@@ -13,8 +13,9 @@
 ## Baseline gates (next, in order)
 
 Tracked as GitHub issues #1-#4 - see [docs/TASKS.md](TASKS.md).
-- [ ] **B1** CVA6 Verilator model built; `rv64ui-p-add`,
-      `rv64ui-p-simple` PASSED logs under `docs/evidence/`
+- [x] **B1** CVA6 Verilator model built; `rv64ui-p-add` and
+      `rv64ui-p-simple` report `*** SUCCESS ***`; evidence in
+      `docs/evidence/b1-cva6-2026-10-12.log` (issue #1)
 - [ ] **B2** Full CVA6 `riscv-asm-tests` list; ACT4 `I,M` ELFs run on
       the CVA6 model (museRISC DUT config); update COMPLIANCE.md
 - [ ] **B3** OpenROAD `muse_crypto` clean at 28% util (40% run ended

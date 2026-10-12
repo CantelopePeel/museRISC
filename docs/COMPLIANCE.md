@@ -2,7 +2,7 @@
 
 "Compliant" here means: passes the named public test suite with a
 stored report. Anything else is marked **not yet claimed**.
-Last updated: 2026-10-12 (v0.1 baseline).
+Last updated: 2026-10-12 (B1 host-smoke gate complete).
 
 | Block | Suite | Status |
 |---|---|---|
@@ -13,7 +13,8 @@ Last updated: 2026-10-12 (v0.1 baseline).
 | Ed25519 (ref model) | RFC 8032 TEST 1+2 sign/verify (`sw/ec_ops.py`) | PASS (algorithm only; HW sequencer pending) |
 | secp256k1 (ref model) | `cryptography` ECDSA oracle vector | PASS (algorithm only) |
 | ACT4 harness | riscv-arch-test ACT4, RV64I, DUT = Sail | 51/51 PASS on Sail — harness validation, **not** a hardware claim |
-| RV64I/M/C on CVA6 | riscv-tests + ACT4 on Verilator model | Not yet claimed (model build in progress; B1/B2) |
+| CVA6 host smoke (B1) | riscv-tests `rv64ui-p-add`, `rv64ui-p-simple` on Verilator model | PASS — `*** SUCCESS *** (tohost = 0)`; see `docs/evidence/` (smoke only) |
+| RV64I/M/C on CVA6 | Full riscv-tests list + ACT4 on Verilator model | Not yet claimed (B2 next) |
 | RV64 A/F/D | ACT4 + TestFloat | Phase 2, not yet claimed |
 | RVV 1.0 | ACT4 vector suite (fixed VLEN) | Phase 3, not yet claimed |
 | Privileged/Sv39 | ACT4 privileged + Linux boot | Phase 2, not yet claimed |

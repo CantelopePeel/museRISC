@@ -19,18 +19,19 @@ hardened with OpenROAD.
 
 > ## Baseline status — v0.1 (2026-10-12)
 >
-> **What is verified today is the crypto RTL, not the RISC-V core and
-> not a chip.** The SHA-256, SHA-512, Keccak-f1600, and EC-field RTL in
-> this repo passes known-answer tests (`make test`), Verilator lint
-> (`make lint`), and Yosys synthesis. The reference curve operations
-> reproduce the Ed25519 RFC 8032 signatures byte-for-byte and verify a
-> secp256k1 ECDSA vector. The official ACT4 compliance harness runs and
-> passes 51 RV64I tests **on the Sail reference model** — that proves
-> the harness, not our hardware.
+> **What is verified today is the crypto RTL plus a CVA6 host smoke
+> test — not RISC-V compliance and not a chip.** The SHA-256, SHA-512,
+> Keccak-f1600, and EC-field RTL passes known-answer tests
+> (`make test`), Verilator lint (`make lint`), and Yosys synthesis.
+> The reference curve operations reproduce the Ed25519 RFC 8032
+> signatures byte-for-byte and verify a secp256k1 ECDSA vector. The
+> official ACT4 harness passes 51 RV64I tests **on the Sail reference
+> model**, and the pinned CVA6 Verilator model passes the B1 smoke
+> tests `rv64ui-p-add` and `rv64ui-p-simple` (see `docs/evidence/`).
 >
-> **Not done yet:** no CVA6 simulation result on RISC-V tests, no
-> RV64GCV compliance claim, no finished OpenROAD routing/GDS, no MPW
-> readiness. See [What's left](#whats-left--the-baseline-plan) below.
+> **Not done yet:** no full RISC-V regression or RV64GCV compliance
+> claim, no finished OpenROAD routing/GDS, and no MPW readiness. See
+> [What's left](#whats-left--the-baseline-plan) below.
 > A *fully compliant* RV64GCV core with vector and floating point is
 > not a from-scratch deliverable; museRISC integrates the proven
 > CVA6 (RV64GC) + Ara (RVV) cores and contributes novel verified RTL
@@ -48,6 +49,7 @@ hardened with OpenROAD.
 | secp256k1 ECDSA verify (ref) | `cryptography`-generated oracle vector — `python3 sw/ec_ops.py` |
 | RTL lint / synthesis | Verilator `-Wall` clean; Yosys synth clean — `make lint` |
 | ACT4 harness | 51 RV64I tests pass **on Sail** — `make compliance` |
+| CVA6 host smoke (B1) | `rv64ui-p-add`, `rv64ui-p-simple`: `*** SUCCESS ***` — `docs/evidence/` |
 | OpenROAD (partial) | Synthesis 52,933 cells, setup slack +5.3 ns @100 MHz (nangate45); routing not yet clean |
 
 ## Locked decisions (2026-10-12)
@@ -140,9 +142,9 @@ starts only when B1/B2 evidence is committed under `docs/evidence/`.
 In priority order; do not start later items until the earlier gate is
 green and its log/report is committed under `docs/evidence/`.
 
-1. **B1 — Host smoke.** Finish the CVA6 Verilator build (pinned
-   Verilator v5.008; job count capped for 8 GB Docker RAM) and run
-   `rv64ui-p-add` / `rv64ui-p-simple`. Pass = `*** SUCCESS *** (tohost = 0)` logs.
+1. **B1 — Host smoke. ✅ Done.** The CVA6 Verilator model passes
+   `rv64ui-p-add` / `rv64ui-p-simple` with
+   `*** SUCCESS *** (tohost = 0)`; evidence is in `docs/evidence/`.
 2. **B2 — Host regression.** Run CVA6's full `riscv-asm-tests` list,
    then generate ACT4 `I,M` ELFs and run them on the CVA6 model with a
    museRISC DUT config. Only then update the compliance matrix.

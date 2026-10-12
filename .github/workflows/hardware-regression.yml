@@ -33,6 +33,8 @@ jobs:
 
       - name: Build model and run smoke tests
         shell: bash
+        env:
+          NUM_JOBS: "4"
         run: |
           set -o pipefail
           mkdir -p build/evidence

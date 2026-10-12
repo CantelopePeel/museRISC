@@ -1,0 +1,13 @@
+# B1 evidence extracted from build_cva6_b1f.log (local Docker run, 2026-10-12)
+# Command: ./scripts/cva6_docker.sh rv64ui-p-add-verilator rv64ui-p-simple-verilator
+# Exit status: 0
+
+work-ver/Variane_testharness tmp/riscv-tests/build/isa//rv64ui-p-add
+tmp/riscv-tests/build/isa//rv64ui-p-add *** SUCCESS *** (tohost = 0) after 35837 cycles
+CPU time used: 27244.05 ms
+Wall clock time passed: 27298.53 ms
+work-ver/Variane_testharness tmp/riscv-tests/build/isa//rv64ui-p-simple
+tmp/riscv-tests/build/isa//rv64ui-p-simple *** SUCCESS *** (tohost = 0) after 35909 cycles
+CPU time used: 21513.51 ms
+Wall clock time passed: 21570.48 ms
+CVA6 container build/test step finished (see log above).
