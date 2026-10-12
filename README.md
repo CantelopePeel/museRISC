@@ -70,8 +70,8 @@ effort goes into the accelerator, SoC, drivers, and physical closure.
 
 ```
             ┌─────────────────────────────────────────────┐
-            │  CVA6  RV64GC (6-stage, MMU, AXI)          │
-            │    + Ara RVV 1.0 vector co-processor      │
+            │  CVA6  RV64GC (6-stage, MMU, AXI)           │
+            │    + Ara RVV 1.0 vector co-processor        │
             └──────────────────┬──────────────────────────┘
                                │ AXI4 / AXI-Lite
         ┌──────────────────────┼───────────────────────┐
