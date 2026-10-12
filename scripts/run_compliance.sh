@@ -11,21 +11,32 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ACT=third_party/riscv-arch-test
-[ -d "$ACT/framework" ] || { echo "clone riscv-arch-test first"; exit 1; }
-command -v mise >/dev/null || { echo "install mise (brew install mise)"; exit 1; }
+[ -d "$ACT/framework" ] || { echo "fetch riscv-arch-test first: ./scripts/setup.sh --fetch-act"; exit 1; }
+command -v mise >/dev/null || { echo "install mise (https://mise.jdx.dev)"; exit 1; }
 [ -x third_party/sail/bin/sail_riscv_sim ] || { echo "install Sail 0.15 into third_party/sail"; exit 1; }
-command -v riscv64-elf-gcc >/dev/null || { echo "install riscv64-elf-gcc"; exit 1; }
+if command -v riscv64-unknown-elf-gcc >/dev/null; then
+  toolchain_prefix=riscv64-unknown-elf-
+elif command -v riscv64-elf-gcc >/dev/null; then
+  toolchain_prefix=riscv64-elf-
+else
+  echo "install a RISC-V bare-metal GCC (riscv64-unknown-elf- or riscv64-elf-)" >&2; exit 1
+fi
 
-# ACT configs expect riscv64-unknown-elf-* names; alias the brew tools.
+# ACT configs expect riscv64-unknown-elf-* names; alias whatever
+# matching toolchain is installed (Homebrew or a distro package).
 mkdir -p build/riscv-alias/bin
 for t in gcc g++ objdump objcopy nm ar as ld readelf size strip ranlib; do
-  ln -sf "$(command -v riscv64-elf-$t)" "build/riscv-alias/bin/riscv64-unknown-elf-$t"
+  src="$(command -v "${toolchain_prefix}$t" || true)"
+  if [ -n "$src" ]; then
+    ln -sf "$src" "build/riscv-alias/bin/riscv64-unknown-elf-$t"
+  fi
 done
+[ -x build/riscv-alias/bin/riscv64-unknown-elf-gcc ] || { echo "RISC-V GCC alias failed" >&2; exit 1; }
 ln -sf "$PWD/third_party/sail/bin/sail_riscv_sim" build/riscv-alias/bin/sail_riscv_sim
 
 # UDB's z3 cache may hold a Linux ELF libz3 on macOS; shim in the
 # Homebrew Mach-O build under the names its FFI loader tries.
-if [ -f /opt/homebrew/lib/libz3.dylib ]; then
+if [ "$(uname -s)" = Darwin ] && [ -f /opt/homebrew/lib/libz3.dylib ]; then
   D="$HOME/.cache/udb/z3/z3-5.1.0/arm64"; mkdir -p "$D"
   for n in libz3.so libz3.so.4.8 libz3 z3 libz3.dylib; do
     cp /opt/homebrew/lib/libz3.dylib "$D/$n"

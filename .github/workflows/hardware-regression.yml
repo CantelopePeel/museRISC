@@ -1,0 +1,83 @@
+name: Hardware regression (B1/B3)
+
+"on":
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Heavy hardware gate to run
+        required: true
+        default: b1
+        type: choice
+        options:
+          - b1
+          - openroad
+          - both
+  schedule:
+    - cron: "17 8 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  cva6-b1:
+    name: B1 - CVA6 rv64ui smoke tests
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'b1' || inputs.target == 'both'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - name: Check out museRISC
+        uses: actions/checkout@v4
+
+      - name: Fetch pinned CVA6 sources
+        run: ./scripts/setup.sh --fetch-cva6
+
+      - name: Build model and run smoke tests
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build/evidence
+          ./scripts/cva6_docker.sh rv64ui-p-add-verilator rv64ui-p-simple-verilator 2>&1 | tee build/evidence/b1-cva6.log
+          successes=$(grep -c '\*\*\* SUCCESS \*\*\*' build/evidence/b1-cva6.log)
+          echo "B1 successful testharness runs: $successes" >> "$GITHUB_STEP_SUMMARY"
+          test "$successes" -ge 2
+
+      - name: Upload B1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b1-cva6-${{ github.sha }}
+          path: build/evidence/b1-cva6.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  openroad-b3:
+    name: B3 - OpenROAD muse_crypto route
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'openroad' || inputs.target == 'both'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - name: Check out museRISC
+        uses: actions/checkout@v4
+
+      - name: Run OpenROAD flow
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build/evidence
+          make openroad 2>&1 | tee build/evidence/b3-openroad.log
+          test -n "$(find build/orfs-results -name '6_final.gds' -print -quit)"
+          find build/orfs-results -name '6_final.gds' -print >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload B3 metrics and layout
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b3-openroad-${{ github.sha }}
+          path: |
+            build/evidence/b3-openroad.log
+            build/orfs-logs/**/*.json
+            build/orfs-reports/**
+            build/orfs-results/**/6_final.gds
+            build/orfs-results/**/6_final.odb
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">museRISC mark</title>
+  <desc id="desc">An M-shaped signal inside a processor package.</desc>
+  <rect width="256" height="256" rx="48" fill="#101923"/>
+  <g stroke="#57D0B8" stroke-width="9" stroke-linecap="round">
+    <path d="M52 88 H28"/>
+    <path d="M52 128 H28"/>
+    <path d="M52 168 H28"/>
+    <path d="M228 88 H204"/>
+    <path d="M228 128 H204"/>
+    <path d="M228 168 H204"/>
+    <path d="M88 52 V28"/>
+    <path d="M128 52 V28"/>
+    <path d="M168 52 V28"/>
+    <path d="M88 228 V204"/>
+    <path d="M128 228 V204"/>
+    <path d="M168 228 V204"/>
+  </g>
+  <rect x="52" y="52" width="152" height="152" rx="24" fill="#162231" stroke="#57D0B8" stroke-width="9"/>
+  <path d="M82 174 V88 L128 142 L174 88 V174" fill="none" stroke="#F3F7F4" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="128" cy="142" r="10" fill="#F2B84B" stroke="#101923" stroke-width="4"/>
+</svg>

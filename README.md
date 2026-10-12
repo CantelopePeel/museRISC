@@ -1,9 +1,21 @@
+<p align="center">
+  <img src="docs/assets/muserisc-logo.svg" alt="museRISC — RV64GCV crypto accelerator SoC" width="760">
+</p>
+
+<p align="center">
+  <a href="https://github.com/bubblebabyboi/museRISC/actions/workflows/regression.yml"><img alt="RTL regression" src="https://github.com/bubblebabyboi/museRISC/actions/workflows/regression.yml/badge.svg"></a>
+  <a href="https://github.com/bubblebabyboi/museRISC/actions/workflows/compliance.yml"><img alt="ACT4 compliance harness" src="https://github.com/bubblebabyboi/museRISC/actions/workflows/compliance.yml/badge.svg"></a>
+  <a href="https://github.com/bubblebabyboi/museRISC/actions/workflows/hardware-regression.yml"><img alt="Hardware regression B1 and B3" src="https://github.com/bubblebabyboi/museRISC/actions/workflows/hardware-regression.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="Licence: GPLv3" src="https://img.shields.io/badge/licence-GPLv3-57D0B8"></a>
+</p>
+
 # museRISC
 
 An open RISC-V crypto-accelerator SoC project: a Linux-capable **RV64GCV**
 host with a hardware accelerator for the elliptic-curve and hashing
-primitives used by Solana, Bitcoin, and Ethereum — built to be verified
-with the official RISC-V compliance tests and hardened with OpenROAD.
+primitives used by Bitcoin, Ethereum, and other blockchain systems —
+built to be verified with the official RISC-V compliance tests and
+hardened with OpenROAD.
 
 > ## Baseline status — v0.1 (2026-10-12)
 >
@@ -76,9 +88,8 @@ effort goes into the accelerator, SoC, drivers, and physical closure.
                          └──────────────┘
 ```
 
-Solana mapping: Ed25519 signatures (SHA-512 + Curve25519 arithmetic) and
-SHA-256 hashing (including Proof-of-History chains). Ethereum mapping:
-secp256k1 ECDSA + Keccak-256. Bitcoin mapping: secp256k1 + SHA-256.
+Ed25519 signatures use SHA-512 with Curve25519 arithmetic. Ethereum
+mapping: secp256k1 ECDSA + Keccak-256. Bitcoin mapping: secp256k1 + SHA-256.
 
 ## Quick start
 
@@ -99,6 +110,31 @@ make openroad        # Docker ORFS run on muse_crypto (long; Linux/CI best)
 `third_party/` (CVA6, Ara, riscv-arch-test, Sail) is intentionally not
 committed — `setup.sh` records the pinned commits and fetch commands.
 
+## Automated regression on GitHub
+
+Every push and pull request runs the fast RTL gate. Heavier compliance
+and hardware flows run weekly or on demand from the repository's
+**Actions** tab because they take much longer and build large tools.
+
+| Workflow | When | What it proves |
+|---|---|---|
+| RTL regression | Every push/PR + daily | Crypto KATs, Verilator lint, Yosys synthesis, script/SVG checks |
+| ACT4 compliance harness | Weekly + manual | ACT4 RV64 tests generated and run on Sail — harness only, not hardware |
+| Hardware regression (B1/B3) | Weekly + manual | B1 CVA6 `rv64ui` smoke tests and/or B3 OpenROAD route, with uploaded logs |
+
+Run a heavy gate manually with the GitHub CLI:
+
+```sh
+gh workflow run "Hardware regression (B1/B3)" -f target=b1
+gh workflow run "Hardware regression (B1/B3)" -f target=openroad
+gh workflow run "ACT4 compliance harness" -f extensions=I
+gh run watch
+```
+
+The workflows upload logs and summaries as Actions artifacts. A green
+ACT4 badge does **not** make the core compliant; the hardware claim
+starts only when B1/B2 evidence is committed under `docs/evidence/`.
+
 ## What's left — the baseline plan
 
 In priority order; do not start later items until the earlier gate is
@@ -106,7 +142,7 @@ green and its log/report is committed under `docs/evidence/`.
 
 1. **B1 — Host smoke.** Finish the CVA6 Verilator build (pinned
    Verilator v5.008; job count capped for 8 GB Docker RAM) and run
-   `rv64ui-p-add` / `rv64ui-p-simple`. Pass = testharness PASSED logs.
+   `rv64ui-p-add` / `rv64ui-p-simple`. Pass = `*** SUCCESS *** (tohost = 0)` logs.
 2. **B2 — Host regression.** Run CVA6's full `riscv-asm-tests` list,
    then generate ACT4 `I,M` ELFs and run them on the CVA6 model with a
    museRISC DUT config. Only then update the compliance matrix.
@@ -128,13 +164,14 @@ Full detail: [docs/ROADMAP.md](docs/ROADMAP.md) ·
 ## Repo layout
 
 ```
+.github/      GitHub Actions: RTL, ACT4 and heavy hardware regression
 rtl/crypto/   Novel verified RTL: sha256, sha512, keccak_f1600, ec_field, top
 rtl/core/     Core integration glue (CVA6/Ara live in third_party/)
 rtl/soc/      SoC top, AXI-Lite accelerator port
 tb/           Testbenches + known-answer vectors
 sw/           Register map header + golden/reference models
 flow/         OpenROAD-flow-scripts designs (nangate45, sky130hd)
-docs/         SPEC.md · ROADMAP.md · COMPLIANCE.md
+docs/         SPEC.md · ROADMAP.md · COMPLIANCE.md · TASKS.md · assets/
 scripts/      setup, CVA6 Docker build, ACT4 compliance, ORFS Docker
 third_party/  (not committed) cva6, ara, riscv-arch-test, sail — pinned
 ```
@@ -144,5 +181,9 @@ third_party/  (not committed) cva6, ara, riscv-arch-test, sail — pinned
 Original museRISC code and documentation are licensed under the
 **GNU General Public License v3.0** — see [LICENSE](LICENSE). Integrated
 cores keep their own licences (CVA6/Ara: Solderpad/Apache-2.0). Check
-`third_party/` before any commercial tapeout. Phase-0 crypto is a functional reference, not
-side-channel hardened — no production keys; see `docs/SPEC.md`.
+`third_party/` before any commercial tapeout. Phase-0 crypto is a
+functional reference, not side-channel hardened — no production keys;
+see `docs/SPEC.md`.
+
+The museRISC logo is an original project mark, not an official Muse or
+RISC-V logo. “RISC-V” is used descriptively for the instruction-set target.

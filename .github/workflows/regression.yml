@@ -1,0 +1,76 @@
+name: RTL regression
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rtl-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rtl:
+    name: Crypto RTL KATs, lint and synthesis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out museRISC
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install simulators and synthesis tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog verilator yosys libxml2-utils
+          iverilog -V
+          verilator --version
+          yosys --version
+
+      - name: Validate shell, Python and SVG sources
+        run: |
+          bash -n scripts/*.sh
+          python3 -m py_compile sw/golden.py sw/ec_ops.py
+          xmllint --noout docs/assets/muserisc-logo.svg docs/assets/muserisc-mark.svg
+
+      - name: Run known-answer regression
+        shell: bash
+        run: |
+          set -o pipefail
+          make test 2>&1 | tee build-ci-test.log
+          {
+            echo "## museRISC RTL regression"
+            echo
+            grep -E "PASS|EC_OPS|ALL PHASE-0" build-ci-test.log || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run Verilator lint
+        run: make lint
+
+      - name: Run Yosys synthesis smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          yosys -Q -p "read_verilog rtl/crypto/sha256_block.v rtl/crypto/sha512_block.v rtl/crypto/keccak_f1600.v rtl/crypto/ec_field.v rtl/crypto/muse_crypto_top.v; hierarchy -check -top muse_crypto_top; proc; opt; stat" 2>&1 | tee build-ci-yosys.log
+
+      - name: Upload regression logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtl-regression-${{ github.sha }}
+          path: |
+            build-ci-test.log
+            build-ci-yosys.log
+            build/*.log
+          if-no-files-found: warn
+          retention-days: 30
