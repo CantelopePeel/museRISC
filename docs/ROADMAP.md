@@ -11,6 +11,8 @@
 - [~] OpenROAD: synth/place/CTS OK; detail route not clean (see B3)
 
 ## Baseline gates (next, in order)
+
+Tracked as GitHub issues #1-#4 - see [docs/TASKS.md](TASKS.md).
 - [ ] **B1** CVA6 Verilator model built; `rv64ui-p-add`,
       `rv64ui-p-simple` PASSED logs under `docs/evidence/`
 - [ ] **B2** Full CVA6 `riscv-asm-tests` list; ACT4 `I,M` ELFs run on
