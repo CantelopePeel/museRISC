@@ -1,0 +1,7 @@
+build/
+build_*.log
+third_party/
+.venv/
+*.vcd
+obj_dir/
+__pycache__/
