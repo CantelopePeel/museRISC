@@ -141,7 +141,8 @@ third_party/  (not committed) cva6, ara, riscv-arch-test, sail — pinned
 
 ## Licence
 
-Original museRISC RTL/docs: Apache-2.0. Integrated cores keep their own
-licences (CVA6/Ara: Solderpad/Apache-2.0). Check `third_party/` before
-any commercial tapeout. Phase-0 crypto is a functional reference, not
+Original museRISC code and documentation are licensed under the
+**GNU General Public License v3.0** — see [LICENSE](LICENSE). Integrated
+cores keep their own licences (CVA6/Ara: Solderpad/Apache-2.0). Check
+`third_party/` before any commercial tapeout. Phase-0 crypto is a functional reference, not
 side-channel hardened — no production keys; see `docs/SPEC.md`.
