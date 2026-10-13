@@ -20,29 +20,35 @@ primitives used by Bitcoin, Ethereum, and other blockchain systems —
 built to be verified with the official RISC-V compliance tests and
 hardened with OpenROAD.
 
-> ## Status — B1+B2 complete (2026-10-12)
+> ## Status — B1–B3 + scalar ISA sweep complete (2026-10-13)
 >
-> **The crypto RTL is KAT-verified and the stock CVA6 host model now
-> passes the full B2 regression — this is still not an RV64GCV
-> compliance claim and not a chip.** The SHA-256, SHA-512,
+> **The crypto RTL is KAT-verified, the integrated CVA6 host passes
+> the full scalar ISA verification sweep, and the crypto macro is
+> OpenROAD-closed with a published GDS — this is still not an
+> RV64GCV compliance claim and not a chip.** The SHA-256, SHA-512,
 > Keccak-f1600, and EC-field RTL passes known-answer tests
 > (`make test`), Verilator lint (`make lint`), and Yosys synthesis,
 > and the reference curve operations reproduce the Ed25519 RFC 8032
 > signatures byte-for-byte and verify a secp256k1 ECDSA vector. On
-> the pinned CVA6 Verilator model, all 174 directed `riscv-tests`
-> (`asm,amo,mul` lists) pass solo, tandem Spike lockstep agrees on
-> 173/174 with zero mismatches (one explained Spike-config waiver),
-> and ACT4 `I,M` passes 64/64 — see
-> [Test & ISA coverage](#test--isa-coverage) and `docs/evidence/`.
+> the pinned CVA6 Verilator model: all 174 directed `riscv-tests`
+> pass solo and in tandem Spike lockstep (one explained waiver);
+> ACT suites pass for I/M/A/F/D, B, C, Zicond, scalar-crypto and
+> privileged Sv39/PMP (documented waivers only); Berkeley
+> TestFloat passes 112/112 checkers / 1,528,080 vectors across all
+> rounding modes — see [Test & ISA coverage](#test--isa-coverage)
+> and `docs/evidence/`. The `muse_crypto` macro closes clean on
+> nangate45 at 100 MHz (DRC/antenna/electrical 0, GDS in the
+> `b3-nangate45-2026-10-13` GitHub release).
 >
-> **Not done yet:** floating-point/vector/privileged compliance,
-> finished OpenROAD closure (B3, next), SoC integration of the
-> accelerator (B4), and MPW readiness. See
-> [What's left](#whats-left--the-baseline-plan) below.
-> A *fully compliant* RV64GCV core with vector and floating point is
-> not a from-scratch deliverable; museRISC integrates the proven
-> CVA6 (RV64GC) + Ara (RVV) cores and contributes novel verified RTL
-> for the crypto accelerator and SoC.
+> **Not done yet:** vector (Ara RVV, [#9](https://github.com/bubblebabyboi/museRISC/issues/9),
+> in progress), SoC integration of the accelerator (B4, deferred),
+> MPW readiness, and an in-house core. The integrated CVA6 + Ara
+> are the verification vehicle, not the end goal: once the ISA is
+> verified end-to-end against them, museRISC replaces them with a
+> clean-slate in-house RV64GCV core
+> ([#18](https://github.com/bubblebabyboi/museRISC/issues/18)),
+> judged by the same stored oracles. Work proceeds on branches
+> linked to GitHub issues, merged to `main` per milestone.
 
 ## Verified in this baseline
 
@@ -61,6 +67,10 @@ hardened with OpenROAD.
 | CVA6 solo regression (B2.2) | All 174 `asm,amo,mul` tests pass on the CVA6 model — `scripts/cva6_docker.sh` |
 | Spike tandem lockstep (B2.3) | 173/174 pass with 0 mismatches (+1 waived Spike-config divergence) — `docs/evidence/` |
 | ACT4 I/M on CVA6 (B2.4) | 64/64 self-checking ACT ELFs (51 I + 13 M) pass on the model — `scripts/build_act4_cva6.sh` |
+| ISA sweep F/D/A (sweep) | Directed FP 46/46 solo+Spike, tandem F 22/22, ACT A/F/D 220/222 (2 waived) — `docs/evidence/` |
+| ISA sweep B/C/crypto (sweep) | ACT B/C/Zicond/scalar-crypto 133/133 — `docs/evidence/` |
+| TestFloat (sweep) | 112/112 checkers, 1,528,080 vectors, all rounding modes — `scripts/build_testfloat.sh` |
+| Privileged ACT (sweep) | Sv39/PMP/exceptions 126/134 (8 documented waivers); misaligned traps proven — `docs/evidence/` |
 | OpenROAD closure (B3) | Clean route, timing met, liberty-electrical clean, GDS published (nangate45, 100 MHz) — `make openroad` |
 
 ## Test & ISA coverage
@@ -203,18 +213,27 @@ green and its log/report is committed under `docs/evidence/`.
    lockstep agrees on 173/174 with zero mismatches (one waived
    Spike-config divergence); ACT4 `I,M` passes 64/64 on the model.
    Combined matrix: `docs/evidence/b2-combined-matrix-2026-10-12.csv`.
-3. **B3 — Macro closure (next).** Finish the OpenROAD run for
-   `muse_crypto`: the local flow already reaches a clean detailed
-   route with timing met and GDS written, with 51 max-cap electrical
-   violations left to clear, then publish final timing/power metrics
-   and the GDS as a release artifact (not to git history if large).
-4. **B4 — SoC integration.** Put `muse_crypto` behind the CVA6 AXI
-   crossbar at `0x2000_0000`, write the bare-metal driver, and run an
-   end-to-end Ed25519/secp256k1 verify on the simulated core.
-5. **Then:** hardware scalar-multiply sequencer (constant-time),
-   SHA-512/Keccak streaming into the accelerator top, ACT4 `A,F,D`
-   + TestFloat, Ara vector integration (RVV), full-SoC OpenROAD
-   closure, and only then a Caravel/MPW decision.
+3. **B3 — Macro closure. ✅ Done (2026-10-13).** Clean OpenROAD
+   run for `muse_crypto` on nangate45 at 100 MHz: detail-route
+   DRC 0, antenna 0, liberty electrical 0, setup +4.52 ns / hold
+   +0.039 ns, 95,431 µm², 20.16 mW; final metrics in
+   `docs/evidence/b3-openroad-nangate45-2026-10-13.log` and the GDS
+   published as the `b3-nangate45-2026-10-13` GitHub release.
+4. **Ara RVV integration ([#9](https://github.com/bubblebabyboi/museRISC/issues/9),
+   in progress).** Ara (VLEN 512, 2 lanes) on the CVA6
+   `cv64a6_imafdcv_sv39` target: toolchain bring-up, vector-kernel
+   smoke, then ACT vector suites against a new DUT config.
+5. **In-house RV64GCV core ([#18](https://github.com/bubblebabyboi/museRISC/issues/18)).**
+   Clean-slate core replacing CVA6+Ara, verified against the same
+   stored directed/ACT/TestFloat oracles (plus the SV/cocotb port,
+   [#19](https://github.com/bubblebabyboi/museRISC/issues/19)).
+6. **B4 — SoC integration (deferred).** Put `muse_crypto` behind
+   the AXI crossbar at `0x2000_0000`, write the bare-metal driver,
+   and run an end-to-end Ed25519/secp256k1 verify on the simulated
+   core — after the core strategy above is settled.
+7. **Then:** hardware scalar-multiply sequencer (constant-time),
+   SHA-512/Keccak streaming into the accelerator top, full-SoC
+   OpenROAD closure, and only then a Caravel/MPW decision.
 
 Full detail: [docs/ROADMAP.md](docs/ROADMAP.md) ·
 [docs/SPEC.md](docs/SPEC.md) · [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
