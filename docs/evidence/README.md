@@ -390,3 +390,31 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   modes, level-2 density. `roundToInt` has no instruction
   in this config (Zfa `fround` not implemented) and stays
   unclaimed.
+
+## Sweep follow-ups — misaligned-access re-measure (2026-10-13, branch `misalign-probe`, issue #20)
+
+- Artifact: [`misalign-probe-2026-10-13.csv`](misalign-probe-2026-10-13.csv)
+  (1 row, PASS); probe source `sw/misalign/probe.S`
+- Question: the inherited upstream CVA6+Ara config notes
+  (discrepancy D13) claim misaligned scalar accesses
+  silently corrupt data; our UDB declares
+  `MISALIGNED_LDST: false` with an LSU-trap rationale.
+  The probe (53 directed cases: lh/lhu/lw/lwu/ld,
+  sh/sw/sd, flw/fld/fsw/fsd, lr.w/lr.d,
+  amoadd.w/amoadd.d at every misaligning offset, aligned
+  controls, and a no-write-on-trap memory check) runs on
+  the scalar model and requires exact mcause per case.
+- Result: **PASS** — every misaligned access traps
+  (loads cause 4, stores/AMO/LR cause 6, LR store-class
+  as in the privileged matrix), trapping stores modify
+  nothing, aligned controls do not trap. D13 does not
+  apply to this build; `docs/SPIKE_CONFIG.md`-era tandem
+  `rv64mi-p-ma_addr` agreement is consistent with this.
+- Consequence: `MISALIGNED_LDST: false` stands as
+  measured truth, and the ACT `Misalign` suite — which
+  requires `MISALIGNED_LDST: true` (hardware handles
+  misaligned accesses without trapping) — correctly
+  generates zero ELFs for this DUT. Misaligned handling
+  by trap is the claim; non-trapping handling is not
+  claimed. Config comments updated to cite this probe
+  (behavior fields unchanged; no prior ELF changes).

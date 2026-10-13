@@ -1,0 +1,2 @@
+test,mode,exit_code,status,cycles,mismatches,log
+misalign-probe,solo,0,PASS,35906,0,logs/misalign-probe.log

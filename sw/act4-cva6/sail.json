@@ -268,13 +268,15 @@
         // without a fault (use `{"None" : null}`), or raise an access fault
         // (use `{"Some": "AccessFault"}`) or a misaligned exception
         // (use `{"Some": "AlignmentException"}`).
-        // This option controls scalar loads/stores.  Measured: a misaligned scalar
-        // access raises no exception, but it does not work either - a load crossing an
-        // 8-byte boundary returns the first doubleword shifted and zero-filled, and a
-        // store corrupts the first doubleword and never writes the second (discrepancy
-        // D13).  The UDB configuration therefore declares MISALIGNED_LDST false, and
-        // this matches it, so the Misalign suites are deselected rather than run
-        // against hardware that cannot satisfy them.
+        // This option controls scalar loads/stores.  The upstream Ara-build
+        // measurement (discrepancy D13: silent corruption) does NOT hold on
+        // this scalar build: measured 2026-10-13 with sw/misalign/probe.S
+        // (53 directed cases, docs/evidence/misalign-probe-2026-10-13.csv),
+        // every misaligned scalar/FP load/store and LR/AMO traps with
+        // LD/ST_ADDR_MISALIGNED and trapping stores write nothing.  The UDB
+        // configuration therefore declares MISALIGNED_LDST false (traps, no
+        // hardware handling), this matches it, and the Misalign suites -
+        // which require non-trapping handling - are correctly deselected.
         "load_store": {
           "Some": "AlignmentException"
         },

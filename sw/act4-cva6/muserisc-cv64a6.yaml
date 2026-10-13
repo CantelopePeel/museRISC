@@ -361,8 +361,12 @@ params:
   CONFIG_PTR_ADDRESS: 0
   # Misaligned scalar loads/stores trap in the LSU (LD/ST_ADDR_MISALIGNED);
   # rv64mi-p-ma_addr/ma_fetch pass solo and in tandem lockstep (B2.2/B2.3
-  # in this repo).  Declared false (misaligned accesses are not supported
-  # without a trap), matching the observable behaviour.
+  # in this repo), and the directed probe sw/misalign/probe.S (53 cases:
+  # all widths/offsets, FP, LR/AMO, no-write-on-trap) passes on the model
+  # (docs/evidence/misalign-probe-2026-10-13.csv).  Declared false
+  # (misaligned accesses are not supported without a trap), matching the
+  # observable behaviour; the ACT Misalign suite requires MISALIGNED_LDST
+  # true (non-trapping handling) and correctly deselects.
   MISALIGNED_LDST: false
   MISALIGNED_LDST_EXCEPTION_PRIORITY: low
   # MISALIGNED_MAX_ATOMICITY_GRANULE_SIZE and MISALIGNED_SPLIT_STRATEGY are gated on
