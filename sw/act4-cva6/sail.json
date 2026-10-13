@@ -712,7 +712,7 @@
       "supported": false
     },
     "Zicond": {
-      "supported": false
+      "supported": true
     },
     // Sail-only: Sail makes cycle and instret accessible only with Zicntr.  CVA6
     // implements them, but not time, so UDB does not declare Zicntr.  No test
@@ -803,7 +803,7 @@
       "supported": true
     },
     "Zcb": {
-      "supported": false
+      "supported": true
     },
     "Zcmop": {
       "supported": false
@@ -830,13 +830,13 @@
       "supported": false
     },
     "Zknd": {
-      "supported": false
+      "supported": true
     },
     "Zkne": {
-      "supported": false
+      "supported": true
     },
     "Zknh": {
-      "supported": false
+      "supported": true
     },
     "Zkr": {
       "supported": false,

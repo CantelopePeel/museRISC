@@ -236,3 +236,28 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   its chunk row, as with B2.2 `xor`.
 - Remaining in this slice: Berkeley TestFloat against the
   cvfpu configuration (issue #7 stays open until stored).
+
+## ISA verification sweep — B/C/Zicond/scalar-crypto (2026-10-12, branch `isa-verify-sweep`, issues #16/#17)
+
+- Artifact: [`act-bc-cva6-2026-10-12.csv`](act-bc-cva6-2026-10-12.csv)
+  (133-row ACT matrix in suite order)
+- Config change: `Zcb`, `Zicond`, `Zkne`, `Zknd`, `Zknh`
+  declared in `sw/act4-cva6/` after decoder audit at
+  `81245a47` (compressed_decoder Zcb cases, `czero` under
+  `RVZiCond`, AES/SHA ops under `ZKN`); Sail support enabled
+  to match. Generation as B2.4 (`EXTENSIONS=` per suite),
+  run solo on the CVA6 model in seven chunks
+  (`act-b-chunk1`–`7`, `TIME_OUT` raised cycle cap supported
+  by the runner for long ACT tests).
+- Result: **133/133 PASS**, 0 fail/timeout (Zba 8, Zbb 24,
+  Zbc 3, Zbs 8, Zbkb 14, Zbkc 2, Zca 32, Zcd 4, Zcb-family
+  12, Zicsr 6, Zifencei 1, Zicond 2, Zkne 4, Zknd 5, Zknh 8);
+  every log shows DUT `*** SUCCESS ***` and
+  `RVCP-SUMMARY: TEST PASSED` with matching cycles.
+- Scope notes: solo-model ACT evidence. Tandem lockstep for
+  these suites was not run (B2.3 waivers already exclude
+  Zicond/ZKN operands from comparison; bitmanip tandem is
+  possible future work, not claimed). `Misalign` suite
+  generated zero ELFs under this config and is handled with
+  the privileged slice. Issues #16/#17 acceptance (stored
+  green reports) is met by this artifact.

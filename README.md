@@ -97,10 +97,10 @@ the custom crypto accelerator not yet attached to it).
 - [x] **A** atomics — directed `rv64ua` lists (ACT `A` still to run, #7)
 - [x] **Zicsr / Zifencei** basics — via directed `rv64mi`/`rv64si` and `fence.i` tests
 - [x] **F / D** floating point — directed (46/46 solo+Spike, tandem F 22/22) + ACT F/D 200/200; TestFloat still pending (#7)
-- [ ] **C** compressed (+ Zca/Zcb/Zcd) — only the `rv64uc-p-rvc` smoke so far
+- [x] **C** compressed (Zca/Zcb/Zcd ACT suites pass; #16) — sweep branch, see `docs/evidence/`
 - [ ] **V** vector (RVV 1.0) — Ara integration pending (#9)
 - [ ] **Privileged M/S/U + Sv39** — exercised by directed priv and virtual-memory (`-v-`) tests; privileged ACT suite and Linux boot pending
-- [ ] **B** bitmanip (Zba/Zbb/Zbc/Zbs), **Zicond**, scalar crypto (Zbkb/Zbkc/Zkn) — implemented in the host config, no directed tests yet
+- [x] **B** bitmanip (Zba/Zbb/Zbc/Zbs), **Zicond**, scalar crypto (Zbkb/Zbkc/Zkne/Zknd/Zknh) — ACT suites pass 133/133 with C/Zicsr/Zifencei (#17)
 
 ## Locked decisions (2026-10-12)
 

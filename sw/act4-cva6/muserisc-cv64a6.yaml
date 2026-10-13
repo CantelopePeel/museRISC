@@ -45,13 +45,15 @@ implemented_extensions:
   - { name: F, version: "= 2.2.0" }
   - { name: D, version: "= 2.2.0" }
 
-  # C, and its RV64 decomposition Zca + Zcd.  This DUT also enables Zcb
-  # (CVA6ConfigZcbExtEn = 1, Zcmp = 0 @81245a47); Zcb is not declared yet
-  # (see header under-claim note).
+  # C, and its RV64 decomposition Zca + Zcb + Zcd.  This DUT enables
+  # Zcb (CVA6ConfigZcbExtEn = 1, Zcmp = 0 @81245a47;
+  # compressed_decoder.sv OpcodeC0Zcb), declared for the ISA sweep
+  # (issue #16).
   #   Quote: "localparam CVA6ConfigCExtEn = 1;" / "localparam CVA6ConfigZcbExtEn = 0;"
   #   https://github.com/pulp-platform/cva6/blob/99eac9a649001bdf5b8f9da52e0ca73d5c48db1c/core/include/cv64a6_imafdcv_sv39_config_pkg.sv#L25
   - { name: C, version: "= 2.0" }
   - { name: Zca, version: "= 1.0.0" }
+  - { name: Zcb, version: "= 1.0.0" }
   - { name: Zcd, version: "= 1.0.0" }
 
   - { name: Zicsr, version: "= 2.0" }
@@ -69,6 +71,14 @@ implemented_extensions:
   - { name: Zbc, version: "= 1.0.0" }
   - { name: Zbkb, version: "= 1.0.0" }
   - { name: Zbkc, version: "= 1.0.0" }
+  # Zicond + scalar-crypto AES/SHA (issue #17, declared for sweep):
+  # decoder.sv @81245a47 decodes czero.eqz/nez under RVZiCond = 1,
+  # aes64es/esm/ds/dsm/ks1i/ks2/im under ZKN = 1, and
+  # sha256sig0/1, sha256sum, sha512sig/sum ops (Zknh).
+  - { name: Zicond, version: "= 1.0.0" }
+  - { name: Zkne, version: "= 1.0.1" }
+  - { name: Zknd, version: "= 1.0.1" }
+  - { name: Zknh, version: "= 1.0.1" }
 
   # Instruction fetches and page-table walks both read the cacheable, coherent L2.
   - { name: Ziccif, version: "= 1.0.0" }
