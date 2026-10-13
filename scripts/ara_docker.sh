@@ -27,4 +27,8 @@ docker run --rm \
       git curl make clang g++ libelf-dev python3 perl autoconf flex bison \
       help2man libfl-dev device-tree-compiler ca-certificates 2>/dev/null
     git config --global --add safe.directory "*"
+    # Upstream quirk at Ara 34bd3bc1: waiver.vlt contains stray UTF-8
+    # object-replacement bytes (EF BF BC) that Verilator rejects as
+    # invalid tokens. Strip non-ASCII bytes (idempotent, comments only).
+    LC_ALL=C sed -i "s/[^[:print:][:space:]]//g" hardware/tb/verilator/waiver.vlt
     exec "$@"' -- "$@"
