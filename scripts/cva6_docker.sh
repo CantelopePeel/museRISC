@@ -3,15 +3,38 @@
 # sample riscv-isa-tests, inside a native-arch Ubuntu container.
 # (Native macOS is not a CVA6-supported build host: its Makefiles
 # assume a Linux GNU toolchain and -m64 GNU flags.)
-# Usage: ./scripts/cva6_docker.sh [extra make targets...]
-# Log evidence is expected under third_party/cva6/tmp/.
+# Usage:
+#   ./scripts/cva6_docker.sh [extra make targets...]
+#   TEST_LISTS=asm,amo,mul ./scripts/cva6_docker.sh regression
+#   SPIKE_TANDEM=1 TEST_LISTS=smoke ./scripts/cva6_docker.sh regression
+# Regression CSV and per-test logs land in build/regression/<RUN_NAME>/.
+# TESTS may override TEST_LISTS with a space-separated test list.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 docker info >/dev/null 2>&1 || { echo "docker daemon not running"; exit 1; }
 [ -d third_party/cva6/core ] || { echo "clone CVA6 first (setup.sh)"; exit 1; }
 
-docker run --rm -e NUM_JOBS="${NUM_JOBS:-2}" \
-  -v "$PWD/third_party/cva6:/cva6" -w /cva6 ubuntu:24.04 bash -exc '
+mkdir -p build/regression
+# Persist the container's /opt/riscv (Spike tandem fork + toolchain
+# symlinks) on the host, per host architecture. Without this the
+# --rm container rebuilds Spike from scratch on every invocation
+# (~10 min under emulation); with it, line "if [ ! -x .../spike ]"
+# below skips the build after the first install.
+HOST_ARCH="$(uname -m)"
+TOOLCHAIN_CACHE="$PWD/build/toolchain-cache/$HOST_ARCH/riscv"
+mkdir -p "$TOOLCHAIN_CACHE"
+docker run --rm \
+  -e NUM_JOBS="${NUM_JOBS:-2}" \
+  -e SPIKE_TANDEM="${SPIKE_TANDEM:-}" \
+  -e VER_LIBRARY="${VER_LIBRARY:-}" \
+  -e TEST_LISTS="${TEST_LISTS:-smoke}" \
+  -e TESTS="${TESTS:-}" \
+  -e TEST_TIMEOUT_SEC="${TEST_TIMEOUT_SEC:-120}" \
+  -e RUN_NAME="${RUN_NAME:-}" \
+  -v "$PWD/third_party/cva6:/cva6" \
+  -v "$PWD/build/regression:/evidence" \
+  -v "$TOOLCHAIN_CACHE:/opt/riscv" \
+  -w /cva6 ubuntu:24.04 bash -exc '
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq build-essential git cmake autoconf automake libtool \
@@ -23,6 +46,14 @@ apt-get install -y -qq build-essential git cmake autoconf automake libtool \
 # Larger CI runners may pass NUM_JOBS=4 (or more) explicitly.
 export RISCV=/opt/riscv SPIKE_INSTALL_DIR=/opt/riscv
 export NUM_JOBS="${NUM_JOBS:-2}"
+if [ -z "${VER_LIBRARY}" ]; then
+  if [ -n "${SPIKE_TANDEM}" ]; then VER_LIBRARY=work-ver-tandem; else VER_LIBRARY=work-ver; fi
+fi
+if [ -z "${RUN_NAME}" ]; then
+  if [ -n "${SPIKE_TANDEM}" ]; then RUN_NAME=tandem; else RUN_NAME=solo; fi
+fi
+export VER_LIBRARY RUN_NAME
+echo "CVA6 mode: SPIKE_TANDEM=${SPIKE_TANDEM:-0} VER_LIBRARY=$VER_LIBRARY TEST_LISTS=$TEST_LISTS RUN_NAME=$RUN_NAME"
 # CVA6 master needs its pinned Verilator v5.008 (+patch); Ubuntu 5.020
 # hits a Verilator internal fault on this design. Same recipe as
 # ci/install-verilator.sh minus the long self-test.
@@ -68,9 +99,9 @@ if [ ! -x $RISCV/bin/spike ]; then
 fi
 test -e $RISCV/lib/libdisasm.so || test -f $RISCV/lib/libdisasm.a
 ls $RISCV/lib/ | grep -E "fesvr|riscv|disasm|yaml"
-# riscv-tests: build only the -p- (physical) tests we run. The -v-
-# variants need a libc (env/v/*.c) that the Ubuntu cross package
-# does not provide in default include paths; CVA6 CI uses -p- tests.
+# riscv-tests: build only physical (-p-) tests. The -v- variants
+# need libc headers that the Ubuntu cross package does not expose by
+# default; the upstream Verilator CI targets below are all -p- tests.
 TVERSION=eeacd5507db7a0f50ca8c4f27aff220fcbb60bdf
 cd tmp
 [ -d riscv-tests ] || git clone https://github.com/riscv/riscv-tests.git
@@ -79,11 +110,102 @@ git submodule update --init --recursive
 autoconf; mkdir -p build isa_out
 cd build && ../configure --prefix=/cva6/tmp/riscv-tests/build
 mkdir -p isa && cd isa
-make -f ../../isa/Makefile src_dir=../../isa XLEN=64 \
-  RISCV_PREFIX=riscv64-unknown-elf- -j${NUM_JOBS} \
-  rv64ui-p-add rv64ui-p-simple rv64um-p-mul rv64ua-p-amoadd_d || true
-ls -l rv64ui-p-add rv64ui-p-simple 2>/dev/null || ls | head
+selected_tests=()
+add_test() {
+  local candidate="$1" existing
+  for existing in "${selected_tests[@]}"; do
+    [ "$existing" = "$candidate" ] && return 0
+  done
+  selected_tests+=("$candidate")
+}
+add_list_file() {
+  local t
+  while IFS= read -r t || [ -n "$t" ]; do
+    case "$t" in ""|\#*) continue ;; esac
+    add_test "$t"
+  done < "$1"
+}
+if [ -n "$TESTS" ]; then
+  for t in $TESTS; do add_test "$t"; done
+else
+  IFS=, read -r -a requested_lists <<< "$TEST_LISTS"
+  for list_name in "${requested_lists[@]}"; do
+    case "$list_name" in
+      smoke)
+        add_test rv64ui-p-add
+        add_test rv64ui-p-simple
+        add_test rv64um-p-mul
+        add_test rv64ua-p-amoadd_d
+        ;;
+      asm) add_list_file /cva6/ci/riscv-asm-tests.list ;;
+      amo) add_list_file /cva6/ci/riscv-amo-tests.list ;;
+      mul) add_list_file /cva6/ci/riscv-mul-tests.list ;;
+      fp) add_list_file /cva6/ci/riscv-fp-tests.list ;;
+      none) ;;
+      *) echo "unknown TEST_LISTS entry: $list_name" >&2; exit 2 ;;
+    esac
+  done
+fi
+echo "Selected ${#selected_tests[@]} riscv-tests ELF(s)"
+if [ "${1:-}" = regression ] && [ "${#selected_tests[@]}" -eq 0 ]; then
+  echo "regression requested with no selected tests" >&2; exit 2
+fi
+if [ "${#selected_tests[@]}" -gt 0 ]; then
+  make -f ../../isa/Makefile src_dir=../../isa XLEN=64 \
+    RISCV_PREFIX=riscv64-unknown-elf- -j"${NUM_JOBS}" \
+    "${selected_tests[@]}"
+fi
 cd /cva6
-make verilate
-'"${1:+make $*}"
+make_args=(ver-library="$VER_LIBRARY")
+if [ -n "${SPIKE_TANDEM}" ]; then make_args+=(SPIKE_TANDEM="$SPIKE_TANDEM"); fi
+make "${make_args[@]}" verilate
+if [ "${1:-}" = regression ]; then
+  outdir="/evidence/$RUN_NAME"
+  mkdir -p "$outdir/logs"
+  csv="$outdir/results.csv"
+  printf "test,mode,exit_code,status,cycles,mismatches,log\n" > "$csv"
+  mode=solo
+  [ -n "${SPIKE_TANDEM}" ] && mode=tandem
+  passed=0; failed=0; timed_out=0; mismatched=0
+  for t in "${selected_tests[@]}"; do
+    elf="tmp/riscv-tests/build/isa/$t"
+    log="$outdir/logs/$t.log"
+    if [ "$mode" = tandem ]; then
+      if timeout "$TEST_TIMEOUT_SEC" "$VER_LIBRARY/Variane_testharness" "+elf_file=$elf" "$elf" >"$log" 2>&1; then rc=0; else rc=$?; fi
+    else
+      if timeout "$TEST_TIMEOUT_SEC" "$VER_LIBRARY/Variane_testharness" "$elf" >"$log" 2>&1; then rc=0; else rc=$?; fi
+    fi
+    mismatch_count=$(grep -ci "Mismatch" "$log" || true)
+    cycles=$(sed -nE "s/.*after ([0-9]+) cycles.*/\1/p" "$log" | tail -n 1)
+    status=FAIL
+    if [ "$rc" -eq 124 ]; then
+      status=TIMEOUT; timed_out=$((timed_out + 1))
+    elif [ "$mismatch_count" -gt 0 ]; then
+      status=MISMATCH; mismatched=$((mismatched + 1))
+    elif [ "$rc" -eq 0 ] && grep -q "\*\*\* SUCCESS \*\*\*" "$log" && ! grep -q "\*\*\* FAILED \*\*\*" "$log"; then
+      status=PASS; passed=$((passed + 1))
+    else
+      failed=$((failed + 1))
+    fi
+    if [ "$status" = TIMEOUT ] || [ "$status" = MISMATCH ]; then
+      failed=$((failed + 1))
+    fi
+    printf "%s,%s,%s,%s,%s,%s,logs/%s.log\n" "$t" "$mode" "$rc" "$status" "${cycles:-}" "$mismatch_count" "$t" >> "$csv"
+    echo "$t: $status (exit $rc, mismatches $mismatch_count)"
+  done
+  {
+    echo "mode=$mode"
+    echo "test_lists=$TEST_LISTS"
+    echo "selected=${#selected_tests[@]}"
+    echo "passed=$passed"
+    echo "failed=$failed"
+    echo "timeouts=$timed_out"
+    echo "mismatched=$mismatched"
+  } > "$outdir/summary.txt"
+  cat "$outdir/summary.txt"
+  [ "$failed" -eq 0 ]
+elif [ "$#" -gt 0 ]; then
+  make "${make_args[@]}" "$@"
+fi
+' bash "$@"
 echo "CVA6 container build/test step finished (see log above)."

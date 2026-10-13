@@ -14,7 +14,7 @@ Last updated: 2026-10-12 (B1 host-smoke gate complete).
 | secp256k1 (ref model) | `cryptography` ECDSA oracle vector | PASS (algorithm only) |
 | ACT4 harness | riscv-arch-test ACT4, RV64I, DUT = Sail | 51/51 PASS on Sail — harness validation, **not** a hardware claim |
 | CVA6 host smoke (B1) | riscv-tests `rv64ui-p-add`, `rv64ui-p-simple` on Verilator model | PASS — `*** SUCCESS *** (tohost = 0)`; see `docs/evidence/` (smoke only) |
-| Spike solo smoke (B2.1) | Same two B1 ELFs on standalone tandem Spike (default config) | PASS exit 0 — oracle sanity only, config not yet matched to CVA6 |
+| Spike solo smoke (B2.1) | Same two B1 ELFs on standalone tandem Spike (default + matched profiles) | PASS exit 0 — oracle sanity only; matched profile gaps in `docs/SPIKE_CONFIG.md` |
 | Spike tandem (B2.3) | `SPIKE_TANDEM=1` RVFI lockstep vs CVA6 (`rvfi_compare`) | Not yet run |
 | RV64I/M/C on CVA6 | Full riscv-tests list + ACT4 on Verilator model | Not yet claimed (B2 next) |
 | RV64 A/F/D | ACT4 + TestFloat | Phase 2, not yet claimed |

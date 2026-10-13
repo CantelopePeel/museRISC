@@ -22,8 +22,27 @@ Committed, reproducible evidence for completed gates. A claim in
 - Command: `./scripts/spike_solo.sh`
 - Result: both B1 ELFs exit 0 on the standalone tandem-Spike binary
   (Spike 1.1.1-dev `b3149ab`)
-- Caveat: this run used Spike defaults (`RV64IMAFDC_zicntr_zihpm`,
+- Caveat: the first run used Spike defaults (`RV64IMAFDC_zicntr_zihpm`,
   `PMP Regions 0`), **not** a config matched to
   `cv64a6_imafdc_sv39`. It validates the ELFs and the oracle only;
   matched-config solo and `SPIKE_TANDEM` lockstep comparison are
   B2 tasks in issue #2.
+- Matched-profile rerun: `spike-solo-matched-b1-elfs-2026-10-12.log`
+  (`SPIKE_PROFILE=matched`) — both ELFs exit 0 with ISA
+  `RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr`, privilege `MSU`,
+  and PMP max/writable 64/8. Remaining config gaps are tracked in
+  `docs/SPIKE_CONFIG.md`; this is still a two-test smoke, not B2.
+
+## B2 batch regression runner smoke (2026-10-12)
+
+- Artifact: [`b2-batch-runner-smoke-2026-10-12.csv`](b2-batch-runner-smoke-2026-10-12.csv)
+- Command: `TESTS="rv64ui-p-add rv64ui-p-simple" RUN_NAME=solo-smoke ./scripts/cva6_docker.sh regression`
+- Result: exit 0; CSV records both tests `PASS` in solo mode with
+  cycle counts 35,837 / 35,909 — identical to the B1 gate above,
+  now produced by the batch matrix runner (`results.csv` +
+  `summary.txt` under `build/regression/<RUN_NAME>/`, per-test logs
+  alongside). Tandem mode (`SPIKE_TANDEM=1`) uses a separate
+  Verilator library (`work-ver-tandem`) so solo evidence is never
+  overwritten.
+- Caveat: runner validation on two tests only. Full directed lists
+  are B2.2; tandem lockstep is B2.3 (issue #2).

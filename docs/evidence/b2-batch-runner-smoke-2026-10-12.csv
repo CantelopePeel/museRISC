@@ -1,0 +1,3 @@
+test,mode,exit_code,status,cycles,mismatches,log
+rv64ui-p-add,solo,0,PASS,35837,0,logs/rv64ui-p-add.log
+rv64ui-p-simple,solo,0,PASS,35909,0,logs/rv64ui-p-simple.log
