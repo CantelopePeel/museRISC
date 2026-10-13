@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/assets/muserisc-logo.svg" alt="museRISC — RV64GCV crypto accelerator SoC" width="760">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/muserisc-logo-dark.svg">
+    <img src="docs/assets/muserisc-logo.svg" alt="museRISC — RV64GCV crypto accelerator SoC" width="760">
+  </picture>
 </p>
 
 <p align="center">
@@ -50,6 +53,7 @@ hardened with OpenROAD.
 | RTL lint / synthesis | Verilator `-Wall` clean; Yosys synth clean — `make lint` |
 | ACT4 harness | 51 RV64I tests pass **on Sail** — `make compliance` |
 | CVA6 host smoke (B1) | `rv64ui-p-add`, `rv64ui-p-simple`: `*** SUCCESS ***` — `docs/evidence/` |
+| Spike solo smoke | Same two ELFs exit 0 on standalone Spike (default config) — `scripts/spike_solo.sh` |
 | OpenROAD (partial) | Synthesis 52,933 cells, setup slack +5.3 ns @100 MHz (nangate45); routing not yet clean |
 
 ## Locked decisions (2026-10-12)
@@ -145,9 +149,10 @@ green and its log/report is committed under `docs/evidence/`.
 1. **B1 — Host smoke. ✅ Done.** The CVA6 Verilator model passes
    `rv64ui-p-add` / `rv64ui-p-simple` with
    `*** SUCCESS *** (tohost = 0)`; evidence is in `docs/evidence/`.
-2. **B2 — Host regression.** Run CVA6's full `riscv-asm-tests` list,
-   then generate ACT4 `I,M` ELFs and run them on the CVA6 model with a
-   museRISC DUT config. Only then update the compliance matrix.
+2. **B2 — Host regression.** Run CVA6's full `riscv-asm-tests` list
+   with Spike as a behavioral oracle — matched-config solo baseline,
+   then `SPIKE_TANDEM` lockstep RVFI comparison — followed by ACT4
+   `I,M` ELFs on the CVA6 model. Only then update the compliance matrix.
 3. **B3 — Macro closure.** Get a clean OpenROAD run for `muse_crypto`
    at 28% utilization (run at 40% ended with 645 routing violations):
    zero DRC violations, final timing/power metrics, GDS committed as a

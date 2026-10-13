@@ -1,0 +1,7 @@
+1.1.1-dev b3149ab
+rv64ui-p-add: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zicntr_zihpm PRIV: MSU
+[SPIKE]                 PMP Regions 0
+rv64ui-p-simple: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zicntr_zihpm PRIV: MSU
+[SPIKE]                 PMP Regions 0

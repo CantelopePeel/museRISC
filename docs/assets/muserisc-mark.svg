@@ -1,22 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
   <title id="title">museRISC mark</title>
-  <desc id="desc">An M-shaped signal inside a processor package.</desc>
-  <rect width="256" height="256" rx="48" fill="#101923"/>
-  <g stroke="#57D0B8" stroke-width="9" stroke-linecap="round">
-    <path d="M52 88 H28"/>
-    <path d="M52 128 H28"/>
-    <path d="M52 168 H28"/>
-    <path d="M228 88 H204"/>
-    <path d="M228 128 H204"/>
-    <path d="M228 168 H204"/>
-    <path d="M88 52 V28"/>
-    <path d="M128 52 V28"/>
-    <path d="M168 52 V28"/>
-    <path d="M88 228 V204"/>
-    <path d="M128 228 V204"/>
-    <path d="M168 228 V204"/>
-  </g>
-  <rect x="52" y="52" width="152" height="152" rx="24" fill="#162231" stroke="#57D0B8" stroke-width="9"/>
-  <path d="M82 174 V88 L128 142 L174 88 V174" fill="none" stroke="#F3F7F4" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="128" cy="142" r="10" fill="#F2B84B" stroke="#101923" stroke-width="4"/>
+  <desc id="desc">A white ribbon M on a bright blue rounded square.</desc>
+  <defs>
+    <linearGradient id="blue" x1="28" y1="28" x2="228" y2="228" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0076FF"/>
+      <stop offset="1" stop-color="#00BDF7"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="60" fill="url(#blue)"/>
+  <path d="M58 188V93c0-17 19-25 32-13l38 40 38-40c13-12 32-4 32 13v95" fill="none" stroke="#FFFFFF" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M48 202c54 25 106 21 160-11" fill="none" stroke="#FFFFFF" stroke-opacity="0.52" stroke-width="9" stroke-linecap="round"/>
 </svg>
