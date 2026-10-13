@@ -418,3 +418,34 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   by trap is the claim; non-trapping handling is not
   claimed. Config comments updated to cite this probe
   (behavior fields unchanged; no prior ELF changes).
+
+## Sweep follow-ups — TestFloat non-RNE rounding modes (2026-10-13, branch `testfloat-rounding`, issue #20)
+
+- Artifact: [`testfloat-rm-cva6-2026-10-13.csv`](testfloat-rm-cva6-2026-10-13.csv)
+  (76-row merged matrix in `testfloat-rm` list order)
+- Harness: generator `--rm` sets `frm` per ELF (RNE
+  default output verified byte-identical); build script
+  `RMODE=rtz|rdn|rup|rmm` generates vectors with the
+  matching `testfloat_gen` flag (`-rminMag/-rmin/-rmax/
+  -rnear_maxMag`, tininess-after) and stages
+  `tf-<op>_<mode>`; runner list `testfloat-rm`
+  enumerates all 76. Arithmetic ops are stride-sampled
+  to 23,232 cases (half of level-1 binary density;
+  mulAdd 23,232 of 6,133,248); conversions run full
+  level-1 (372–768).
+- Result: **76/76 PASS**, 771,936 vector executions —
+  RTZ, RDN, RUP, and RMM each over f32/f64
+  add/mul/div/sqrt/mulAdd plus nine conversions
+  (f32_to_i32, f32_to_ui64, f64_to_i64, f64_to_ui32,
+  i64_to_f32, ui64_to_f64, i32_to_f64, ui32_to_f32,
+  f64_to_f32), run solo in eight chunks
+  (`tfrm-<mode>-arith/cvt`). Every PASS log
+  cross-checked. Single-run reproduce:
+  `TEST_LISTS=testfloat-rm` (same selection; chunking is
+  a host-stability measure, as in B2.2). Float->int NX
+  masking applies as in the conversions evidence.
+- TestFloat totals across the three matrices: 112
+  checkers, 1,528,080 vectors, all PASS. Remaining
+  under #20: level-2 mulAdd density. Sub-operations
+  f32_sub/f64_sub rounding is covered at RNE and shares
+  the adder rounding path; not separately run per mode.

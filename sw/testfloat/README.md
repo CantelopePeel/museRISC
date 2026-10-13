@@ -30,11 +30,14 @@ TIME_OUT=20000000 TEST_TIMEOUT_SEC=420 ELF_SUBDIR=testfloat-elfs \
 Scope: single/double add, sub, mul, div, sqrt, and fused
 multiply-add (`TEST_LISTS=testfloat`), plus float<->int and
 f32<->f64 conversions and eq/le/lt comparisons
-(`TEST_LISTS=testfloat-cvt`), all at RNE. Float->int checkers
+(`TEST_LISTS=testfloat-cvt`) at RNE, plus RTZ/RDN/RUP/RMM
+arithmetic and conversions (`TEST_LISTS=testfloat-rm`,
+built with `RMODE=<mode> scripts/build_testfloat.sh`).
+Float->int checkers
 mask the NX flag: TestFloat generates those vectors with
 SoftFloat `exact=false` (expected flags never carry NX) while
 RISC-V `fcvt` raises NX on inexact conversions. `roundToInt`
-(no instruction without Zfa) and non-RNE rounding modes are
+(no instruction without Zfa) and level-2 density are
 follow-up work under issue #20. The
 upstream `berkeley-softfloat-3`/`berkeley-testfloat-3` trees live
 uncommitted under `third_party/` (recorded commits in evidence).
