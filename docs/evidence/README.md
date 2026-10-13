@@ -637,3 +637,35 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   `docs/CORE.md` — single-cycle RV64I only. No
   compliance claim attaches to it; riscv-tests/ACT
   gates start once CSR/trap state lands (stage 3).
+
+## In-house core stage 2 — M extension + pipeline (2026-10-13, #18)
+
+- Artifact: [`core-stage2-2026-10-13.log`](core-stage2-2026-10-13.log)
+  (clean `make core-test` extract); plan in
+  [`docs/CORE.md`](../CORE.md).
+- Stage 2a (commit `1f280ec`): `muserisc_muldiv` (RV64M incl.
+  divide-by-zero and signed-overflow rules, W variants) with a
+  C++ unit TB (165,877 checks, `__int128` golden model,
+  divisor-biased randoms) and `sw/core-tests/rv64m_directed.S`
+  (sign quadrants, div-by-zero, `INT_MIN/-1` at both widths,
+  div-mul-rem round trips), verified first on the single-cycle
+  core.
+- Stage 2b: the core is now a 5-stage in-order pipeline (full
+  EX forwarding + WB→ID bypass, one load-use bubble, control
+  transfers resolved in EX with two flushed slots, exceptions
+  carried to WB so a trapping instruction and everything
+  younger write nothing — the last point proven by
+  `trap_younger_store.S`). The full stage-1/2a suite stays
+  green unchanged, plus `pipeline_directed.S` (forwarding
+  chains at distances 1–3, load-use into ALU/branch/JALR/store
+  data and address, flush suppressing a fall-through store,
+  `x0` never forwarding, dependent accumulate loop).
+- Coverage: every annotated `rtl/core/` source line executed
+  (456/456); combined line+toggle points 314/456 (68%),
+  deterministic across reruns. `make test` and `make lint`
+  also pass at this commit.
+- Caveat: the divider is combinational (correctness vehicle,
+  not timing-closable — an iterative divider replaces it
+  before any synthesis target), and traps still halt the
+  machine at WB; real trap state is stage 3. No compliance
+  claim attaches yet.

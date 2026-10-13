@@ -24,19 +24,26 @@ take far longer — are stage gates, not per-commit checks.
 
 ## Stages
 
-| Stage | Scope | Gate |
-|---|---|---|
-| 1 | RV64I base integer, single-cycle, Harvard SRAM ports | unit TBs (ALU, decoder via directed asm), directed RV64I asm, coverage report |
-| 2 | M extension + 5-stage pipeline (hazards, forwarding) behind the stage-1 module boundaries | directed M asm (incl. div/rem edges), stage-1 directed suite still green on the pipelined core |
+| Stage | Scope | Gate | Status |
+|---|---|---|---|
+| 1 | RV64I base integer, single-cycle, Harvard SRAM ports | unit TBs (ALU, decoder via directed asm), directed RV64I asm, coverage report | done |
+| 2 | M extension + 5-stage pipeline (hazards, forwarding) behind the stage-1 module boundaries | directed M asm (incl. div/rem edges), stage-1 directed suite still green on the pipelined core | done |
 | 3 | Privileged M/S/U, CSRs, traps/interrupts, Sv39+Svnapot MMU, PMP | riscv-tests `rv64ui/um` (needs CSR/trap state), ACT I/M + priv suites, Linux boot attempt |
 | 4 | A, F/D (IEEE-754, all rounding modes), Zba/Zbb/Zbc/Zbs, Zcb, Zicond, Zkn | ACT suites per extension, TestFloat vectors (flow exists) |
 | 5 | C (Zca/Zcb/Zcd) — fetch realignment | ACT C suites, misaligned-fetch probes |
 | 6 | V (RVV 1.0), VLEN 512, lane-parallel unit | ACT vector with the `sw/act4-cva6v` flow retargeted |
 
-Single-cycle in stage 1 is deliberate: ISA semantics (decoder, ALU,
-load/store datapath) get verified with zero hazard noise, and the
-same modules are reused when the pipeline lands in stage 2. Stage-1
-performance is explicitly not a goal.
+Single-cycle in stage 1 was deliberate: ISA semantics (decoder,
+ALU, load/store datapath) got verified with zero hazard noise, and
+stage 2 reused the same modules inside a classic 5-stage pipeline
+— full forwarding to EX (EX/MEM and MEM/WB) plus a WB→ID bypass,
+one load-use bubble, all control transfers resolved in EX
+(predict not-taken, two flushed slots), and exceptions carried to
+WB so a trapping instruction and everything younger perform no
+writes. The M-unit divider is combinational in stage 2 (a
+correctness vehicle; an iterative divider with an EX stall
+replaces it before any synthesis target). Pipeline performance
+beyond correctness is not yet a goal at this stage.
 
 ## Requirements carried from the CVA6+Ara characterization
 

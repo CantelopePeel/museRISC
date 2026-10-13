@@ -1,0 +1,28 @@
+In-house core stage 2 (issue #18): M extension + 5-stage pipeline
+Command: make core-test   (host Verilator 5.044, riscv64-elf-gcc), clean rebuild
+
+ALU TB PASS (205642 checks)
+MULDIV TB PASS (165877 checks)
+DECODER TB PASS (10258 checks)
+REGFILE TB PASS (4194 checks)
+CORE TB PASS rv64i_directed.bin (315 cycles)
+CORE TB PASS rv64m_directed.bin (167 cycles)
+CORE TB PASS pipeline_directed.bin (648 cycles)
+CORE TB PASS trap_illegal.bin (expected trap cause 2 at pc 0x4, 5 cycles)
+CORE TB PASS trap_misalign.bin (expected trap cause 4 at pc 0x4, 5 cycles)
+CORE TB PASS trap_ecall.bin (expected trap cause 11 at pc 0x4, 5 cycles)
+CORE TB PASS trap_ebreak.bin (expected trap cause 3 at pc 0x4, 5 cycles)
+CORE TB PASS trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 6 cycles)
+CORE TB PASS trap_younger_store.bin (expected trap cause 4 at pc 0x4, 5 cycles)
+Total coverage (314/456) 68.00%
+
+Annotated source lines executed at least once (verilator_coverage):
+  muserisc_alu.sv: 36/36
+  muserisc_core.sv: 219/219
+  muserisc_decoder.sv: 138/138
+  muserisc_muldiv.sv: 50/50
+  muserisc_regfile.sv: 13/13
+  TOTAL 456/456 = 100.0% (no %000000 lines)
+Combined line+toggle points: 314/456 = 68% (deterministic
+across reruns; residue is toggle/partial-expression points).
+Repo gates also green at this commit: make test, make lint.

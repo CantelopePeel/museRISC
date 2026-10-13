@@ -28,8 +28,9 @@ SWFLAGS       := -march=rv64im_zicsr_zifencei -mabi=lp64 -nostdlib -T $(ROOT)/sw
 CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv $(RTL)/muserisc_alu.sv \
             $(RTL)/muserisc_muldiv.sv $(RTL)/muserisc_decoder.sv \
             $(RTL)/muserisc_core.sv
-TESTS    := rv64i_directed rv64m_directed trap_illegal trap_misalign \
-            trap_ecall trap_ebreak trap_store_misalign
+TESTS    := rv64i_directed rv64m_directed pipeline_directed \
+            trap_illegal trap_misalign trap_ecall trap_ebreak \
+            trap_store_misalign trap_younger_store
 
 .PHONY: all alu muldiv decoder regfile core sw coverage clean
 all: alu muldiv decoder regfile core coverage
@@ -86,11 +87,13 @@ $(BUILD)/%.bin: $(ROOT)/sw/core-tests/%.S $(ROOT)/sw/core-tests/link.ld | $(BUIL
 core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_rv64i.dat ./core_tb rv64i_directed.bin
 	cd $(BUILD) && COV_FILE=cov_rv64m.dat ./core_tb rv64m_directed.bin
+	cd $(BUILD) && COV_FILE=cov_pipeline.dat ./core_tb pipeline_directed.bin
 	cd $(BUILD) && COV_FILE=cov_trap_illegal.dat ./core_tb trap_illegal.bin 100000 --expect-trap 2
 	cd $(BUILD) && COV_FILE=cov_trap_misalign.dat ./core_tb trap_misalign.bin 100000 --expect-trap 4
 	cd $(BUILD) && COV_FILE=cov_trap_ecall.dat ./core_tb trap_ecall.bin 100000 --expect-trap 11
 	cd $(BUILD) && COV_FILE=cov_trap_ebreak.dat ./core_tb trap_ebreak.bin 100000 --expect-trap 3
 	cd $(BUILD) && COV_FILE=cov_trap_smisalign.dat ./core_tb trap_store_misalign.bin 100000 --expect-trap 6
+	cd $(BUILD) && COV_FILE=cov_trap_ystore.dat ./core_tb trap_younger_store.bin 100000 --expect-trap 4
 
 ## ---- Coverage ----------------------------------------------------------
 # Annotate from this directory: the .dat files record source paths
@@ -99,9 +102,10 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 COV_INPUTS := $(BUILD)/cov_alu.dat $(BUILD)/cov_muldiv.dat \
               $(BUILD)/cov_decoder.dat $(BUILD)/cov_regfile.dat \
               $(BUILD)/cov_rv64i.dat $(BUILD)/cov_rv64m.dat \
+              $(BUILD)/cov_pipeline.dat \
               $(BUILD)/cov_trap_illegal.dat $(BUILD)/cov_trap_misalign.dat \
               $(BUILD)/cov_trap_ecall.dat $(BUILD)/cov_trap_ebreak.dat \
-              $(BUILD)/cov_trap_smisalign.dat
+              $(BUILD)/cov_trap_smisalign.dat $(BUILD)/cov_trap_ystore.dat
 coverage:
 	@rm -f $(BUILD)/cov_merged.dat
 	@verilator_coverage --write $(BUILD)/cov_merged.dat $(COV_INPUTS)
