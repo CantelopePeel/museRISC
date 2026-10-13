@@ -1,0 +1,18 @@
+app,result,cycles_hex,notes
+hello_world,PASS,48d,prints "Ariane says Hello!"
+dotproduct,PASS,abfb,
+fdotproduct,PASS,97a7,
+imatmul,PASS,1cc713,
+fmatmul,PASS,227e3f,
+iconv2d,PASS,7e251,
+fconv2d,PASS,aabf9,
+jacobi2d,PASS,22d41c,
+dropout,PASS,b228,
+exp,PASS,6d71,
+softmax,PASS,2e667,
+pathfinder,PASS,2d70cf,
+roi_align,PASS,1762,
+lavamd,PASS,1b06a,
+fconv3d,PASS,157129,
+fft,FAIL,24315,numerical errors under GCC-substitute build; upstream CI passes with pinned LLVM (retest pending)
+dwt,FAIL,fd06f,numerical errors under GCC-substitute build; upstream CI passes with pinned LLVM (retest pending)

@@ -508,8 +508,20 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   exit 0 in 3,751 cycles (~46 kHz); corrupted-expectation
   negative control exits 2; restored kernel re-passes
   deterministically.
-- Open on #9: Ara app kernels (LLVM or GCC path),
-  patched riscv-tests vector lists, ACT vector suites
-  with a dedicated DUT config, and the synthesis
-  area/timing snapshot. Vector compliance is not
-  yet claimed.
+- App kernels: [`ara-apps-2026-10-13.csv`](ara-apps-2026-10-13.csv)
+  — 15/17 PASS on the model via the GCC substitute path
+  (`sw/ara-smoke/run_apps.sh`, packaged
+  `riscv64-unknown-elf-gcc` + picolibc specs): hello_world,
+  dotproduct, fdotproduct, imatmul, fmatmul, iconv2d,
+  fconv2d, jacobi2d, dropout, exp, softmax, pathfinder,
+  roi_align, lavamd, fconv3d. `fft` and `dwt` fail with
+  numerical errors under GCC-built binaries at both -O3
+  and -O1; upstream CI builds these with the pinned LLVM
+  and simulates them on 2_lanes, so treat as
+  compiler-substitution suspects pending an LLVM retest
+  (an unpatched-Spike oracle is not usable: Ara requires
+  its modified Spike for the .spike targets).
+- Open on #9: patched riscv-tests vector lists, ACT
+  vector suites with a dedicated DUT config, the
+  synthesis area/timing snapshot, and the fft/dwt LLVM
+  retest. Vector compliance is not yet claimed.
