@@ -1,0 +1,35 @@
+Ara RVV integration smoke evidence — 2026-10-13 (branch 9-ara-rvv, issue #9)
+
+System: CVA6 (Ara Bender pin pulp-platform/cva6 99eac9a6, target
+cv64a6_imafdcv_sv39) + Ara 34bd3bc1, config 2_lanes with VLEN=512.
+Note: the scalar sweep evidence is on openhwgroup CVA6 81245a47;
+the vector system integrates Ara's pinned CVA6 (same lineage, the
+commit our ACT config citations already reference).
+
+Bring-up commands (scripts/ara_docker.sh, native arm64 container):
+  make -C hardware bender            # Bender 0.31.0
+  make -C hardware checkout          # lockfile deps (bender update
+                                      # re-resolves and conflicts)
+  make -C hardware apply-patches     # SRAM DPI exports (required)
+  make verilator                     # Ara-pinned Verilator 5.047
+                                      # (CVA6 v5.008 rejects waiver.vlt)
+  make -C hardware verilate config=2_lanes vlen=512
+  /repo/sw/ara-smoke/build.sh        # Ubuntu riscv64-unknown-elf-gcc
+                                      # 13.2, -march=rv64gcv medany
+  hardware/build/verilator/Vara_tb_verilator \
+      -l ram,/repo/sw/ara-smoke/smoke.elf,elf
+
+Results:
+  verilated model: hardware/build/verilator/Vara_tb_verilator (19 MB)
+  smoke (sw/ara-smoke/smoke.c: strip-mined vadd.vv + vfadd.vv over
+  64 elements, scalar-checked): exit code 0, 3751 cycles, ~46 kHz
+  wallclock simulation speed on this host.
+  negative control (expected value off by one): exit code 2.
+  Restored smoke re-run: exit code 0, same cycle count.
+
+No Docker memory increase was needed in the end (VM stays
+7.65 GiB): the wins were running the container natively on arm64
+(the CVA6 Verilator is an aarch64 build), building only Ara's
+pinned Verilator from source (~3 min), and using the packaged
+RISC-V GCC for the smoke kernel instead of building LLVM.
+LLVM-based app flow and ACT vector remain open on #9.

@@ -486,3 +486,30 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   recorded, not waived. sky130hd deltas live in
   `flow/designs/sky130hd/muse_crypto/README.md`; no
   sky130hd run is claimed.
+
+## Ara RVV integration — model build + vector smoke (2026-10-13, branch `9-ara-rvv`, issue #9)
+
+- Artifact: [`ara-smoke-2026-10-13.log`](ara-smoke-2026-10-13.log);
+  smoke source `sw/ara-smoke/`, runner
+  `scripts/ara_docker.sh`.
+- System: Ara `34bd3bc1` (2 lanes, VLEN 512) attached
+  to its Bender-pinned CVA6 `99eac9a6`
+  (`cv64a6_imafdcv_sv39`), verilated with Ara's pinned
+  Verilator 5.047 in a native-arm64 container. The
+  earlier "host RAM/toolchain" deferral turned out
+  avoidable: only Verilator is built from source
+  (~3 min), Bender deps come from the lockfile
+  (`checkout`, not `update`), the SRAM DPI patch is
+  applied, and the smoke kernel compiles with the
+  packaged `riscv64-unknown-elf-gcc` — no LLVM build,
+  no Docker memory increase (VM remains 7.65 GiB).
+- Result: **smoke PASS** — strip-mined `vadd.vv` and
+  `vfadd.vv` over 64 elements verified scalar-side,
+  exit 0 in 3,751 cycles (~46 kHz); corrupted-expectation
+  negative control exits 2; restored kernel re-passes
+  deterministically.
+- Open on #9: Ara app kernels (LLVM or GCC path),
+  patched riscv-tests vector lists, ACT vector suites
+  with a dedicated DUT config, and the synthesis
+  area/timing snapshot. Vector compliance is not
+  yet claimed.
