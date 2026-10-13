@@ -1,13 +1,19 @@
-# Host core integration (Phase 1+)
+# In-house core (issue #18)
 
-museRISC does not home-grow an RV64GCV core. Integration plan:
+This directory holds museRISC's own RV64 core, written in
+SystemVerilog and developed in verified stages (design, staging
+plan, interface contract, and requirements carried from the
+CVA6+Ara characterization: [`docs/CORE.md`](../../docs/CORE.md)).
 
-1. **CVA6** (`third_party/cva6`, openhwgroup/cva6) — RV64GC, 6-stage,
-   MMU/Sv39, AXI. Config: `cv64a6_imafdc_sv39` as the starting point.
-2. **Ara** (`third_party/ara`, pulp-platform/ara) — RVV 1.0 vector
-   co-processor designed to attach to CVA6. Start VLEN=512, 2 lanes.
-3. Glue in this directory will hold the AXI crossbar config, boot ROM,
-   and the arch-test target (`link.ld`, trap handler) for RISCOF.
+The earlier integration plan for this directory — a CVA6 host
+(`cv64a6_imafdc_sv39` / `cv64a6_imafdcv_sv39`) with an Ara vector
+unit, fetched via `scripts/setup.sh` — has been superseded. The
+third-party system remains in `third_party/` as the characterized
+reference the merged B1/B2/#9 evidence was gathered on; it is not
+the shipping core.
 
-Fetch with `./scripts/setup.sh` (pinned commits recorded there).
-Compliance procedure: `scripts/run_compliance.sh` + COMPLIANCE.md.
+Stage 1 (landed on the #18 branch): single-cycle RV64I
+(`muserisc_pkg`, `muserisc_regfile`, `muserisc_alu`,
+`muserisc_decoder`, `muserisc_core`) verified by C++ Verilator
+unit testbenches per module plus directed self-checking assembly
+(`tb/cpp/`, `sw/core-tests/`, run via `make core-test`).

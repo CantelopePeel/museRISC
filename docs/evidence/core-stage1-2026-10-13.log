@@ -1,0 +1,23 @@
+In-house core stage 1 (issue #18): build+test transcript extract
+Command: make core-test   (host Verilator 5.044, riscv64-elf-gcc)
+
+ALU TB PASS (205642 checks)
+DECODER TB PASS (10258 checks)
+REGFILE TB PASS (4194 checks)
+CORE TB PASS rv64i_directed.bin (266 cycles)
+CORE TB PASS trap_illegal.bin (expected trap cause 2 at pc 0x4, 1 cycles)
+CORE TB PASS trap_misalign.bin (expected trap cause 4 at pc 0x4, 1 cycles)
+CORE TB PASS trap_ecall.bin (expected trap cause 11 at pc 0x4, 1 cycles)
+CORE TB PASS trap_ebreak.bin (expected trap cause 3 at pc 0x4, 1 cycles)
+CORE TB PASS trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 2 cycles)
+Total coverage (163/273) 59.00%
+
+Annotated source lines executed at least once (verilator_coverage):
+  muserisc_alu.sv: 36/36
+  muserisc_core.sv: 95/95
+  muserisc_decoder.sv: 129/129
+  muserisc_regfile.sv: 13/13
+  TOTAL 273/273 = 100.0% (no %000000 lines)
+verilator_coverage combined line+toggle points: 163/273 = 59%;
+the residual points are toggle/partial-expression points
+(wide datapath and PC bits under small directed footprints).

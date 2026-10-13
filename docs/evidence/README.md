@@ -604,3 +604,36 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   (fix belongs upstream in Ara or in #18; it is not
   fixable in test code without invalidating the
   evidence). Vector compliance is not claimed.
+  Resolution: #9 closed as merged with both items
+  explicitly descoped; synthesis closure is tracked by
+  #11, the ACT requirement by #18.
+
+## In-house core stage 1 — RV64I (2026-10-13, issue #18 branch)
+
+- Artifact: [`core-stage1-2026-10-13.log`](core-stage1-2026-10-13.log)
+  (extract of a clean `make core-test` run); design and
+  staging plan in [`docs/CORE.md`](../CORE.md), RTL in
+  `rtl/core/`, C++ Verilator testbenches in `tb/cpp/`,
+  directed software in `sw/core-tests/`.
+- Result: ALU unit TB 205,642 checks, decoder unit TB
+  10,258 checks (full opcode × funct3 × funct7-sample
+  sweep vs an encoding-whitelist golden model), regfile
+  unit TB 4,194 checks, directed RV64I assembly (14
+  groups: arithmetic/logic/shifts incl. W variants, all
+  branches, JAL/JALR, every load/store size and
+  extension, `x0`, FENCE, AUIPC) and five expected-trap
+  programs (illegal CSR access, misaligned load/store,
+  ECALL, EBREAK) all PASS on the single-cycle core.
+- Coverage: every annotated source line in `rtl/core/`
+  executed (273/273, no `%000000` lines); combined
+  line+toggle points 163/273 (59%), the residue being
+  toggle/partial-expression points on wide datapaths.
+- Bugs found by this loop and fixed before commit: ADDI
+  with a negative immediate decoded as SUB, and illegal
+  encodings leaking side-effecting control fields (both
+  in `muserisc_decoder`); harness read-data settle and
+  golden-model slips in two TBs.
+- Caveat: this is stage 1 of the plan in
+  `docs/CORE.md` — single-cycle RV64I only. No
+  compliance claim attaches to it; riscv-tests/ACT
+  gates start once CSR/trap state lands (stage 3).
