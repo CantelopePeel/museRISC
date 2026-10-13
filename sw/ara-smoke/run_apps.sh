@@ -3,12 +3,14 @@
 # each on the verilated CVA6+Ara model. Run inside the Ara container:
 #   ./scripts/ara_docker.sh /repo/sw/ara-smoke/run_apps.sh [app ...]
 set -uo pipefail
+VLEN="${VLEN:-512}" # must match the verilated model under hardware/build
 cd "$(dirname "$0")/../../third_party/ara/apps"
 APPS="${@:-dotproduct fdotproduct imatmul fmatmul iconv2d fconv2d}"
 run_one() {
   local app="$1"
   echo "=== $app: build"
-  if ! make config=2_lanes vlen=512 "$app" COMPILER=gcc \
+  rm -f "bin/$app" # force rebuild: make does not track VLEN changes
+  if ! make config=2_lanes vlen="$VLEN" "$app" COMPILER=gcc \
       RISCV_CC=riscv64-unknown-elf-gcc RISCV_CXX=riscv64-unknown-elf-g++ \
       RISCV_OBJDUMP=riscv64-unknown-elf-objdump RISCV_STRIP=riscv64-unknown-elf-strip \
       LLVM_FLAGS="-march=rv64gcv_zfh -mabi=lp64d -mno-relax --specs=picolibc.specs" \

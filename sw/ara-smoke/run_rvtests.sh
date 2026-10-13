@@ -4,8 +4,10 @@
 # Run inside the Ara container:
 #   ./scripts/ara_docker.sh /repo/sw/ara-smoke/run_rvtests.sh [range]
 # Optional args: first and last index (1-based) into the Makefrag list.
+# VLEN env (default 512) must match the verilated model under hardware/build.
 # Emits one CSV line per test: name,PASS|FAIL|BUILD_FAIL|TIMEOUT,cycles
 set -uo pipefail
+VLEN="${VLEN:-512}"
 cd "$(dirname "$0")/../../third_party/ara/apps"
 TESTS=$(sed -n '/^rv64uv_sc_tests/,/^$/p' riscv-tests/isa/rv64uv/Makefrag \
   | sed 's/rv64uv_sc_tests =//; s/\\//g' | tr '\n' ' ')
@@ -21,11 +23,11 @@ for t in $TESTS; do
   [ "$i" -lt "$FIRST" ] && continue
   [ "$i" -gt "$LAST" ] && break
   bin="bin/rv64uv-ara-$t"
-  if [ ! -f "$bin" ]; then
-    if ! make config=2_lanes vlen=512 "$bin" "${OVR[@]}" \
-        > "/tmp/rvt_${t}_build.log" 2>&1; then
-      echo "$t,BUILD_FAIL,"; continue
-    fi
+  rm -f "$bin" # always rebuild: make does not track VLEN changes, and a
+               # stale ELF built for another VLEN would silently mislead
+  if ! make config=2_lanes vlen="$VLEN" "$bin" "${OVR[@]}" \
+      > "/tmp/rvt_${t}_build.log" 2>&1; then
+    echo "$t,BUILD_FAIL,"; continue
   fi
   timeout 240 ../hardware/build/verilator/Vara_tb_verilator \
     -l "ram,/repo/third_party/ara/apps/$bin,elf" \

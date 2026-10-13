@@ -1,0 +1,3 @@
+app,result,cycles_hex,notes
+fft,PASS,fa3e,"VLEN2048 model + GCC build (VLEN=2048): kernel assumes n_fft < VLMAX (NFFT=64, e32m1) and ignores the vsetvl return value, so it cannot pass at VLEN512 by construction"
+dwt,PASS,cdf0,"VLEN2048 model + GCC build (VLEN=2048): kernel vl-doubling accounting assumes DWT_LEN=512 fits one e32m4 register group (VLEN>=2048), so it fails at VLEN512 by kernel construction"

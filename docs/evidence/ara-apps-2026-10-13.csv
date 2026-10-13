@@ -14,5 +14,5 @@ pathfinder,PASS,2d70cf,
 roi_align,PASS,1762,
 lavamd,PASS,1b06a,
 fconv3d,PASS,157129,
-fft,FAIL,24315,numerical errors under GCC-substitute build; upstream CI passes with pinned LLVM (retest pending)
-dwt,FAIL,fd06f,numerical errors under GCC-substitute build; upstream CI passes with pinned LLVM (retest pending)
+fft,FAIL,24315,"kernel assumes n_fft < VLMAX and ignores vsetvl return (NFFT=64 vs VLMAX e32m1 = 16 @VLEN512); PASS on VLEN2048 model with same GCC build — see ara-apps-vlen2048-2026-10-13.csv"
+dwt,FAIL,fd06f,"kernel vl-doubling accounting assumes DWT_LEN=512 fits one e32m4 group (needs VLEN>=2048); PASS on VLEN2048 model with same GCC build — see ara-apps-vlen2048-2026-10-13.csv"

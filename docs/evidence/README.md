@@ -515,13 +515,43 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   dotproduct, fdotproduct, imatmul, fmatmul, iconv2d,
   fconv2d, jacobi2d, dropout, exp, softmax, pathfinder,
   roi_align, lavamd, fconv3d. `fft` and `dwt` fail with
-  numerical errors under GCC-built binaries at both -O3
-  and -O1; upstream CI builds these with the pinned LLVM
-  and simulates them on 2_lanes, so treat as
-  compiler-substitution suspects pending an LLVM retest
-  (an unpatched-Spike oracle is not usable: Ara requires
-  its modified Spike for the .spike targets).
-- Open on #9: patched riscv-tests vector lists, ACT
-  vector suites with a dedicated DUT config, the
-  synthesis area/timing snapshot, and the fft/dwt LLVM
-  retest. Vector compliance is not yet claimed.
+  numerical errors at VLEN512, but both kernels carry
+  single-register-group length assumptions that cannot
+  hold at VLEN512 for the shipped problem sizes (`fft`:
+  source documents "works if n_fft < VLMAX" and ignores
+  the `vsetvl` return value, NFFT=64 vs VLMAX 16 for
+  e32m1; `dwt`: vl-doubling accounting needs DWT_LEN=512
+  to fit one e32m4 group, i.e. VLEN ≥ 2048). Both PASS
+  on a VLEN2048 build of the same model with the same
+  GCC toolchain
+  ([`ara-apps-vlen2048-2026-10-13.csv`](ara-apps-vlen2048-2026-10-13.csv)),
+  so they are classified as kernel VLEN assumptions, not
+  hardware or compiler failures; the planned LLVM retest
+  is descoped for these two kernels because the failure
+  mode is compiler-independent by construction.
+- Patched riscv-tests vector list (rv64uv, 177 tests,
+  `sw/ara-smoke/run_rvtests.sh`, GCC builds):
+  [`ara-rv64uv-2026-10-13.csv`](ara-rv64uv-2026-10-13.csv)
+  records 49 PASS / 127 FAIL / 1 TIMEOUT (`vrgather`) at
+  VLEN512. Every failing test's source assumes VLEN > 512
+  by at least one concrete mechanism — hardcoded
+  `VSET(avl, ...)` counts above VLMAX at VLEN512 while
+  the `VLOAD`/`VCMP` macros check all `avl` elements;
+  widening/narrowing cases that require the wide operand
+  to fit one physical register; or `check_vtype_vl`
+  requiring `vl == avl` for AVL up to 250 — and no test
+  whose source fits VLEN512 fails (first failing element
+  index is 8 in the widening cases, exactly one 512-bit
+  register of e64). Rebuilt at VLEN2048 (Ara's upstream
+  default for `2_lanes`) with the same GCC toolchain, the
+  full list passes 177/177
+  ([`ara-rv64uv-vlen2048-2026-10-13.csv`](ara-rv64uv-vlen2048-2026-10-13.csv)),
+  which confirms the VLEN512 failures are test-source
+  VLEN assumptions rather than Ara hardware bugs or GCC
+  codegen faults. This suite therefore cannot serve as
+  VLEN512 acceptance evidence; the VLEN512 claim rests on
+  the smoke kernel, the 15 VLEN-agnostic app kernels, and
+  the 49 rv64uv tests that fit VLEN512, pending ACT.
+- Open on #9: ACT vector suites with a dedicated DUT
+  config and the synthesis area/timing snapshot. Vector
+  compliance is not yet claimed.
