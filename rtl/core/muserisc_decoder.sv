@@ -125,13 +125,17 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.valid = 1'b0;
         end
       end
-      7'b0110011: begin  // OP (register-register)
+      7'b0110011: begin  // OP (register-register) and M (funct7=1)
         if ((funct7 == 7'b0000000) ||
             ((funct7 == 7'b0100000) &&
              ((funct3 == 3'b000) || (funct3 == 3'b101)))) begin
           ctrl_o.valid = 1'b1;
           ctrl_o.reg_write = 1'b1;
           ctrl_o.alu_op = alu_decode(funct3, instr_i[30]);
+        end else if (funct7 == 7'b0000001) begin
+          ctrl_o.valid = 1'b1;
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.muldiv = 1'b1;
         end
       end
       7'b0011011: begin  // OP-IMM-32
@@ -155,7 +159,7 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.valid = 1'b0;
         end
       end
-      7'b0111011: begin  // OP-32
+      7'b0111011: begin  // OP-32 and M W-variants (funct7=1)
         ctrl_o.word_op = 1'b1;
         ctrl_o.alu_op = alu_decode(funct3, instr_i[30]);
         if ((funct7 == 7'b0000000) &&
@@ -167,6 +171,13 @@ module muserisc_decoder import muserisc_pkg::*; (
                      ((funct3 == 3'b000) || (funct3 == 3'b101))) begin
           ctrl_o.valid = 1'b1;
           ctrl_o.reg_write = 1'b1;
+        end else if ((funct7 == 7'b0000001) &&
+                     ((funct3 == 3'b000) || (funct3[2] == 1'b1))) begin
+          // MULW (000), DIVW (100), DIVUW (101), REMW (110), REMUW (111);
+          // there are no MULHW-class encodings.
+          ctrl_o.valid = 1'b1;
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.muldiv = 1'b1;
         end
       end
       7'b0001111: begin  // FENCE / FENCE.I: NOP in stage 1

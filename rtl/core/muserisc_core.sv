@@ -63,6 +63,15 @@ module muserisc_core import muserisc_pkg::*; (
       .result_o  (alu_result)
   );
 
+  logic [63:0] muldiv_result;
+  muserisc_muldiv u_muldiv (
+      .funct3_i  (ctrl.funct3),
+      .word_op_i (ctrl.word_op),
+      .a_i       (rs1_data),
+      .b_i       (rs2_data),
+      .result_o  (muldiv_result)
+  );
+
   // Branch conditions from funct3.
   always_comb begin
     unique case (ctrl.funct3)
@@ -161,10 +170,11 @@ module muserisc_core import muserisc_pkg::*; (
   assign trap_pc_o = pc_q;
 
   // Writeback select: jumps write the return address, loads the
-  // loaded data, everything else the ALU result.
+  // loaded data, M ops the muldiv result, everything else the ALU.
   always_comb begin
     if (ctrl.jal || ctrl.jalr)   rd_data = pc_q + 64'd4;
     else if (ctrl.mem_read)      rd_data = load_data;
+    else if (ctrl.muldiv)        rd_data = muldiv_result;
     else                         rd_data = alu_result;
   end
 

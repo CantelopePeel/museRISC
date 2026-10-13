@@ -26,7 +26,8 @@ package muserisc_pkg;
   // Decoder output consumed by the datapath. One struct so stage 2
   // can register it verbatim between decode and execute.
   typedef struct packed {
-    logic    valid;        // legal RV64I instruction (stage-1 subset)
+    logic    muldiv;       // result comes from the M unit (funct3 selects)
+    logic    valid;        // legal instruction in the implemented subset
     logic    reg_write;    // write rd at end of cycle
     logic    mem_read;     // load: rd takes loaded data
     logic    mem_write;    // store: byte enables from funct3

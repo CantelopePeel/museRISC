@@ -18,7 +18,7 @@ enum AluOp { ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND, COPY_B };
 
 struct Ctrl {
   bool valid = false, reg_write = false, mem_read = false, mem_write = false;
-  bool alu_src_imm = false, alu_a_pc = false, word_op = false;
+  bool alu_src_imm = false, alu_a_pc = false, word_op = false, muldiv = false;
   int alu_op = ADD;
   bool branch = false, jal = false, jalr = false, ecall = false, ebreak = false;
   uint64_t imm = 0;
@@ -88,10 +88,12 @@ Ctrl Golden(uint32_t insn) {
       if (f3 == 5 && top != 0 && top != 0x10) c.valid = false;
       break;
     }
-    case 0x33:  // OP
+    case 0x33:  // OP, plus M under funct7=1 (all funct3 defined)
       if (f7 == 0 || (f7 == 0x20 && (f3 == 0 || f3 == 5))) {
         c.valid = c.reg_write = true;
         c.alu_op = AluFor(static_cast<int>(f3), alt);
+      } else if (f7 == 1) {
+        c.valid = c.reg_write = c.muldiv = true;
       }
       break;
     case 0x1b: {  // OP-IMM-32: ADDIW (0), SLLIW (1), SRLIW/SRAIW (5)
@@ -105,12 +107,14 @@ Ctrl Golden(uint32_t insn) {
       }
       break;
     }
-    case 0x3b:  // OP-32: ADDW/SLLW/SRLW (f7=0), SUBW/SRAW (f7=0x20)
+    case 0x3b:  // OP-32 + M W-variants: MULW, DIV[U]W, REM[U]W only
       c.word_op = true;
       c.alu_op = AluFor(static_cast<int>(f3), alt);
       if ((f7 == 0 && (f3 == 0 || f3 == 1 || f3 == 5)) ||
           (f7 == 0x20 && (f3 == 0 || f3 == 5))) {
         c.valid = c.reg_write = true;
+      } else if (f7 == 1 && (f3 == 0 || f3 >= 4)) {
+        c.valid = c.reg_write = c.muldiv = true;
       }
       break;
     case 0x0f:  // FENCE / FENCE.I
@@ -151,7 +155,7 @@ int main(int argc, char** argv) {
     const int kFunct3 = 0, kEbreak = 3, kEcall = 4, kJalr = 5, kJal = 6,
               kBranch = 7, kAluOp = 8, kWordOp = 12, kAluAPc = 13,
               kAluSrcImm = 14, kMemWrite = 15, kMemRead = 16,
-              kRegWrite = 17, kValid = 18;
+              kRegWrite = 17, kValid = 18, kMuldiv = 19;
     const Field fields[] = {
         {"valid", bit(kValid), g.valid},
         {"reg_write", bit(kRegWrite), g.reg_write && g.valid},
@@ -160,6 +164,7 @@ int main(int argc, char** argv) {
         {"branch", bit(kBranch), g.branch && g.valid},
         {"jal", bit(kJal), g.jal && g.valid},
         {"jalr", bit(kJalr), g.jalr && g.valid},
+        {"muldiv", bit(kMuldiv), g.muldiv && g.valid},
         {"ecall", bit(kEcall), g.ecall && g.valid},
         {"ebreak", bit(kEbreak), g.ebreak && g.valid},
     };

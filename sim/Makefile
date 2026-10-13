@@ -23,15 +23,16 @@ RISCV_PREFIX ?= $(shell command -v riscv64-unknown-elf-gcc >/dev/null 2>&1 \
                   && echo riscv64-unknown-elf- || echo riscv64-elf-)
 RISCV_GCC     := $(RISCV_PREFIX)gcc
 RISCV_OBJCOPY := $(RISCV_PREFIX)objcopy
-SWFLAGS       := -march=rv64i_zicsr_zifencei -mabi=lp64 -nostdlib -T $(ROOT)/sw/core-tests/link.ld
+SWFLAGS       := -march=rv64im_zicsr_zifencei -mabi=lp64 -nostdlib -T $(ROOT)/sw/core-tests/link.ld
 
 CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv $(RTL)/muserisc_alu.sv \
-            $(RTL)/muserisc_decoder.sv $(RTL)/muserisc_core.sv
-TESTS    := rv64i_directed trap_illegal trap_misalign trap_ecall \
-            trap_ebreak trap_store_misalign
+            $(RTL)/muserisc_muldiv.sv $(RTL)/muserisc_decoder.sv \
+            $(RTL)/muserisc_core.sv
+TESTS    := rv64i_directed rv64m_directed trap_illegal trap_misalign \
+            trap_ecall trap_ebreak trap_store_misalign
 
-.PHONY: all alu decoder regfile core sw coverage clean
-all: alu decoder regfile core coverage
+.PHONY: all alu muldiv decoder regfile core sw coverage clean
+all: alu muldiv decoder regfile core coverage
 
 $(BUILD) $(OBJ):
 	mkdir -p $@
@@ -44,6 +45,15 @@ $(BUILD)/alu_tb: $(ROOT)/tb/cpp/alu_tb.cpp $(PKG) $(RTL)/muserisc_alu.sv | $(BUI
 
 alu: $(BUILD)/alu_tb
 	cd $(BUILD) && COV_FILE=cov_alu.dat ./alu_tb
+
+## ---- Muldiv unit test ---------------------------------------------------
+$(BUILD)/muldiv_tb: $(ROOT)/tb/cpp/muldiv_tb.cpp $(RTL)/muserisc_muldiv.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/muldiv --top-module muserisc_muldiv \
+	  -o $(abspath $(BUILD)/muldiv_tb) $(RTL)/muserisc_muldiv.sv \
+	  $(abspath $(ROOT)/tb/cpp/muldiv_tb.cpp)
+
+muldiv: $(BUILD)/muldiv_tb
+	cd $(BUILD) && COV_FILE=cov_muldiv.dat ./muldiv_tb
 
 ## ---- Decoder unit test -------------------------------------------------
 $(BUILD)/decoder_tb: $(ROOT)/tb/cpp/decoder_tb.cpp $(PKG) $(RTL)/muserisc_decoder.sv | $(BUILD) $(OBJ)
@@ -75,6 +85,7 @@ $(BUILD)/%.bin: $(ROOT)/sw/core-tests/%.S $(ROOT)/sw/core-tests/link.ld | $(BUIL
 
 core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_rv64i.dat ./core_tb rv64i_directed.bin
+	cd $(BUILD) && COV_FILE=cov_rv64m.dat ./core_tb rv64m_directed.bin
 	cd $(BUILD) && COV_FILE=cov_trap_illegal.dat ./core_tb trap_illegal.bin 100000 --expect-trap 2
 	cd $(BUILD) && COV_FILE=cov_trap_misalign.dat ./core_tb trap_misalign.bin 100000 --expect-trap 4
 	cd $(BUILD) && COV_FILE=cov_trap_ecall.dat ./core_tb trap_ecall.bin 100000 --expect-trap 11
@@ -85,8 +96,9 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 # Annotate from this directory: the .dat files record source paths
 # relative to sim/, where verilator was invoked. Inputs are listed
 # explicitly so a stale merged file can never feed back into a merge.
-COV_INPUTS := $(BUILD)/cov_alu.dat $(BUILD)/cov_decoder.dat \
-              $(BUILD)/cov_regfile.dat $(BUILD)/cov_rv64i.dat \
+COV_INPUTS := $(BUILD)/cov_alu.dat $(BUILD)/cov_muldiv.dat \
+              $(BUILD)/cov_decoder.dat $(BUILD)/cov_regfile.dat \
+              $(BUILD)/cov_rv64i.dat $(BUILD)/cov_rv64m.dat \
               $(BUILD)/cov_trap_illegal.dat $(BUILD)/cov_trap_misalign.dat \
               $(BUILD)/cov_trap_ecall.dat $(BUILD)/cov_trap_ebreak.dat \
               $(BUILD)/cov_trap_smisalign.dat
