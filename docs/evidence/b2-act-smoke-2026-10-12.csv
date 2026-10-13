@@ -1,0 +1,4 @@
+test,mode,exit_code,status,cycles,mismatches,log
+I-add-00,solo,0,PASS,35837,0,logs/I-add-00.log
+I-addi-00,solo,0,PASS,35906,0,logs/I-addi-00.log
+M-mul-00,solo,0,PASS,35837,0,logs/M-mul-00.log

@@ -17,6 +17,7 @@ Last updated: 2026-10-12 (B2.0–B2.3 complete on branch `b2-tandem-act4`; B2.4 
 | Spike solo (B2.1) | All 174 B2 directed-list ELFs on standalone tandem Spike, profile `matched` (config frozen in `docs/SPIKE_CONFIG.md`, B2.0) | 174/174 PASS exit 0 — validates ELFs + oracle only, **not** a CVA6 result; see `docs/evidence/` |
 | Spike tandem (B2.3) | `SPIKE_TANDEM=1` RVFI lockstep vs CVA6 (`rvfi_compare`) | 173/174 PASS with 0 mismatches + 1 waived config divergence (`rv64mi-p-csr` cycle CSR without Zicntr; DUT passes) on branch `b2-tandem-act4`; zero unexplained mismatches; see `docs/evidence/` |
 | RV64I/M/A/C + priv subset on CVA6 (B2.2) | 174 riscv-tests (ui/um/ua/uc/si/mi, `-p-`+`-v-`) on Verilator model via batch runner | 174/174 PASS — `*** SUCCESS *** (tohost = 0)` each, 0 fail/timeout/mismatch; solo only, no lockstep compare (B2.3); see `docs/evidence/` |
+| ACT4 I/M on CVA6 (B2.4) | 64 self-checking ACT ELFs (51 I + 13 M, `sw/act4-cva6/` DUT config) on Verilator model | Smoke PASS — 3/3 (`RVCP-SUMMARY: TEST PASSED`) on branch `b2-tandem-act4`; full 64-ELF run in progress, not yet claimed; see `docs/evidence/` |
 | ACT4 I/M on CVA6 (B2.4) | riscv-arch-test ACT4 with CVA6 DUT config | Not yet run |
 | RV64 A/F/D | ACT4 + TestFloat | Phase 2, not yet claimed |
 | RVV 1.0 | ACT4 vector suite (fixed VLEN) | Phase 3, not yet claimed |

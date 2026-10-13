@@ -31,6 +31,7 @@ docker run --rm \
   -e TESTS="${TESTS:-}" \
   -e TEST_TIMEOUT_SEC="${TEST_TIMEOUT_SEC:-120}" \
   -e RUN_NAME="${RUN_NAME:-}" \
+  -e ELF_SUBDIR="${ELF_SUBDIR:-}" \
   -v "$PWD/third_party/cva6:/cva6" \
   -v "$PWD/build/regression:/evidence" \
   -v "$TOOLCHAIN_CACHE:/opt/riscv" \
@@ -53,7 +54,13 @@ if [ -z "${RUN_NAME}" ]; then
   if [ -n "${SPIKE_TANDEM}" ]; then RUN_NAME=tandem; else RUN_NAME=solo; fi
 fi
 export VER_LIBRARY RUN_NAME
-echo "CVA6 mode: SPIKE_TANDEM=${SPIKE_TANDEM:-0} VER_LIBRARY=$VER_LIBRARY TEST_LISTS=$TEST_LISTS RUN_NAME=$RUN_NAME"
+# Directory (relative to /cva6) holding test ELFs named by TESTS.
+# Default is the riscv-tests build output; ACT4 runs pass
+# ELF_SUBDIR=act-elfs (staged by scripts/build_act4_cva6.sh) and
+# skip the riscv-tests build below.
+ELF_SUBDIR="${ELF_SUBDIR:-tmp/riscv-tests/build/isa}"
+export ELF_SUBDIR
+echo "CVA6 mode: SPIKE_TANDEM=${SPIKE_TANDEM:-0} VER_LIBRARY=$VER_LIBRARY TEST_LISTS=$TEST_LISTS RUN_NAME=$RUN_NAME ELF_SUBDIR=$ELF_SUBDIR"
 # CVA6 master needs its pinned Verilator v5.008 (+patch); Ubuntu 5.020
 # hits a Verilator internal fault on this design. Same recipe as
 # ci/install-verilator.sh minus the long self-test.
@@ -153,10 +160,16 @@ echo "Selected ${#selected_tests[@]} riscv-tests ELF(s)"
 if [ "${1:-}" = regression ] && [ "${#selected_tests[@]}" -eq 0 ]; then
   echo "regression requested with no selected tests" >&2; exit 2
 fi
-if [ "${#selected_tests[@]}" -gt 0 ]; then
-  make -f ../../isa/Makefile src_dir=../../isa XLEN=64 \
-    RISCV_PREFIX=riscv64-unknown-elf- -j"${NUM_JOBS}" \
-    "${selected_tests[@]}"
+if [ "$ELF_SUBDIR" = tmp/riscv-tests/build/isa ]; then
+  if [ "${#selected_tests[@]}" -gt 0 ]; then
+    make -f ../../isa/Makefile src_dir=../../isa XLEN=64 \
+      RISCV_PREFIX=riscv64-unknown-elf- -j"${NUM_JOBS}" \
+      "${selected_tests[@]}"
+  fi
+else
+  for t in "${selected_tests[@]}"; do
+    [ -f "/cva6/$ELF_SUBDIR/$t" ] || { echo "Missing test ELF: $ELF_SUBDIR/$t" >&2; exit 1; }
+  done
 fi
 cd /cva6
 make_args=(ver-library="$VER_LIBRARY")
@@ -171,7 +184,7 @@ if [ "${1:-}" = regression ]; then
   [ -n "${SPIKE_TANDEM}" ] && mode=tandem
   passed=0; failed=0; timed_out=0; mismatched=0
   for t in "${selected_tests[@]}"; do
-    elf="tmp/riscv-tests/build/isa/$t"
+    elf="$ELF_SUBDIR/$t"
     log="$outdir/logs/$t.log"
     # Tandem Spike setup reads +elf_file/+core_name via
     # $value$plusargs (rvfi_spike.sv, spike.sv). They go after the
