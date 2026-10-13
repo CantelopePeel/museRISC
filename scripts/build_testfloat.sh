@@ -28,15 +28,27 @@ if [ ! -x "$GEN" ]; then
 fi
 [ -x "$GEN" ] || { echo "testfloat_gen build failed"; exit 1; }
 mkdir -p build/testfloat third_party/cva6/testfloat-elfs
+# Optional non-RNE rounding pass: RMODE=rtz|rdn|rup|rmm stages
+# tf-<op>_<rmode> ELFs generated with the matching testfloat_gen flag.
+GEN_RFLAG=""; GEN_RMARG=""; SUFFIX=""
+case "${RMODE:-}" in
+  "") ;;
+  rtz) GEN_RFLAG="-rminMag";;
+  rdn) GEN_RFLAG="-rmin";;
+  rup) GEN_RFLAG="-rmax";;
+  rmm) GEN_RFLAG="-rnear_maxMag";;
+  *) echo "unknown RMODE: $RMODE" >&2; exit 1;;
+esac
+if [ -n "${RMODE:-}" ]; then GEN_RMARG="--rm $RMODE"; SUFFIX="_$RMODE"; fi
 for op in $OPS; do
-  echo "== $op"
+  echo "== $op$SUFFIX"
   docker run --rm -v "$PWD/$TP:/tp" ubuntu:24.04 bash -lc \
-    "cd /tp/berkeley-testfloat-3/build/HostRISCV && ./testfloat_gen -level 1 -seed $SEED $op" \
-    > "build/testfloat/$op.txt"
-  python3 scripts/testfloat_cva6.py "$op" --max-cases "$MAX_CASES" \
-    < "build/testfloat/$op.txt" > "build/testfloat/tf-$op.S"
+    "cd /tp/berkeley-testfloat-3/build/HostRISCV && ./testfloat_gen -level 1 -seed $SEED $GEN_RFLAG $op" \
+    > "build/testfloat/$op$SUFFIX.txt"
+  python3 scripts/testfloat_cva6.py "$op" $GEN_RMARG --max-cases "$MAX_CASES" \
+    < "build/testfloat/$op$SUFFIX.txt" > "build/testfloat/tf-$op$SUFFIX.S"
   riscv64-elf-gcc -nostdlib -nostartfiles -march=rv64imafdc -mabi=lp64d \
-    -T sw/testfloat/link.ld "build/testfloat/tf-$op.S" -o "build/testfloat/tf-$op" 2>/dev/null
-  cp "build/testfloat/tf-$op" third_party/cva6/testfloat-elfs/
+    -T sw/testfloat/link.ld "build/testfloat/tf-$op$SUFFIX.S" -o "build/testfloat/tf-$op$SUFFIX" 2>/dev/null
+  cp "build/testfloat/tf-$op$SUFFIX" third_party/cva6/testfloat-elfs/
 done
 echo "Staged ELFs: $(ls third_party/cva6/testfloat-elfs | wc -l | tr -d ' ') in third_party/cva6/testfloat-elfs/"

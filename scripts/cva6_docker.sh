@@ -158,6 +158,17 @@ else
           add_test "tf-$op"
         done
         ;;
+      testfloat-rm)
+        for rm in rtz rdn rup rmm; do
+          for op in f32_add f32_mul f32_div f32_sqrt f32_mulAdd \
+                    f64_add f64_mul f64_div f64_sqrt f64_mulAdd \
+                    f32_to_i32 f32_to_ui64 f64_to_i64 f64_to_ui32 \
+                    i64_to_f32 ui64_to_f64 i32_to_f64 ui32_to_f32 \
+                    f64_to_f32; do
+            add_test "tf-${op}_${rm}"
+          done
+        done
+        ;;
       testfloat-cvt)
         for op in f32_to_i32 f32_to_i64 f32_to_ui32 f32_to_ui64 \
                   f64_to_i32 f64_to_i64 f64_to_ui32 f64_to_ui64 \
