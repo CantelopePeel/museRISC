@@ -40,7 +40,7 @@ docker run --rm \
     spike_args=(--disable-dtb)
     if [ "$SPIKE_PROFILE" = matched ]; then
       spike_args+=(
-        --isa=RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr
+        --isa=RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot
         --priv=MSU
         --param /top/core/0/pmpregions_max:uint64_t=64
         --param /top/core/0/pmpregions_writable:uint64_t=8

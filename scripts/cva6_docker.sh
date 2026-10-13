@@ -99,9 +99,12 @@ if [ ! -x $RISCV/bin/spike ]; then
 fi
 test -e $RISCV/lib/libdisasm.so || test -f $RISCV/lib/libdisasm.a
 ls $RISCV/lib/ | grep -E "fesvr|riscv|disasm|yaml"
-# riscv-tests: build only physical (-p-) tests. The -v- variants
-# need libc headers that the Ubuntu cross package does not expose by
-# default; the upstream Verilator CI targets below are all -p- tests.
+# riscv-tests: build both physical (-p-) and virtual-memory (-v-)
+# tests. The -v- variants compile env/v/*.c, which need libc headers;
+# the Ubuntu cross GCC ships no libc, so expose picolibc headers
+# (nothing is linked from libc: the tests use -nostdlib and env/v
+# provides its own string.c).
+export C_INCLUDE_PATH=/usr/lib/picolibc/riscv64-unknown-elf/include
 TVERSION=eeacd5507db7a0f50ca8c4f27aff220fcbb60bdf
 cd tmp
 [ -d riscv-tests ] || git clone https://github.com/riscv/riscv-tests.git
