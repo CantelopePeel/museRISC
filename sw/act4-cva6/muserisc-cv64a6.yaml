@@ -124,6 +124,13 @@ implemented_extensions:
   - { name: Sv39, version: "= 1.0.0" }
   - { name: Svbare, version: "= 1.0.0" }
 
+  # Svnapot: this target enables it (declared during the privileged ACT
+  # slice after Sv_sv39_svnapot_not_supported failed against hardware
+  # that translates NAPOT PTEs).
+  #   Quote: "SvnapotEn: bit'(1),"
+  #   core/include/cv64a6_imafdc_sv39_config_pkg.sv @81245a47 (line 182)
+  - { name: Svnapot, version: "= 1.0.0" }
+
   # Svade, not Svadu: the page table walker never writes A or D back.  It raises a page
   # fault and leaves the bits to software.
   #   Quote: "the access flag since we let the access flag be managed by SW. if (!pte.x || !pte.a) begin state_d = PROPAGATE_ERROR;"

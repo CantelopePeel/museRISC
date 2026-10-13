@@ -24,12 +24,16 @@ Adapted from the upstream riscv-arch-test `6af53584` CVA6 configs:
   `tohost` halt, console store to `0x1000_0000`, which is
   `ariane_soc` UARTBase in this testharness); macros unchanged.
 
-Extensions this DUT implements but that are deliberately not yet
-declared (Zcb, Zicond, Svnapot, scalar-crypto decode beyond
-Zbkb/Zbkc) only deselect their suites. Declare them when those
-suites are scheduled (issues #7/#9). Zicntr is not declared
-because the `time` CSR has no read case in `csr_regfile` and
-traps, even though `cycle`/`instret` exist.
+Extensions are declared as their suites are scheduled and
+verified (Zcb/Zicond/Zkne/Zknd/Zknh in sweep slice 2; Svnapot
+in the privileged slice after the hardware was observed
+translating NAPOT PTEs — `SvnapotEn=1` for this target).
+Privileged suites are enabled (`include_priv_tests: True`).
+Zicntr is not declared because the `time` CSR has no read case
+in `csr_regfile` and traps, even though `cycle`/`instret`
+exist. Svinval/Svpbmt/Zicbo have no decode at this pin and
+stay undeclared; Svade (not Svadu) is declared because the
+walker never writes A/D back.
 
 ## Use
 

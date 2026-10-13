@@ -936,8 +936,9 @@
     "Svrsw60t59b": {
       "supported": false
     },
+    // SvnapotEn = 1 in cv64a6_imafdc_sv39_config_pkg @81245a47.
     "Svnapot": {
-      "supported": false
+      "supported": true
     },
     "Ssnpm": {
       "supported": false,

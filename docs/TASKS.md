@@ -15,7 +15,7 @@ gate until the previous gate's evidence is committed under
 
 - [ ] [#5](https://github.com/bubblebabyboi/museRISC/issues/5) Hardware scalar-multiply sequencer (constant-time) for Ed25519 + secp256k1
 - [ ] [#6](https://github.com/bubblebabyboi/museRISC/issues/6) Streaming SHA-512 and Keccak/SHA3 into the accelerator top (sponge + DMA)
-- [ ] [#7](https://github.com/bubblebabyboi/museRISC/issues/7) ACT4 A/F/D compliance + TestFloat for the FPU *(in progress on `isa-verify-sweep`: ACT A/F/D + TestFloat stored; privileged/Sv39 + Linux boot remain)*
+- [ ] [#7](https://github.com/bubblebabyboi/museRISC/issues/7) ACT4 A/F/D compliance + TestFloat for the FPU *(on `isa-verify-sweep`: ACT A/F/D, TestFloat, privileged ACT 126/134 stored; Linux boot assessed as follow-up — see `docs/evidence/`)*
 - [ ] [#8](https://github.com/bubblebabyboi/museRISC/issues/8) riscv-dv random regression + GitHub Actions CI
 - [ ] [#9](https://github.com/bubblebabyboi/museRISC/issues/9) Ara RVV 1.0 vector integration + ACT4 vector tests *(blocked by #2)*
 - [ ] [#10](https://github.com/bubblebabyboi/museRISC/issues/10) Vectorised SHA-256 chain benchmark (Solana PoH-style) vs scalar + accelerator *(blocked by #4, #9)*

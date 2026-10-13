@@ -298,4 +298,64 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   level-2 density remain follow-up work under issue #7;
   do not claim full TestFloat coverage. This completes the
   TestFloat task of #7; its privileged/Sv39 + Linux task
-  keeps the issue open.
+  is the next section.
+
+## ISA verification sweep — privileged ACT (Sv39/PMP/exceptions) (2026-10-13, branch `isa-verify-sweep`, issue #7)
+
+- Artifact: [`act-priv-cva6-2026-10-13.csv`](act-priv-cva6-2026-10-13.csv)
+  (134-row merged matrix in generated-list order)
+- Config changes: `include_priv_tests: True` in
+  `sw/act4-cva6/test_config.yaml`, and Svnapot declared in
+  the UDB yaml + `sail.json` after the discovery pass showed
+  the hardware translating NAPOT PTEs the config claimed
+  unsupported (`SvnapotEn: bit'(1)`,
+  `cv64a6_imafdc_sv39_config_pkg.sv` @`81245a47`). The full
+  matrix was regenerated and rerun under the corrected
+  config (nine 16-ELF chunks `priv2-chunk1`–`9`,
+  `TIME_OUT=10000000`), so every row below is from the
+  corrected config; the three divergence classes reproduced
+  identically across both passes.
+- Result: **126/134 PASS**, 0 timeouts (ExceptionsSv 2,
+  ExceptionsSvSm 4, ExceptionsSvZaamo 2,
+  ExceptionsSvZaamoSm 3, ExceptionsSvZalrsc 0/2,
+  ExceptionsSvZalrscSm 0/3, PMPF 1, PMPS 10, PMPSm 35/37,
+  PMPU 10, PMPZaamo 1, PMPZalrsc 0/1, PMPZca 11, Sv 28,
+  SvPMP 4, SvSm 6, Svade 2, Svbare 2, SvbareSm 1,
+  Svnapot 4); every PASS log cross-checked (`SUCCESS` +
+  `RVCP-SUMMARY: TEST PASSED` + matching cycles).
+- Waived divergences (8 rows kept as FAIL/MISMATCH in the
+  matrix; each log fingerprinted at merge time):
+  1. **LR exception cause class** (6 tests: all
+     ExceptionsSvZalrsc* + PMPZalrsc): CVA6 reports LR
+     faults with store/AMO causes (misaligned 6 vs 4, page
+     fault 15 vs 13, access fault 7 vs 5) because its LSU
+     classifies LR on the store side; Sail/ACT classify LR
+     as a load. Verified at the faulting `lr.w` (XEPC
+     disassembly). Exception *behavior* otherwise matches.
+  2. **PMP grain readback** (`PMPSm_grain-00`): for G=1,
+     the spec gives NAPOT pmpaddr bit 0 its stored value,
+     but `csr_regfile.sv` forces readback bit 0 to 1
+     whenever A[1]=1 (the read-as-ones rule applies to
+     bits [G-2:0], empty at G=1). Address matching itself
+     (grain check suite) passes.
+  3. **PA0 data value** (`PMPSm_cfg_A_tor_zero-00`): the
+     test loads from physical address 0 and checks data;
+     Sail's boot image and the harness debug ROM hold
+     different words there (0x8067 vs 0x2). PMP permission
+     behavior around the probe passes; the data word is
+     platform content, not DUT logic.
+- Not generated (0 ELFs, correctly deselected):
+  `Misalign` (UDB declares misaligned ld/st unsupported —
+  inherited measurement D13 says misaligned scalar accesses
+  silently corrupt rather than fault; re-measure before
+  claiming), Svadu/SvaduPMP (Svade implemented instead),
+  Svinval/SvinvalSm and Svpbmt (no decode/PBMTE at this
+  pin, checked in RTL), PMPZicbo/SvPMPZicbo/SvZicbo (no
+  Zicbo). Sv48/Sv57 variants deselect against Sv39.
+- Linux boot smoke: **not run, assessed out of scope for
+  this harness tonight** — it needs cva6-sdk
+  OpenSBI/Buildroot images and a linux-gnu toolchain (none
+  present) plus ~10^9-cycle Verilator boots, a different
+  flow from the tohost regression harness. Tracked as
+  follow-up; privileged/Sv39 *spot checks* are the matrix
+  above. Tandem lockstep for privileged suites not run.

@@ -2,7 +2,7 @@
 
 "Compliant" here means: passes the named public test suite with a
 stored report. Anything else is marked **not yet claimed**.
-Last updated: 2026-10-13 (B2 complete; pre-GDS ISA sweep in progress on branch `isa-verify-sweep`: F/D/A directed + ACT, B/C/Zicond/Zkn ACT, and TestFloat archived; B3 deferred).
+Last updated: 2026-10-13 (B2 complete; pre-GDS ISA sweep on branch `isa-verify-sweep`: F/D/A directed + ACT, B/C/Zicond/Zkn ACT, TestFloat, and privileged ACT archived; B3 deferred).
 
 | Block | Suite | Status |
 |---|---|---|
@@ -22,7 +22,7 @@ Last updated: 2026-10-13 (B2 complete; pre-GDS ISA sweep in progress on branch `
 | RV64 A atomics ACT (sweep, #7) | ACT Zaamo (18) + Zalrsc (4) on model | 20/22 PASS; `Zalrsc-sc` (2) waived testharness hang (directed `lrsc` passes B2) — ACT A not yet claimed |
 | RV64 B/C/Zicond/Zkn ACT (sweep, #16/#17) | ACT Zba/Zbb/Zbc/Zbs, Zbkb/Zbkc, Zca/Zcb/Zcd, Zicsr, Zifencei, Zicond, Zkne/Zknd/Zknh (133) on model | 133/133 PASS solo on branch `isa-verify-sweep` — `docs/evidence/act-bc-cva6-2026-10-12.csv`; tandem for these suites not run/claimed |
 | RVV 1.0 | ACT4 vector suite (fixed VLEN) | Phase 3, not yet claimed |
-| Privileged/Sv39 | ACT4 privileged + Linux boot | Phase 2, not yet claimed |
+| Privileged/Sv39 (sweep, #7) | ACT privileged suites for this config (134: Sv/Svbare/Svade/Svnapot/SvSm/SvPMP, PMP S/U/Sm/F/Za, ExceptionsSv*) on model | 126/134 PASS solo — `docs/evidence/act-priv-cva6-2026-10-13.csv`; 8 waived (6 LR cause-class, 1 PMP G=1 readback, 1 PA0 data); Misalign/Svadu/Svinval/Svpbmt/Zicbo suites deselected (not implemented); Linux boot not yet claimed |
 | OpenROAD macro | ORFS nangate45, `muse_crypto` | Local run complete: detailed route 0 violations, antenna 0, setup/hold TNS 0 (setup WS +5.13 ns @ 10 ns), GDS written; 51 max-cap electrical violations remain — B3 not yet claimed |
 
 Reproduce locally:

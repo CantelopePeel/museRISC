@@ -79,7 +79,8 @@ scope limits). Anything unchecked is planned work, not a claim.
 - [x] ACT4 `I,M` self-checking ELFs on the CVA6 model — 64 tests (51 I + 13 M)
 - [x] Directed FP lists (46) + ACT4 `A,F,D` on the model (220/222, 2 waived `Zalrsc-sc` harness hangs) — sweep branch, see `docs/evidence/`
 - [x] Berkeley TestFloat level-1 against the FPU configuration — f32/f64 add/sub/mul/div/sqrt/mulAdd at RNE, 466,008 vectors, 12/12 (#7)
-- [ ] Privileged ACT suites + Linux boot smoke (#7)
+- [x] Privileged ACT suites on the model — 126/134 (8 waived divergences, see `docs/evidence/`) (#7)
+- [ ] Linux boot smoke (needs cva6-sdk images; assessed, follow-up)
 - [ ] Random instruction regression with riscv-dv in CI (#8)
 - [ ] ACT4 vector suite (#9)
 - [ ] Linux boot on the model
@@ -99,7 +100,7 @@ the custom crypto accelerator not yet attached to it).
 - [x] **F / D** floating point — directed (46/46 solo+Spike, tandem F 22/22) + ACT F/D 200/200 + TestFloat level-1 12/12 (466,008 vectors, #7)
 - [x] **C** compressed (Zca/Zcb/Zcd ACT suites pass; #16) — sweep branch, see `docs/evidence/`
 - [ ] **V** vector (RVV 1.0) — Ara integration pending (#9)
-- [ ] **Privileged M/S/U + Sv39** — exercised by directed priv and virtual-memory (`-v-`) tests; privileged ACT suite and Linux boot pending
+- [x] **Privileged M/S/U + Sv39** — directed priv/`-v-` tests + ACT privileged suites 126/134 (Svnapot declared; 8 waived divergences in `docs/evidence/`); Linux boot pending
 - [x] **B** bitmanip (Zba/Zbb/Zbc/Zbs), **Zicond**, scalar crypto (Zbkb/Zbkc/Zkne/Zknd/Zknh) — ACT suites pass 133/133 with C/Zicsr/Zifencei (#17)
 
 ## Locked decisions (2026-10-12)
