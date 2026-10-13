@@ -552,6 +552,55 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   VLEN512 acceptance evidence; the VLEN512 claim rests on
   the smoke kernel, the 15 VLEN-agnostic app kernels, and
   the 49 rv64uv tests that fit VLEN512, pending ACT.
-- Open on #9: ACT vector suites with a dedicated DUT
-  config and the synthesis area/timing snapshot. Vector
-  compliance is not yet claimed.
+- ACT vector suites with a dedicated DUT config
+  (`sw/act4-cva6v/`, derived byte-identically except
+  `name:`/`description:` from upstream arch-test
+  `6af53584`'s `cv64a6_imafdcv_sv39` config for these
+  exact pins at VLEN512; `scripts/ara_docker.sh` applies
+  upstream's two DUT-build patches — 16 MiB ELF loader
+  window and CVA6 RVB/ZKN enable — so the model matches
+  the config; note the model was re-verilated with those
+  patches after the rv64uv/apps runs above, with smoke,
+  rv64uv 1–10, and `dotproduct` re-verified
+  cycle-identical). Generation
+  (`scripts/build_act4_cva6v.sh`, Sail-checked) produced
+  2,047 ELFs across Vf32/Vf64/Vls8–64/Vx8–64; 34 further
+  Vls indexed/segment tests fail at generation time on
+  the Sail side ("trap signature overflow", a test-side
+  defect independent of the DUT;
+  [`act-vector-genfail-2026-10-13.csv`](act-vector-genfail-2026-10-13.csv)).
+  Running all 2,047 on the model
+  ([`act-vector-cva6v-2026-10-13.csv`](act-vector-cva6v-2026-10-13.csv))
+  gives 6 PASS / 2,005 FAIL / 36 TIMEOUT. The failures
+  are **not** instruction-result mismatches: 2,032 fail
+  at test case 1 inside ACT's self-check compare
+  (`RVTEST_SIGUPD_V`: `vmsne.vv` + `vfirst.m` at small
+  `vl`) with the reported bad byte equal to the expected
+  byte, and the only passes are the scalar-result moves
+  (`vmv.x.s`, `vfmv.f.s`) that use the scalar signature
+  path. A directed probe
+  ([`act-vector-vfirst-probe-2026-10-13.log`](act-vector-vfirst-probe-2026-10-13.log),
+  source `sw/act4-cva6v/probe_tail.c`) root-causes this:
+  data-path ops honor `vl` and tail-undisturbed exactly,
+  but at `vl=1` the Ara mask compare writes NrLanes mask
+  bits (2 here, 4 on a 4-lane build) instead of one, and
+  `vfirst.m` scans past `vl`, returning NrLanes instead
+  of -1 — contrary to RVV 1.0, where `vfirst`/`vpopc`
+  examine only active elements (index < `vl`) and
+  mask-result tails under `mu` are undisturbed. The 36
+  TIMEOUTs (masked `vmadc`/`vmsbc`, `vrgather*`,
+  `vcompress`) never halt; every terminating test
+  finishes within 26,363 cycles, so these are hangs, not
+  slow tests (budgets used: 20M cycles ×1, 5M ×7, 1M ×28,
+  recorded per-row in the CSV). Net: ACT vector cannot
+  pass on Ara at this pin — at either lane count —
+  because of this Ara mask-op deviation, which also
+  means full RVV 1.0 compliance **cannot be claimed**
+  for the integrated CVA6+Ara system; `vfirst`/`vpopc`
+  `vl` bounding and mask-tail behavior are requirements
+  carried into the in-house core (#18).
+- Open on #9: the synthesis area/timing snapshot, and
+  the acceptance decision given the ACT blocker above
+  (fix belongs upstream in Ara or in #18; it is not
+  fixable in test code without invalidating the
+  evidence). Vector compliance is not claimed.

@@ -32,4 +32,15 @@ docker run --rm \
     # object-replacement bytes (EF BF BC) that Verilator rejects as
     # invalid tokens. Strip non-ASCII bytes (idempotent, comments only).
     LC_ALL=C sed -i "s/[^[:print:][:space:]]//g" hardware/tb/verilator/waiver.vlt
+    # Match the riscv-arch-test CVA6+Ara DUT build (.github/scripts/
+    # install-ara.sh + setup-ara.sh at arch-test 6af53584) so the model
+    # is the config that sw/act4-cva6v/ describes: widen the testbench
+    # ELF loader window from 1 MiB to the 16 MiB L2 (ACT vector ELFs
+    # exceed 1 MiB), and enable CVA6 RVB/ZKN which the stock
+    # cv64a6_imafdcv_sv39 leaves off. Both are idempotent.
+    sed -i "s/{\.base=0x80000000, \.size=0x00100000}/{.base=0x80000000, .size=0x01000000}/" \
+      hardware/tb/verilator/ara_tb.cpp
+    grep -q "cfg.ZKN" hardware/src/ara_soc.sv || \
+      sed -i "s/^\( *\)cfg.NrPMPEntries          = 0;/&\n\1cfg.RVB                   = 1'"'"'b1;\n\1cfg.ZKN                   = 1'"'"'b1;/" \
+        hardware/src/ara_soc.sv
     exec "$@"' -- "$@"

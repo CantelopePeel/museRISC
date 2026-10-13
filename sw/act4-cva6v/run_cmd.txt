@@ -1,0 +1,1 @@
+./scripts/ara_docker.sh /repo/sw/act4-cva6v/run_actv.sh

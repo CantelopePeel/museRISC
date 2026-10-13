@@ -1,0 +1,28 @@
+Directed probe: ACT vector self-check compare path on CVA6+Ara (issue #9)
+Probe source: sw/act4-cva6v/probe_tail.c (built by sw/act4-cva6v/build_probe.sh)
+DUT: Ara 34bd3bc1 + CVA6 99eac9a6 (cv64a6_imafdcv_sv39, RVB/ZKN enabled per
+scripts/ara_docker.sh), VLEN 512, Verilator 5.047 model (ara_tb_verilator).
+
+Stages 1-3 replicate ACT test Vx8-vadd.vv-00 case 1 with known scalar values
+(VLMAX vmv.v.i prefill 0x0d; VL=1 vle8 loads; VL=1 vadd.vv; e8/m1/tu/mu) and
+pass: data-path operations honor vl=1 and tail-undisturbed exactly.
+Stage 4 replicates RVTEST_SIGUPD_V's compare (mask tmp prefilled all-ones,
+golden := DUT result, VL=1 vmsne.vv, then vfirst.m). RVV 1.0 requires
+vmsne under mu to write only mask bit 0 and vfirst to examine only active
+elements (index < vl), yielding -1 here. Measured instead:
+
+== 2 lanes (config=2_lanes; exit code 24 = stage-4 mismatch) ==
+S4 mask      : fc ff ff ff ff ff ff ff
+S4 vfirst = 02
+
+== 4 lanes (config=4_lanes, upstream ACT probed lane count; exit 24) ==
+S4 mask      : f0 ff ff ff ff ff ff ff
+S4 vfirst = 04
+
+Interpretation: the mask compare executes ceil to NrLanes elements (bits
+0..NrLanes-1 written at vl=1) and vfirst scans past vl, returning NrLanes.
+Full stage dumps (S1-S3 register images, all 0x0d tails intact) are in the
+local run logs build_actv_probe_r3.log / build_actv_probe4l.log (uncommitted).
+This deviation makes every ACT vector ELF whose RVTEST_SIGUPD_V compare runs
+at vl < VLMAX with nonzero stale mask-tmp bits report FAIL independent of
+the instruction under test; see act-vector-cva6v-2026-10-13.csv.
