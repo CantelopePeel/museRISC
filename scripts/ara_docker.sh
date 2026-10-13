@@ -15,9 +15,9 @@ cd "$(dirname "$0")/.."
 docker info >/dev/null 2>&1 || { echo "docker daemon not running"; exit 1; }
 mkdir -p third_party/ara/install
 docker run --rm \
-  -v "$PWD/third_party:/tp" \
+  -v "$PWD:/repo" \
   -v muserisc-apt-cache:/var/cache/apt \
-  -w /tp/ara \
+  -w /repo/third_party/ara \
   ubuntu:24.04 bash -lc '
     set -e
     export DEBIAN_FRONTEND=noninteractive
@@ -25,7 +25,8 @@ docker run --rm \
     apt-get update -o Dir::Cache::Archives=/var/cache/apt/archives
     apt-get install -y -o Dir::Cache::Archives=/var/cache/apt/archives \
       git curl make clang g++ libelf-dev python3 perl autoconf flex bison \
-      help2man libfl-dev device-tree-compiler ca-certificates 2>/dev/null
+      help2man libfl-dev device-tree-compiler ca-certificates \
+      gcc-riscv64-unknown-elf picolibc-riscv64-unknown-elf 2>/dev/null
     git config --global --add safe.directory "*"
     # Upstream quirk at Ara 34bd3bc1: waiver.vlt contains stray UTF-8
     # object-replacement bytes (EF BF BC) that Verilator rejects as
