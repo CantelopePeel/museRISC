@@ -16,5 +16,7 @@ export EARLY_SIZING_CAP_RATIO = 0.8
 # be absorbed. Ban them (platform defaults first); synthesis and the
 # resizer then use X2/X4 variants with 32-64 fF limits, which the
 # 21 fF repair target covers with margin.
-export DONT_USE_CELLS = TAPCELL_X1 FILLCELL_X1 AOI211_X1 OAI211_X1 \
+# (override: platforms/nangate45/config.mk is included after this file
+# and would otherwise clobber the list with its own assignment.)
+override export DONT_USE_CELLS = TAPCELL_X1 FILLCELL_X1 AOI211_X1 OAI211_X1 \
                         NOR3_X1 NOR4_X1 NOR4_X2
