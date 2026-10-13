@@ -109,6 +109,22 @@ and the oracle; it says nothing about CVA6 (that is B2.2/B2.3).
    pin. Parameter provenance therefore comes from source
    inspection (`riscv/Proc.cc`) plus the `[SPIKE]` boot banner,
    not from `--print-params` output.
+5. **`rv64mi-p-csr` cycle-CSR reads (B2.3 finding).** Tandem sets
+   `ext_zicntr_supported=0` (resolved item 1 above), so tandem
+   Spike has no `cycle` CSR and `TEST_CASE 25`
+   (`csrrc zero, cycle, zero`) traps illegal on Spike only,
+   printing `*** FAILED *** (tohost = 18)` (18 is the stale
+   TESTNUM from the preceding case) while CVA6 completes with
+   `*** SUCCESS ***`. Standalone-Spike bisection confirms the
+   cause: the tandem ISA string fails with exit 18, adding
+   `_zicntr` passes. Lockstep comparison itself reports zero
+   mismatches and no UVM errors for this test. Waived for B2.3
+   as an explained reference-configuration divergence, not a
+   DUT result; the matrix keeps the runner's `FAIL` row.
+   **Revisit** by enabling Zicntr in the tandem conversion via
+   a Docker-script patch (third_party/ is not committed) and
+   re-running the full tandem matrix under the new ISA string;
+   do not change the frozen config for a single test mid-gate.
 
 ## Out of scope for Spike matching
 

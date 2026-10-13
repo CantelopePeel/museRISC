@@ -107,16 +107,22 @@ Committed, reproducible evidence for completed gates. A claim in
   This is directed-test evidence on the integrated CVA6 model,
   not a standalone RV64GCV compliance claim.
 
-## B2.3 tandem smoke (2026-10-12, branch `b2-tandem-act4`)
+## B2.3 — Spike tandem lockstep directed regression (2026-10-12, branch `b2-tandem-act4`)
 
-- Artifact: [`b2-tandem-smoke-2026-10-12.csv`](b2-tandem-smoke-2026-10-12.csv)
-- Command: `SPIKE_TANDEM=1 TEST_LISTS=smoke RUN_NAME=tandem-smoke ./scripts/cva6_docker.sh regression`
+- Artifacts: [`b2-cva6-tandem-2026-10-12.csv`](b2-cva6-tandem-2026-10-12.csv)
+  (174-row merged matrix in directed-list order; smoke step:
+  [`b2-tandem-smoke-2026-10-12.csv`](b2-tandem-smoke-2026-10-12.csv))
+- Command (single-run reproduce):
+  `SPIKE_TANDEM=1 TEST_LISTS=asm,amo,mul RUN_NAME=tandem ./scripts/cva6_docker.sh regression`
   (separate model library `work-ver-tandem`; solo evidence untouched)
-- Result: exit 0, **4/4 PASS with 0 mismatches** (`rv64ui-p-add`,
-  `rv64ui-p-simple`, `rv64um-p-mul`, `rv64ua-p-amoadd_d`); Spike
-  tandem banner shows ISA `RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr`
+- Result: **173/174 PASS, 0 lockstep mismatches, 0 timeouts**,
+  plus 1 explained reference-configuration waiver below (counts
+  by family as B2.1/B2.2: 96 `rv64ui`, 26 `rv64um`, 38 `rv64ua`,
+  6 `rv64si`, 7 `rv64mi`, 1 `rv64uc`; 92 `-p-` + 82 `-v-`).
+  Every passing log shows DUT `*** SUCCESS *** (tohost = 0)`
+  with tandem banner ISA `RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr`
   (from `get_isa_str`, per the B2.0 waivers), boot `0x10000`,
-  PMP regions/granularity 8/8.
+  PMP regions/granularity 8/8, and no `UVM_ERROR`/`UVM_FATAL`.
 - Runner fix: tandem setup reads `+elf_file`/`+core_name` via
   `$value$plusargs`, but `ariane_tb.cpp` allowlists only three
   leading Verilog plusargs, so the runner now passes them after
@@ -125,6 +131,32 @@ Committed, reproducible evidence for completed gates. A claim in
   `cv64a6_imafdc_sv39` (`riscv_dpi.cc` requires the `cv64a`
   prefix; the `spike.sv` default `cva6` aborts). No
   `third_party/` patch was needed.
-- Caveat: smoke only. The full 174-test tandem matrix runs next
-  on this branch; B2.3 is claimed only when it completes with
-  zero unexplained mismatches (issue #2).
+- Assembly note: the matrix merges nine 20-test chunk runs
+  (`tandem-chunk1`–`chunk9`, list order) plus one retest below.
+  Chunking uses the same ELFs, tandem model, and verdict logic
+  as the single-run command; it exists because longer Docker
+  runs on this host have died mid-matrix (see B2.2 note).
+- Triage (2 initial non-PASS rows, both resolved):
+  `rv64ua-v-amoand_w` first recorded `TIMEOUT` under host
+  slowdown (log stalled after Spike init); standalone re-run
+  passes with 21,225 cycles in 26 s, in family with its sibling
+  atomics, and the matrix carries the retest row.
+  `rv64mi-p-csr` deterministically records `FAIL` (exit 0,
+  1,203 cycles, 0 mismatches): its log contains both CVA6
+  `*** SUCCESS ***` and Spike-side `*** FAILED ***`, because
+  tandem Spike has no `cycle` CSR without Zicntr (frozen
+  `ext_zicntr_supported=0`) and traps on `TEST_CASE 25` while
+  CVA6 passes. Standalone-Spike bisection (tandem ISA string
+  fails exit 18; adding `_zicntr` passes) confirms a
+  reference-configuration divergence, waived with reasons in
+  `docs/SPIKE_CONFIG.md` (waived item 5). The matrix keeps the
+  `FAIL` row; B2.3 acceptance is zero *unexplained* mismatches.
+- Verification: every merged row was cross-checked against its
+  per-test log (tandem banner, SUCCESS/FAILED shape, zero
+  mismatches, CSV cycles equal to log cycles, no hidden UVM
+  errors in passing logs). Per-test logs remain under
+  `build/regression/*/logs/` locally (`build/` is not committed).
+- Caveat: tandem comparison is architectural lockstep against
+  Spike as configured in B2.0 (including its waivers), not a
+  second normative compliance run. ACT4 `I,M` on the model is
+  B2.4; the combined four-column matrix is B2.5 (issue #2).
