@@ -1,0 +1,5 @@
+test,mode,exit_code,status,cycles,mismatches,log
+rv64ui-p-add,tandem,0,PASS,1576,0,logs/rv64ui-p-add.log
+rv64ui-p-simple,tandem,0,PASS,613,0,logs/rv64ui-p-simple.log
+rv64um-p-mul,tandem,0,PASS,1557,0,logs/rv64um-p-mul.log
+rv64ua-p-amoadd_d,tandem,0,PASS,740,0,logs/rv64ua-p-amoadd_d.log

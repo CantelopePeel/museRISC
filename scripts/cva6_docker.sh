@@ -173,8 +173,14 @@ if [ "${1:-}" = regression ]; then
   for t in "${selected_tests[@]}"; do
     elf="tmp/riscv-tests/build/isa/$t"
     log="$outdir/logs/$t.log"
+    # Tandem Spike setup reads +elf_file/+core_name via
+    # $value$plusargs (rvfi_spike.sv, spike.sv). They go after the
+    # binary: ariane_tb.cpp allowlists only three leading Verilog
+    # plusargs, while Verilated::commandArgs still exposes
+    # trailing args to $value$plusargs. core_name is the Makefile
+    # default target; riscv_dpi.cc requires the cv64a prefix.
     if [ "$mode" = tandem ]; then
-      if timeout "$TEST_TIMEOUT_SEC" "$VER_LIBRARY/Variane_testharness" "+elf_file=$elf" "$elf" >"$log" 2>&1; then rc=0; else rc=$?; fi
+      if timeout "$TEST_TIMEOUT_SEC" "$VER_LIBRARY/Variane_testharness" "$elf" "+elf_file=$elf" "+core_name=cv64a6_imafdc_sv39" >"$log" 2>&1; then rc=0; else rc=$?; fi
     else
       if timeout "$TEST_TIMEOUT_SEC" "$VER_LIBRARY/Variane_testharness" "$elf" >"$log" 2>&1; then rc=0; else rc=$?; fi
     fi

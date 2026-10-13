@@ -106,3 +106,25 @@ Committed, reproducible evidence for completed gates. A claim in
   lists, random instruction testing, and RVV are later phases.
   This is directed-test evidence on the integrated CVA6 model,
   not a standalone RV64GCV compliance claim.
+
+## B2.3 tandem smoke (2026-10-12, branch `b2-tandem-act4`)
+
+- Artifact: [`b2-tandem-smoke-2026-10-12.csv`](b2-tandem-smoke-2026-10-12.csv)
+- Command: `SPIKE_TANDEM=1 TEST_LISTS=smoke RUN_NAME=tandem-smoke ./scripts/cva6_docker.sh regression`
+  (separate model library `work-ver-tandem`; solo evidence untouched)
+- Result: exit 0, **4/4 PASS with 0 mismatches** (`rv64ui-p-add`,
+  `rv64ui-p-simple`, `rv64um-p-mul`, `rv64ua-p-amoadd_d`); Spike
+  tandem banner shows ISA `RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr`
+  (from `get_isa_str`, per the B2.0 waivers), boot `0x10000`,
+  PMP regions/granularity 8/8.
+- Runner fix: tandem setup reads `+elf_file`/`+core_name` via
+  `$value$plusargs`, but `ariane_tb.cpp` allowlists only three
+  leading Verilog plusargs, so the runner now passes them after
+  the binary, where `Verilated::commandArgs` still exposes them.
+  `core_name` is the Makefile default target
+  `cv64a6_imafdc_sv39` (`riscv_dpi.cc` requires the `cv64a`
+  prefix; the `spike.sv` default `cva6` aborts). No
+  `third_party/` patch was needed.
+- Caveat: smoke only. The full 174-test tandem matrix runs next
+  on this branch; B2.3 is claimed only when it completes with
+  zero unexplained mismatches (issue #2).
