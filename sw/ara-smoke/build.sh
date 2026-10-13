@@ -14,7 +14,7 @@ else
   mkdir -p build
   sed 's/ALIGNMENT/128/g' "$ARA/apps/common/arch.link.ld" > "$LD"
 fi
-riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -O2 -nostdlib \
+riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -mcmodel=medany -O2 -nostdlib \
   -I"$ARA/apps/common" \
   -T "$LD" \
   "$ARA/apps/common/crt0.S" sw/ara-smoke/smoke.c \
