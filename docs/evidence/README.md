@@ -161,9 +161,12 @@ Committed, reproducible evidence for completed gates. A claim in
   second normative compliance run. ACT4 `I,M` on the model is
   B2.4; the combined four-column matrix is B2.5 (issue #2).
 
-## B2.4 ACT4 on CVA6 — DUT config and smoke (2026-10-12, branch `b2-tandem-act4`)
+## B2.4/B2.5 — ACT4 I/M on CVA6 and combined B2 matrix (2026-10-12, branch `b2-tandem-act4`)
 
-- Artifact: [`b2-act-smoke-2026-10-12.csv`](b2-act-smoke-2026-10-12.csv)
+- Artifacts: [`b2-act-cva6-2026-10-12.csv`](b2-act-cva6-2026-10-12.csv)
+  (64-row ACT matrix), [`b2-combined-matrix-2026-10-12.csv`](b2-combined-matrix-2026-10-12.csv)
+  (174-row Spike-solo / CVA6-solo / tandem matrix, B2.5);
+  smoke step: [`b2-act-smoke-2026-10-12.csv`](b2-act-smoke-2026-10-12.csv)
 - DUT config: `sw/act4-cva6/` (UDB yaml, `sail.json`, `link.ld`,
   `rvmodel_macros.h`, `test_config.yaml`), adapted from the
   upstream riscv-arch-test CVA6+Ara config to this scalar
@@ -173,12 +176,23 @@ Committed, reproducible evidence for completed gates. A claim in
   self-checking ELFs (51 `I` + 13 `M`, riscv-arch-test
   `6af53584`, Sail-generated expected results) and stages them
   under `third_party/cva6/act-elfs/` for the batch runner
-  (`ELF_SUBDIR=act-elfs` in `scripts/cva6_docker.sh`).
-- Smoke result: exit 0, **3/3 PASS** on the CVA6 solo model
-  (`I-add-00`, `I-addi-00`, `M-mul-00`), each log showing DUT
-  `*** SUCCESS ***` and `RVCP-SUMMARY: TEST PASSED`.
-- Caveat: smoke only. The full 64-ELF run on the model follows
-  on this branch; B2.4 is claimed only with its complete matrix
-  (issue #2). ACT ELFs are self-checking against Sail, so a
-  model PASS means CVA6 reproduced the reference result for
-  every checked register/memory signature in that test.
+  (`ELF_SUBDIR=act-elfs TEST_LISTS=act-im` in
+  `scripts/cva6_docker.sh`, four 16-ELF chunks `act-chunk1`–`4`).
+- Result: **64/64 PASS** on the CVA6 solo model, 0
+  fail/timeout; every log shows DUT `*** SUCCESS ***` and
+  `RVCP-SUMMARY: TEST PASSED` with CSV cycles matching the log.
+  ACT ELFs are self-checking against Sail, so a model PASS
+  means CVA6 reproduced the reference result for every checked
+  register/memory signature in that test. The optional
+  standalone-Spike ACT cross-check was not run (generation
+  already checks each ELF against Sail).
+- Combined B2 outcome (B2.5): standalone Spike 174/174 PASS,
+  CVA6 solo 174/174 PASS, tandem lockstep 173/174 PASS with
+  zero mismatches plus the single waived `rv64mi-p-csr`
+  reference-configuration divergence above, and ACT4 `I,M`
+  64/64 PASS on the model. Within B2 scope the integrated
+  CVA6 model (stock `cv64a6_imafdc_sv39` at `81245a47`, custom
+  crypto not yet integrated) is therefore claimed as passing
+  the directed `asm,amo,mul` lists plus ACT4 `I,M` — nothing
+  wider (floating-point lists, privileged ACT suites, and RVV
+  remain later-phase work, issues #7/#9).

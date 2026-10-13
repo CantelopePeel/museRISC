@@ -2,7 +2,7 @@
 
 "Compliant" here means: passes the named public test suite with a
 stored report. Anything else is marked **not yet claimed**.
-Last updated: 2026-10-12 (B2.0–B2.3 complete on branch `b2-tandem-act4`; B2.4 ACT4 next).
+Last updated: 2026-10-12 (B2 complete: B2.0–B2.5 evidence archived; B3 next).
 
 | Block | Suite | Status |
 |---|---|---|
@@ -17,8 +17,7 @@ Last updated: 2026-10-12 (B2.0–B2.3 complete on branch `b2-tandem-act4`; B2.4 
 | Spike solo (B2.1) | All 174 B2 directed-list ELFs on standalone tandem Spike, profile `matched` (config frozen in `docs/SPIKE_CONFIG.md`, B2.0) | 174/174 PASS exit 0 — validates ELFs + oracle only, **not** a CVA6 result; see `docs/evidence/` |
 | Spike tandem (B2.3) | `SPIKE_TANDEM=1` RVFI lockstep vs CVA6 (`rvfi_compare`) | 173/174 PASS with 0 mismatches + 1 waived config divergence (`rv64mi-p-csr` cycle CSR without Zicntr; DUT passes) on branch `b2-tandem-act4`; zero unexplained mismatches; see `docs/evidence/` |
 | RV64I/M/A/C + priv subset on CVA6 (B2.2) | 174 riscv-tests (ui/um/ua/uc/si/mi, `-p-`+`-v-`) on Verilator model via batch runner | 174/174 PASS — `*** SUCCESS *** (tohost = 0)` each, 0 fail/timeout/mismatch; solo only, no lockstep compare (B2.3); see `docs/evidence/` |
-| ACT4 I/M on CVA6 (B2.4) | 64 self-checking ACT ELFs (51 I + 13 M, `sw/act4-cva6/` DUT config) on Verilator model | Smoke PASS — 3/3 (`RVCP-SUMMARY: TEST PASSED`) on branch `b2-tandem-act4`; full 64-ELF run in progress, not yet claimed; see `docs/evidence/` |
-| ACT4 I/M on CVA6 (B2.4) | riscv-arch-test ACT4 with CVA6 DUT config | Not yet run |
+| ACT4 I/M on CVA6 (B2.4) | 64 self-checking ACT ELFs (51 I + 13 M, `sw/act4-cva6/` DUT config) on Verilator model | 64/64 PASS — each `*** SUCCESS ***` + `RVCP-SUMMARY: TEST PASSED`, 0 fail/timeout; combined B2 matrix in `docs/evidence/b2-combined-matrix-2026-10-12.csv` (B2.5) |
 | RV64 A/F/D | ACT4 + TestFloat | Phase 2, not yet claimed |
 | RVV 1.0 | ACT4 vector suite (fixed VLEN) | Phase 3, not yet claimed |
 | Privileged/Sv39 | ACT4 privileged + Linux boot | Phase 2, not yet claimed |
@@ -31,6 +30,10 @@ make test                 # crypto KATs (done today)
 make lint                 # Verilator -Wall clean
 make compliance           # ACT4 RV64I on Sail (harness only)
 ./scripts/cva6_docker.sh  # CVA6 model + ISA smoke tests (B1, long)
+TEST_LISTS=asm,amo,mul ./scripts/spike_solo.sh        # B2.1 Spike-solo baseline
+TEST_LISTS=asm,amo,mul RUN_NAME=solo-full ./scripts/cva6_docker.sh regression   # B2.2 (long)
+SPIKE_TANDEM=1 TEST_LISTS=asm,amo,mul RUN_NAME=tandem ./scripts/cva6_docker.sh regression  # B2.3 (long)
+./scripts/build_act4_cva6.sh  # B2.4 ACT ELFs; then run via cva6_docker.sh ELF_SUBDIR=act-elfs
 make openroad             # ORFS on muse_crypto (B3, long)
 ```
 

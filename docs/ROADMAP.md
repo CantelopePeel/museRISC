@@ -16,10 +16,11 @@ Tracked as GitHub issues #1-#4 - see [docs/TASKS.md](TASKS.md).
 - [x] **B1** CVA6 Verilator model built; `rv64ui-p-add` and
       `rv64ui-p-simple` report `*** SUCCESS ***`; evidence in
       `docs/evidence/b1-cva6-2026-10-12.log` (issue #1)
-- [ ] **B2** Full CVA6 `riscv-asm-tests` list with Spike as behavioral
-      oracle — freeze a matched Spike config, solo baseline, then
-      `SPIKE_TANDEM` lockstep RVFI comparison — followed by ACT4 `I,M`
-      ELFs on the CVA6 model; update COMPLIANCE.md (issue #2)
+- [x] **B2** Full CVA6 `riscv-asm-tests` list with Spike as behavioral
+      oracle — Spike solo + CVA6 solo 174/174, tandem lockstep 173/174
+      (+1 waived config divergence, zero mismatches), ACT4 `I,M` 64/64
+      on the model; evidence in `docs/evidence/` (issue #2, closed
+      2026-10-12)
 - [ ] **B3** OpenROAD `muse_crypto` clean at 28% util (40% run ended
       with 645 route violations): final metrics + GDS artifact
 - [ ] **B4** SoC integration: crypto on CVA6 AXI @ 0x2000_0000,
