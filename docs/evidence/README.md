@@ -359,3 +359,34 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   flow from the tohost regression harness. Tracked as
   follow-up; privileged/Sv39 *spot checks* are the matrix
   above. Tandem lockstep for privileged suites not run.
+
+## Sweep follow-ups — TestFloat conversions + comparisons (2026-10-13, branch `sweep-followups`, issue #20)
+
+- Artifact: [`testfloat-cvt-cva6-2026-10-13.csv`](testfloat-cvt-cva6-2026-10-13.csv)
+  (24-row merged matrix in `testfloat-cvt` list order)
+- Harness: `scripts/testfloat_cva6.py` extended with
+  conversion/comparison classes (float->int, int->float,
+  f32<->f64, feq/fle/flt); arithmetic output verified
+  byte-identical to the committed generator. Runner gains
+  `TEST_LISTS=testfloat-cvt`; `scripts/build_testfloat.sh`
+  default op set covers all 36 checkers. Run solo in four
+  chunks (`tfcvt-chunk1`–`4`, `TIME_OUT=20000000
+  TEST_TIMEOUT_SEC=420`).
+- Result: **24/24 PASS**, 290,136 vector executions —
+  f32/f64 to i32/i64/ui32/ui64, i32/i64/ui32/ui64 to
+  f32/f64, f32->f64, f64->f32 (372–768 level-1 cases
+  each), and f32/f64 eq/le/lt (46,464 each). Every log
+  cross-checked against its row.
+- Flag caveat (float->int only): TestFloat generates
+  to-int vectors with SoftFloat `exact=false`, so its
+  expected flags never include NX, while RISC-V `fcvt`
+  raises NX on inexact conversions (flag distribution in
+  the vectors is only {none, NV}). The checkers therefore
+  mask NX for the 8 float->int ops and compare the other
+  flags exactly; `fcvt` NX behavior itself is covered by
+  ACT F/D against Sail (200/200 above). Everything else
+  (result bits including saturation, NV) is exact.
+- Remaining TestFloat depth under #20: non-RNE rounding
+  modes, level-2 density. `roundToInt` has no instruction
+  in this config (Zfa `fround` not implemented) and stays
+  unclaimed.

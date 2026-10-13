@@ -158,6 +158,16 @@ else
           add_test "tf-$op"
         done
         ;;
+      testfloat-cvt)
+        for op in f32_to_i32 f32_to_i64 f32_to_ui32 f32_to_ui64 \
+                  f64_to_i32 f64_to_i64 f64_to_ui32 f64_to_ui64 \
+                  i32_to_f32 i64_to_f32 ui32_to_f32 ui64_to_f32 \
+                  i32_to_f64 i64_to_f64 ui32_to_f64 ui64_to_f64 \
+                  f32_to_f64 f64_to_f32 \
+                  f32_eq f32_le f32_lt f64_eq f64_le f64_lt; do
+          add_test "tf-$op"
+        done
+        ;;
       none) ;;
       *) echo "unknown TEST_LISTS entry: $list_name" >&2; exit 2 ;;
     esac

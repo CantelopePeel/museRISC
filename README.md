@@ -78,7 +78,7 @@ scope limits). Anything unchecked is planned work, not a claim.
 - [x] `riscv-tests` directed lists `asm,amo,mul` — 174 tests on Spike solo, CVA6 solo, and tandem lockstep
 - [x] ACT4 `I,M` self-checking ELFs on the CVA6 model — 64 tests (51 I + 13 M)
 - [x] Directed FP lists (46) + ACT4 `A,F,D` on the model (220/222, 2 waived `Zalrsc-sc` harness hangs) — sweep branch, see `docs/evidence/`
-- [x] Berkeley TestFloat level-1 against the FPU configuration — f32/f64 add/sub/mul/div/sqrt/mulAdd at RNE, 466,008 vectors, 12/12 (#7)
+- [x] Berkeley TestFloat level-1 against the FPU configuration — arithmetic + conversions + comparisons at RNE, 756,144 vectors, 36/36 (#7, #20)
 - [x] Privileged ACT suites on the model — 126/134 (8 waived divergences, see `docs/evidence/`) (#7)
 - [ ] Linux boot smoke (needs cva6-sdk images; assessed, follow-up)
 - [ ] Random instruction regression with riscv-dv in CI (#8)
@@ -97,7 +97,7 @@ the custom crypto accelerator not yet attached to it).
 - [x] **M** multiply/divide — directed `rv64um` + ACT `M`
 - [x] **A** atomics — directed `rv64ua` lists + ACT `A` 20/22 (2 waived `Zalrsc-sc` harness hangs, #7)
 - [x] **Zicsr / Zifencei** basics — via directed `rv64mi`/`rv64si` and `fence.i` tests
-- [x] **F / D** floating point — directed (46/46 solo+Spike, tandem F 22/22) + ACT F/D 200/200 + TestFloat level-1 12/12 (466,008 vectors, #7)
+- [x] **F / D** floating point — directed (46/46 solo+Spike, tandem F 22/22) + ACT F/D 200/200 + TestFloat level-1 36/36 (756,144 vectors, #7/#20)
 - [x] **C** compressed (Zca/Zcb/Zcd ACT suites pass; #16) — sweep branch, see `docs/evidence/`
 - [ ] **V** vector (RVV 1.0) — Ara integration pending (#9)
 - [x] **Privileged M/S/U + Sv39** — directed priv/`-v-` tests + ACT privileged suites 126/134 (Svnapot declared; 8 waived divergences in `docs/evidence/`); Linux boot pending

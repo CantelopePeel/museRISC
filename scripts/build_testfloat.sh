@@ -10,7 +10,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 TP=third_party
 GEN=$TP/berkeley-testfloat-3/build/HostRISCV/testfloat_gen
-OPS="${OPS:-f32_add f32_sub f32_mul f32_div f32_sqrt f32_mulAdd f64_add f64_sub f64_mul f64_div f64_sqrt f64_mulAdd}"
+OPS="${OPS:-f32_add f32_sub f32_mul f32_div f32_sqrt f32_mulAdd f64_add f64_sub f64_mul f64_div f64_sqrt f64_mulAdd f32_to_i32 f32_to_i64 f32_to_ui32 f32_to_ui64 f64_to_i32 f64_to_i64 f64_to_ui32 f64_to_ui64 i32_to_f32 i64_to_f32 ui32_to_f32 ui64_to_f32 i32_to_f64 i64_to_f64 ui32_to_f64 ui64_to_f64 f32_to_f64 f64_to_f32 f32_eq f32_le f32_lt f64_eq f64_le f64_lt}"
 MAX_CASES="${MAX_CASES:-46464}"
 SEED="${SEED:-42}"
 command -v riscv64-elf-gcc >/dev/null || { echo "install riscv64-elf-gcc"; exit 1; }
