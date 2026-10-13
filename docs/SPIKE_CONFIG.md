@@ -125,6 +125,21 @@ and the oracle; it says nothing about CVA6 (that is B2.2/B2.3).
    a Docker-script patch (third_party/ is not committed) and
    re-running the full tandem matrix under the new ISA string;
    do not change the frozen config for a single test mid-gate.
+6. **Double-precision tandem loads (ISA-sweep finding).** Every
+   directed `rv64ud` test deterministically records tandem
+   `FAIL` with CVA6 `*** SUCCESS ***`, Spike-side
+   `*** FAILED ***`, zero compare mismatches, and no UVM
+   errors, including `rv64ud-p-move`/`-ldst` (load/move only,
+   no arithmetic), while all `rv64uf` tests pass tandem 22/22
+   and all 46 float tests pass both CVA6-solo and
+   standalone-Spike. Bisection exonerates the ISA string (solo
+   Spike passes under tandem, matched, and baseline strings),
+   isolating tandem DPI stepping of 64-bit FP loads (`fld`) at
+   this pin as a harness limitation, not a DUT result. Waived
+   for the sweep's tandem-F claim; D lockstep is **not**
+   claimed. **Revisit** by debugging `spike_step` FP-load
+   injection in the tandem fork (third_party/, Docker-script
+   patch) without changing the frozen B2 comparison config.
 
 ## Out of scope for Spike matching
 

@@ -1,0 +1,5 @@
+test,mode,exit_code,status,cycles,mismatches,log
+rv64uf-p-fadd,solo,0,PASS,35906,0,logs/rv64uf-p-fadd.log
+rv64ud-p-fadd,solo,0,PASS,35906,0,logs/rv64ud-p-fadd.log
+rv64ud-p-fdiv,solo,0,PASS,35909,0,logs/rv64ud-p-fdiv.log
+rv64uf-v-fmadd,solo,0,PASS,35909,0,logs/rv64uf-v-fmadd.log

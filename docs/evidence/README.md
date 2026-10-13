@@ -196,3 +196,43 @@ Committed, reproducible evidence for completed gates. A claim in
   the directed `asm,amo,mul` lists plus ACT4 `I,M` — nothing
   wider (floating-point lists, privileged ACT suites, and RVV
   remain later-phase work, issues #7/#9).
+
+## ISA verification sweep — F/D + A (2026-10-12, branch `isa-verify-sweep`, issue #7)
+
+Pre-GDS sweep ordered ahead of B3. Directed float lists are
+CVA6 `ci/riscv-fp-tests.list` ("fp"); ACT suites are generated
+with the B2.4 DUT config (`sw/act4-cva6/`).
+
+- Artifacts: [`fp-cva6-solo-2026-10-12.csv`](fp-cva6-solo-2026-10-12.csv)
+  (46 directed float, CVA6 solo), [`spike-solo-fp-2026-10-12.log`](spike-solo-fp-2026-10-12.log)
+  (46, standalone Spike `matched`), [`fp-tandem-f-2026-10-12.csv`](fp-tandem-f-2026-10-12.csv)
+  (22 single-precision tandem), [`act-afd-cva6-2026-10-12.csv`](act-afd-cva6-2026-10-12.csv)
+  (222 ACT rows: 84 F + 116 D + 18 Zaamo + 4 Zalrsc); smoke
+  steps: [`fp-smoke-2026-10-12.csv`](fp-smoke-2026-10-12.csv),
+  [`fp-tandem-smoke-2026-10-12.csv`](fp-tandem-smoke-2026-10-12.csv)
+- Directed result: **CVA6 solo 46/46 PASS** (22 F + 24 D,
+  `-p-`/`-v-`), **Spike solo 46/46 PASS**, **tandem F 22/22
+  PASS** with 0 mismatches. Tandem D (24 tests) is waived as
+  a harness limitation, not run to a matrix: every D test
+  probed (`fadd`, `fdiv`, `move`, `ldst`) shows DUT SUCCESS
+  with Spike-side FAILED and zero compare mismatches,
+  including load/move-only tests, isolating tandem `fld`
+  stepping at this pin (`docs/SPIKE_CONFIG.md` waived item 6).
+  D arithmetic itself is evidenced by both solo oracles.
+- ACT result: **220/222 PASS** on the CVA6 solo model (all F,
+  D, Zaamo, and Zalrsc-`lr` rows PASS with
+  `RVCP-SUMMARY: TEST PASSED`). The two `Zalrsc-sc` rows
+  (`sc.d`, `sc.w`) hang to the cycle cap (still running at
+  10M cycles, `tohost` untouched) in this testharness and are
+  recorded `FAIL` as an explained waiver: directed
+  `rv64ua-*-lrsc` passes solo and tandem (B2) and ACT
+  `Zalrsc-lr` passes here, so core LR/SC logic is evidenced;
+  the ACT `sc` case mix (hundreds of constrained-loop cases
+  including `rs1=x0` forms) wedges the simulation memory
+  path. Revisit with a directed case-level probe under #7;
+  do not claim ACT Zalrsc-sc coverage.
+- One transient harness crash (`F-fadd.s-00`, exit 139,
+  banner-only log) passes cleanly on standalone re-run and in
+  its chunk row, as with B2.2 `xor`.
+- Remaining in this slice: Berkeley TestFloat against the
+  cvfpu configuration (issue #7 stays open until stored).

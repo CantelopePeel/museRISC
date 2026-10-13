@@ -2,7 +2,7 @@
 
 "Compliant" here means: passes the named public test suite with a
 stored report. Anything else is marked **not yet claimed**.
-Last updated: 2026-10-12 (B2 complete: B2.0–B2.5 evidence archived; B3 next).
+Last updated: 2026-10-12 (B2 complete; pre-GDS ISA sweep in progress on branch `isa-verify-sweep`: F/D/A directed + ACT archived, B3 deferred).
 
 | Block | Suite | Status |
 |---|---|---|
@@ -18,7 +18,8 @@ Last updated: 2026-10-12 (B2 complete: B2.0–B2.5 evidence archived; B3 next).
 | Spike tandem (B2.3) | `SPIKE_TANDEM=1` RVFI lockstep vs CVA6 (`rvfi_compare`) | 173/174 PASS with 0 mismatches + 1 waived config divergence (`rv64mi-p-csr` cycle CSR without Zicntr; DUT passes) on branch `b2-tandem-act4`; zero unexplained mismatches; see `docs/evidence/` |
 | RV64I/M/A/C + priv subset on CVA6 (B2.2) | 174 riscv-tests (ui/um/ua/uc/si/mi, `-p-`+`-v-`) on Verilator model via batch runner | 174/174 PASS — `*** SUCCESS *** (tohost = 0)` each, 0 fail/timeout/mismatch; solo only, no lockstep compare (B2.3); see `docs/evidence/` |
 | ACT4 I/M on CVA6 (B2.4) | 64 self-checking ACT ELFs (51 I + 13 M, `sw/act4-cva6/` DUT config) on Verilator model | 64/64 PASS — each `*** SUCCESS ***` + `RVCP-SUMMARY: TEST PASSED`, 0 fail/timeout; combined B2 matrix in `docs/evidence/b2-combined-matrix-2026-10-12.csv` (B2.5) |
-| RV64 A/F/D | ACT4 + TestFloat | Phase 2, not yet claimed |
+| RV64 F/D directed + ACT (sweep, #7) | riscv-tests fp lists (46) solo/tandem + ACT F (84) / D (116) on model | Solo 46/46 + Spike 46/46, tandem F 22/22 (D tandem waived: harness `fld` stepping), ACT F/D 200/200 PASS on branch `isa-verify-sweep`; TestFloat pending — FPU not yet claimed |
+| RV64 A atomics ACT (sweep, #7) | ACT Zaamo (18) + Zalrsc (4) on model | 20/22 PASS; `Zalrsc-sc` (2) waived testharness hang (directed `lrsc` passes B2) — ACT A not yet claimed |
 | RVV 1.0 | ACT4 vector suite (fixed VLEN) | Phase 3, not yet claimed |
 | Privileged/Sv39 | ACT4 privileged + Linux boot | Phase 2, not yet claimed |
 | OpenROAD macro | ORFS nangate45, `muse_crypto` | Local run complete: detailed route 0 violations, antenna 0, setup/hold TNS 0 (setup WS +5.13 ns @ 10 ns), GDS written; 51 max-cap electrical violations remain — B3 not yet claimed |

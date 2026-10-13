@@ -32,6 +32,7 @@ docker run --rm \
   -e TEST_TIMEOUT_SEC="${TEST_TIMEOUT_SEC:-120}" \
   -e RUN_NAME="${RUN_NAME:-}" \
   -e ELF_SUBDIR="${ELF_SUBDIR:-}" \
+  -e TIME_OUT="${TIME_OUT:-}" \
   -v "$PWD/third_party/cva6:/cva6" \
   -v "$PWD/build/regression:/evidence" \
   -v "$TOOLCHAIN_CACHE:/opt/riscv" \
@@ -186,6 +187,10 @@ if [ "${1:-}" = regression ]; then
   for t in "${selected_tests[@]}"; do
     elf="$ELF_SUBDIR/$t"
     log="$outdir/logs/$t.log"
+    # Optional cycle cap for long tests (harness default 2M cycles
+    # in rvfi_tracer); +time_out is allowlisted by ariane_tb.cpp.
+    time_out_arg=()
+    if [ -n "${TIME_OUT:-}" ]; then time_out_arg=("+time_out=$TIME_OUT"); fi
     # Tandem Spike setup reads +elf_file/+core_name via
     # $value$plusargs (rvfi_spike.sv, spike.sv). They go after the
     # binary: ariane_tb.cpp allowlists only three leading Verilog
@@ -193,9 +198,9 @@ if [ "${1:-}" = regression ]; then
     # trailing args to $value$plusargs. core_name is the Makefile
     # default target; riscv_dpi.cc requires the cv64a prefix.
     if [ "$mode" = tandem ]; then
-      if timeout "$TEST_TIMEOUT_SEC" "$VER_LIBRARY/Variane_testharness" "$elf" "+elf_file=$elf" "+core_name=cv64a6_imafdc_sv39" >"$log" 2>&1; then rc=0; else rc=$?; fi
+      if timeout "$TEST_TIMEOUT_SEC" "$VER_LIBRARY/Variane_testharness" "${time_out_arg[@]}" "$elf" "+elf_file=$elf" "+core_name=cv64a6_imafdc_sv39" >"$log" 2>&1; then rc=0; else rc=$?; fi
     else
-      if timeout "$TEST_TIMEOUT_SEC" "$VER_LIBRARY/Variane_testharness" "$elf" >"$log" 2>&1; then rc=0; else rc=$?; fi
+      if timeout "$TEST_TIMEOUT_SEC" "$VER_LIBRARY/Variane_testharness" "${time_out_arg[@]}" "$elf" >"$log" 2>&1; then rc=0; else rc=$?; fi
     fi
     mismatch_count=$(grep -ci "Mismatch" "$log" || true)
     cycles=$(sed -nE "s/.*after ([0-9]+) cycles.*/\1/p" "$log" | tail -n 1)

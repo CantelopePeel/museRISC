@@ -1,0 +1,140 @@
+1.1.1-dev b3149ab
+Spike profile: matched
+rv64uf-p-fadd: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-fclass: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-fcmp: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-fcvt: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-fcvt_w: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-fdiv: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-fmadd: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-fmin: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-ldst: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-move: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-p-recoding: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-fadd: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-fclass: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-fcmp: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-fcvt: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-fcvt_w: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-fdiv: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-fmadd: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-fmin: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-ldst: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-move: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64uf-v-recoding: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-fadd: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-fclass: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-fcmp: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-fcvt: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-fcvt_w: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-fdiv: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-fmadd: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-fmin: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-ldst: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-move: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-recoding: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-p-structural: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-fadd: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-fclass: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-fcmp: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-fcvt: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-fcvt_w: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-fdiv: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-fmadd: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-fmin: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-ldst: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-move: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-recoding: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
+rv64ud-v-structural: Spike solo PASS (exit 0)
+[SPIKE] Proc 0 | ISA: RV64IMAFDC_zba_zbb_zbc_zbs_zcb_zicsr_zicntr_zihpm_zicond_zkn_svnapot PRIV: MSU
+[SPIKE]                 PMP Regions 40
