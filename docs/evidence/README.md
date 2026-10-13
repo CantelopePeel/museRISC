@@ -234,8 +234,8 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
 - One transient harness crash (`F-fadd.s-00`, exit 139,
   banner-only log) passes cleanly on standalone re-run and in
   its chunk row, as with B2.2 `xor`.
-- Remaining in this slice: Berkeley TestFloat against the
-  cvfpu configuration (issue #7 stays open until stored).
+- Berkeley TestFloat for this slice is stored separately
+  below (2026-10-13).
 
 ## ISA verification sweep — B/C/Zicond/scalar-crypto (2026-10-12, branch `isa-verify-sweep`, issues #16/#17)
 
@@ -261,3 +261,41 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   generated zero ELFs under this config and is handled with
   the privileged slice. Issues #16/#17 acceptance (stored
   green reports) is met by this artifact.
+
+## ISA verification sweep — Berkeley TestFloat vs cvfpu (2026-10-13, branch `isa-verify-sweep`, issue #7)
+
+- Artifact: [`testfloat-cva6-2026-10-13.csv`](testfloat-cva6-2026-10-13.csv)
+  (12-row merged matrix in generator op order)
+- Harness: `./scripts/build_testfloat.sh` builds host
+  `testfloat_gen` (Berkeley SoftFloat/TestFloat 3e, RISCV
+  specialization; berkeley-softfloat-3 `a0c6494c`,
+  berkeley-testfloat-3 `a9c849f1`, uncommitted under
+  `third_party/`), generates level-1 seed-42 vectors, and
+  `scripts/testfloat_cva6.py` emits bare-metal checkers
+  (`sw/testfloat/`) that execute each vector on the FPU and
+  compare result bits (any NaN matches any NaN) and accrued
+  `fflags` exactly, halting via HTIF `tohost` with the failing
+  case index encoded. ELFs staged under
+  `third_party/cva6/testfloat-elfs/`, run solo on the CVA6
+  model in four 3-ELF chunks (`tf-chunk1`–`4`,
+  `TIME_OUT=20000000 TEST_TIMEOUT_SEC=420`); the single-run
+  reproduce (`TEST_LISTS=testfloat RUN_NAME=tf-all`, runner
+  list added with this evidence) reproduces the identical
+  12-row matrix.
+- Result: **12/12 PASS**, 0 fail/timeout — f32/f64 add, sub,
+  mul, div, sqrt, and fused mulAdd at RNE with
+  tininess-after-rounding, 466,008 vector executions in
+  total (46,464 per binary op; the two mulAdd ops are
+  stride-sampled 46,464 of 6,133,248 level-1 cases; sqrt
+  full at 600 f32 / 768 f64). Every log shows
+  `*** SUCCESS ***` with CSV cycles matching the log.
+- Scope notes: vectors are checked against SoftFloat with
+  the RISCV specialization, so a PASS means the cvfpu
+  configuration in this CVA6 build agrees with the
+  IEEE-754/RISC-V reference arithmetic (including exception
+  flags) for these operations at RNE. Conversions,
+  comparisons/`roundToInt`, non-RNE rounding modes, and
+  level-2 density remain follow-up work under issue #7;
+  do not claim full TestFloat coverage. This completes the
+  TestFloat task of #7; its privileged/Sv39 + Linux task
+  keeps the issue open.

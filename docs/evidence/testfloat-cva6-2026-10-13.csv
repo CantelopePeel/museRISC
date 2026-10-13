@@ -1,0 +1,13 @@
+test,mode,exit_code,status,cycles,mismatches,log
+tf-f32_add,solo,0,PASS,1988399,0,logs/tf-f32_add.log
+tf-f32_sub,solo,0,PASS,1988399,0,logs/tf-f32_sub.log
+tf-f32_mul,solo,0,PASS,1988399,0,logs/tf-f32_mul.log
+tf-f32_div,solo,0,PASS,2523470,0,logs/tf-f32_div.log
+tf-f32_sqrt,solo,0,PASS,35909,0,logs/tf-f32_sqrt.log
+tf-f32_mulAdd,solo,0,PASS,2208500,0,logs/tf-f32_mulAdd.log
+tf-f64_add,solo,0,PASS,1925135,0,logs/tf-f64_add.log
+tf-f64_sub,solo,0,PASS,1925135,0,logs/tf-f64_sub.log
+tf-f64_mul,solo,0,PASS,1925135,0,logs/tf-f64_mul.log
+tf-f64_div,solo,0,PASS,2712131,0,logs/tf-f64_div.log
+tf-f64_sqrt,solo,0,PASS,67223,0,logs/tf-f64_sqrt.log
+tf-f64_mulAdd,solo,0,PASS,2145491,0,logs/tf-f64_mulAdd.log

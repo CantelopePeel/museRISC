@@ -152,6 +152,12 @@ else
       amo) add_list_file /cva6/ci/riscv-amo-tests.list ;;
       mul) add_list_file /cva6/ci/riscv-mul-tests.list ;;
       fp) add_list_file /cva6/ci/riscv-fp-tests.list ;;
+      testfloat)
+        for op in f32_add f32_sub f32_mul f32_div f32_sqrt f32_mulAdd \
+                  f64_add f64_sub f64_mul f64_div f64_sqrt f64_mulAdd; do
+          add_test "tf-$op"
+        done
+        ;;
       none) ;;
       *) echo "unknown TEST_LISTS entry: $list_name" >&2; exit 2 ;;
     esac
