@@ -26,7 +26,7 @@ docker run --rm \
     apt-get install -y -o Dir::Cache::Archives=/var/cache/apt/archives \
       git curl make clang g++ libelf-dev python3 perl autoconf flex bison \
       help2man libfl-dev device-tree-compiler ca-certificates \
-      gcc-riscv64-unknown-elf picolibc-riscv64-unknown-elf 2>/dev/null
+      gcc-riscv64-unknown-elf picolibc-riscv64-unknown-elf python3-numpy 2>/dev/null
     git config --global --add safe.directory "*"
     # Upstream quirk at Ara 34bd3bc1: waiver.vlt contains stray UTF-8
     # object-replacement bytes (EF BF BC) that Verilator rejects as
