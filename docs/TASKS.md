@@ -8,7 +8,7 @@ gate until the previous gate's evidence is committed under
 
 - [x] [#1](https://github.com/bubblebabyboi/museRISC/issues/1) **[B1] Host smoke** — CVA6 Verilator model passes `rv64ui-p-add` / `rv64ui-p-simple`; evidence in `docs/evidence/`
 - [x] [#2](https://github.com/bubblebabyboi/museRISC/issues/2) **[B2] Host regression** — full `riscv-asm-tests` with Spike solo + `SPIKE_TANDEM` lockstep, then ACT4 `I,M` ELFs on the CVA6 model *(done 2026-10-12: Spike solo + CVA6 solo 174/174, tandem 173/174 + 1 waived divergence, ACT4 I/M 64/64; see `docs/evidence/b2-combined-matrix-2026-10-12.csv`)*
-- [ ] [#3](https://github.com/bubblebabyboi/museRISC/issues/3) **[B3] OpenROAD closure** — clean route for `muse_crypto` (nangate45), final metrics + GDS *(next)*
+- [x] [#3](https://github.com/bubblebabyboi/museRISC/issues/3) **[B3] OpenROAD closure** — clean route for `muse_crypto` (nangate45), final metrics + GDS *(done 2026-10-13: DRC/antenna/liberty-electrical 0, setup +4.52 ns / hold +0.039 ns @ 10 ns; GDS in release `b3-nangate45-2026-10-13`)*
 - [ ] [#4](https://github.com/bubblebabyboi/museRISC/issues/4) **[B4] SoC integration** — `muse_crypto` on the CVA6 AXI fabric + driver + on-core signature verify *(blocked by #3 evidence flow; host confidence from #1/#2 in place)*
 
 ## Features ([milestone: v1 features](https://github.com/bubblebabyboi/museRISC/milestone/2))

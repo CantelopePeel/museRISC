@@ -449,3 +449,40 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   under #20: level-2 mulAdd density. Sub-operations
   f32_sub/f64_sub rounding is covered at RNE and shares
   the adder rounding path; not separately run per mode.
+
+## B3 — OpenROAD closure, muse_crypto nangate45 (2026-10-13, branch `b3-openroad`, issue #3)
+
+- Artifact: [`b3-openroad-nangate45-2026-10-13.log`](b3-openroad-nangate45-2026-10-13.log)
+  (metrics + liberty signoff extract); GDS published as
+  the GitHub release asset `b3-nangate45-2026-10-13`
+  (`6_final.gds`, 61 MB, not in git).
+- Commands: `./scripts/openroad_docker.sh` then
+  `./scripts/orfs_liberty_check.sh` (both Dockerized;
+  config in `flow/designs/nangate45/muse_crypto/`).
+- Baseline (pre-fix run): detail-route DRC 0, antenna 0,
+  setup/hold TNS 0 (+5.13/+0.038 ns @ 10 ns), GDS
+  written, but 51 post-route max-capacitance violations
+  vs liberty (0 at every pre-route stage; final routed
+  parasitics exceed estimates by up to 22%).
+- Fix (three measured iterations): `EARLY_SIZING_CAP_RATIO
+  = 0.8` alone changed nothing (buffering decisions key
+  on the full limit); an SDC `set_max_capacitance` repair
+  guardband is honored by the resizer at every stage —
+  42 fF left 9 liberty violators, 21 fF (26.05/1.223,
+  tightest violator class over worst observed growth)
+  left 5, all weakest PMOS-stack gates; `DONT_USE_CELLS`
+  (with `override` — the platform config is included
+  after the design config and otherwise clobbers the
+  list) bans NOR3_X1/NOR4_X1/NOR4_X2.
+- Final result: **detail-route DRC 0, antenna 0, liberty
+  max-cap/slew/fanout violations 0, setup WS +4.52 ns,
+  hold WS +0.039 ns, TNS 0/0**; 61,590 stdcells,
+  95,431 µm² stdcell area in a 296,867 µm² core (32.1%
+  utilized), 20.16 mW total. The 21 fF SDC value is a
+  repair target only; signoff is liberty limits via
+  `scripts/orfs_liberty_check.sh` (the flow finish
+  report counts 2,979 pins over the 21 fF guardband by
+  design). Hold margin (+39 ps) is positive but thin —
+  recorded, not waived. sky130hd deltas live in
+  `flow/designs/sky130hd/muse_crypto/README.md`; no
+  sky130hd run is claimed.

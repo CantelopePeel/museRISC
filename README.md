@@ -61,7 +61,7 @@ hardened with OpenROAD.
 | CVA6 solo regression (B2.2) | All 174 `asm,amo,mul` tests pass on the CVA6 model — `scripts/cva6_docker.sh` |
 | Spike tandem lockstep (B2.3) | 173/174 pass with 0 mismatches (+1 waived Spike-config divergence) — `docs/evidence/` |
 | ACT4 I/M on CVA6 (B2.4) | 64/64 self-checking ACT ELFs (51 I + 13 M) pass on the model — `scripts/build_act4_cva6.sh` |
-| OpenROAD (partial, B3 next) | Detailed route 0 violations, timing met, GDS written (nangate45); 51 max-cap electrical violations remain |
+| OpenROAD closure (B3) | Clean route, timing met, liberty-electrical clean, GDS published (nangate45, 100 MHz) — `make openroad` |
 
 ## Test & ISA coverage
 
@@ -85,7 +85,7 @@ scope limits). Anything unchecked is planned work, not a claim.
 - [ ] ACT4 vector suite (#9)
 - [ ] Linux boot on the model
 - [ ] On-core crypto driver / end-to-end signature verify (B4, #4)
-- [ ] OpenROAD signoff run with final metrics + GDS (B3, #3)
+- [x] OpenROAD signoff run with final metrics + GDS (B3, #3)
 
 ### ISA (target: RV64GCV)
 

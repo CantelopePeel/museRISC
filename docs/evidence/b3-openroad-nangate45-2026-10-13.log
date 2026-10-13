@@ -1,0 +1,42 @@
+B3 OpenROAD closure evidence — muse_crypto_top, nangate45, 2026-10-13
+Command: ./scripts/openroad_docker.sh (make openroad), then
+         ./scripts/orfs_liberty_check.sh
+Config: flow/designs/nangate45/muse_crypto/{config.mk,constraint.sdc}
+  CORE_UTILIZATION=28, CLOCK_PERIOD=10ns, EARLY_SIZING_CAP_RATIO=0.8,
+  SDC set_max_capacitance 21 fF (repair guardband, not signoff),
+  DONT_USE_CELLS += NOR3_X1 NOR4_X1 NOR4_X2 (override).
+Flow metrics (6_report.json, finish stage; baseline = pre-fix run):
+  setup worst slack [ns]       baseline=5.12614  final=4.51794
+  setup TNS [ns]               baseline=0  final=0
+  hold worst slack [ns]        baseline=0.0377061  final=0.0390653
+  hold TNS [ns]                baseline=0  final=0
+  stdcell count                baseline=52026  final=61590
+  stdcell area [um2]           baseline=83023.1  final=95430.7
+  core area [um2]              baseline=295691  final=296867
+  die area [um2]               baseline=298750  final=299625
+  utilization                  baseline=0.280777  final=0.32146
+  total power [W]              baseline=0.0207023  final=0.0201571
+  detail-route DRC violations    baseline=0  final=0  (5_route_drc.rpt empty)
+  antenna violations             final=0  (drt_antennas.log empty; DRT ends 0)
+  liberty max-cap violations     baseline=51  final=0  (liberty signoff below)
+  guardband (21fF) count final=2979 pins over the repair target by design
+  6_final.gds written (61 MB; published as GitHub release asset, not in git)
+
+Liberty signoff (scripts/orfs_liberty_check.sh on 6_1_fill.odb + 6_final.spef):
+SIGNOFF max_capacitance violators (liberty limits):
+SIGNOFF max_slew violators:
+SIGNOFF max_fanout violators:
+worst slack max 4.52
+worst slack min 0.04
+tns max 0.00
+Group                  Internal  Switching    Leakage      Total
+                          Power      Power      Power      Power (Watts)
+----------------------------------------------------------------
+Sequential             3.50e-03   5.94e-05   3.84e-04   3.94e-03  19.6%
+Combinational          5.38e-03   6.52e-03   1.64e-03   1.35e-02  67.2%
+Clock                  1.21e-03   1.42e-03   4.24e-05   2.67e-03  13.3%
+Macro                  0.00e+00   0.00e+00   0.00e+00   0.00e+00   0.0%
+Pad                    0.00e+00   0.00e+00   0.00e+00   0.00e+00   0.0%
+----------------------------------------------------------------
+Total                  1.01e-02   8.00e-03   2.07e-03   2.02e-02 100.0%
+                          50.1%      39.7%      10.3%
