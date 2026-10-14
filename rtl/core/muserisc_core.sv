@@ -194,15 +194,26 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] idex_imm_q;
   logic [31:0] idex_instr_q;  // for illegal-instruction tval in EX
   logic [63:0] idex_rs1_q, idex_rs2_q;
+  logic [63:0] idex_frs1_q, idex_frs2_q, idex_frs3_q;
   logic [4:0]  idex_rs1_addr_q, idex_rs2_addr_q, idex_rd_q;
+  logic [4:0]  idex_rs3_addr_q;
   logic        idex_exc_q;
   logic [63:0] idex_cause_q, idex_tval_q;
 
+  // FP sources of the ID instruction (from the decoder ctrl).
+  logic [4:0] id_rs3;
+  assign id_rs3 = ifid_instr_q[31:27];
   assign stall = idex_valid_q && idex_ctrl_q.mem_read &&
-                 !idex_exc_q && (idex_rd_q != 5'd0) && ifid_valid_q &&
-                 !ifid_exc_q &&
-                 ((id_uses_rs1 && (idex_rd_q == id_rs1)) ||
-                  (id_uses_rs2 && (idex_rd_q == id_rs2)));
+                 !idex_exc_q && ifid_valid_q && !ifid_exc_q &&
+                 ((!idex_ctrl_q.fp_rd && (idex_rd_q != 5'd0) &&
+                   ((id_uses_rs1 && (idex_rd_q == id_rs1)) ||
+                    (id_uses_rs2 && (idex_rd_q == id_rs2)))) ||
+                  (idex_ctrl_q.fp_rd &&
+                   ((id_ctrl.fp_rs1 && (idex_rd_q == id_rs1)) ||
+                    (id_ctrl.fp_rs2 && (idex_rd_q == id_rs2)) ||
+                    (id_ctrl.fp_op && id_ctrl.fpu_op >= 5'd12 &&
+                     id_ctrl.fpu_op <= 5'd15 &&
+                     (idex_rd_q == id_rs3)))));
 
   // ------------------------------------------------------------
   // EX stage
@@ -235,11 +246,15 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] memwb_result_q;
   logic [4:0]  memwb_rd_q;
   logic        memwb_reg_write_q;
+  logic        memwb_fp_write_q;
   logic        memwb_exc_q;
   logic [63:0] memwb_cause_q, memwb_tval_q;
 
   logic        wb_write;
   assign wb_write = memwb_valid_q && memwb_reg_write_q && !memwb_exc_q;
+  logic        wb_fp_write;
+  assign wb_fp_write = memwb_valid_q && memwb_fp_write_q &&
+                       !memwb_exc_q;
   assign trap_fire = memwb_valid_q && memwb_exc_q;
   assign trap_take = trap_fire && !trap_halt_i;
   assign freeze = trap_fire && trap_halt_i;
@@ -257,6 +272,55 @@ module muserisc_core import muserisc_pkg::*; (
       .raddr_b_i (id_rs2),
       .rdata_b_o (rf_rs2)
   );
+
+  logic [63:0] frf_rs1, frf_rs2, frf_rs3;
+  logic [63:0] id_frs1_val, id_frs2_val, id_frs3_val;
+  muserisc_fpregfile u_fpregfile (
+      .clk_i     (clk_i),
+      .we_i      (wb_fp_write && !freeze),
+      .waddr_i   (memwb_rd_q),
+      .wdata_i   (memwb_result_q),
+      .raddr1_i  (id_rs1),
+      .raddr2_i  (id_rs2),
+      .raddr3_i  (id_rs3),
+      .rdata1_o  (frf_rs1),
+      .rdata2_o  (frf_rs2),
+      .rdata3_o  (frf_rs3)
+  );
+  assign id_frs1_val = (wb_fp_write && (memwb_rd_q == id_rs1))
+                       ? memwb_result_q : frf_rs1;
+  assign id_frs2_val = (wb_fp_write && (memwb_rd_q == id_rs2))
+                       ? memwb_result_q : frf_rs2;
+  assign id_frs3_val = (wb_fp_write && (memwb_rd_q == id_rs3))
+                       ? memwb_result_q : frf_rs3;
+
+  logic [63:0] ex_frs1, ex_frs2, ex_frs3;
+  always_comb begin
+    if (exmem_valid_q && exmem_ctrl_q.fp_rd &&
+        !exmem_ctrl_q.mem_read && !exmem_exc_q &&
+        (exmem_rd_q == idex_rs1_addr_q))
+      ex_frs1 = exmem_result_q;
+    else if (wb_fp_write && (memwb_rd_q == idex_rs1_addr_q))
+      ex_frs1 = memwb_result_q;
+    else
+      ex_frs1 = idex_frs1_q;
+    if (exmem_valid_q && exmem_ctrl_q.fp_rd &&
+        !exmem_ctrl_q.mem_read && !exmem_exc_q &&
+        (exmem_rd_q == idex_rs2_addr_q))
+      ex_frs2 = exmem_result_q;
+    else if (wb_fp_write && (memwb_rd_q == idex_rs2_addr_q))
+      ex_frs2 = memwb_result_q;
+    else
+      ex_frs2 = idex_frs2_q;
+    if (exmem_valid_q && exmem_ctrl_q.fp_rd &&
+        !exmem_ctrl_q.mem_read && !exmem_exc_q &&
+        (exmem_rd_q == idex_rs3_addr_q))
+      ex_frs3 = exmem_result_q;
+    else if (wb_fp_write && (memwb_rd_q == idex_rs3_addr_q))
+      ex_frs3 = memwb_result_q;
+    else
+      ex_frs3 = idex_frs3_q;
+  end
 
   assign id_rs1_val = (wb_write && (memwb_rd_q != 5'd0) &&
                        (memwb_rd_q == id_rs1)) ? memwb_result_q : rf_rs1;
@@ -297,6 +361,41 @@ module muserisc_core import muserisc_pkg::*; (
       .result_o  (alu_result)
   );
 
+  logic [2:0]  csr_frm;
+  logic [1:0]  csr_fs;
+  logic [63:0] fpu_result;
+  logic [4:0]  fpu_flags;
+  logic [2:0]  fpu_rm;
+  assign fpu_rm = (idex_ctrl_q.funct3 == 3'b111) ? csr_frm
+                                                 : idex_ctrl_q.funct3;
+  muserisc_fpu u_fpu (
+      .op_i      (idex_ctrl_q.fpu_op),
+      .fmt_d_i   (idex_ctrl_q.fmt_d),
+      .rm_i      (fpu_rm),
+      .a_i       (idex_ctrl_q.fp_rs1 ? ex_frs1 : ex_rs1),
+      .b_i       (ex_frs2),
+      .c_i       (ex_frs3),
+      .aux_i     (idex_ctrl_q.fpu_aux),
+      .result_o  (fpu_result),
+      .flags_o   (fpu_flags)
+  );
+  // FP instructions need FS != Off; dynamic rounding mode must
+  // name a real mode (static bad rms are illegal at decode).
+  logic fp_illegal;
+  assign fp_illegal = (idex_ctrl_q.fp && (csr_fs == 2'b00)) ||
+                      (idex_ctrl_q.fp_rm &&
+                       (idex_ctrl_q.funct3 == 3'b111) &&
+                       (csr_frm > 3'd4));
+  logic csr_fflags_we, fp_dirty_ex, fp_dirty_mem, fp_dirty;
+  assign csr_fflags_we = idex_valid_q && idex_ctrl_q.fp_op &&
+                         !idex_exc_q && !ex_illegal && !trap_fire &&
+                         !mem_stall;
+  assign fp_dirty_ex = csr_fflags_we && idex_ctrl_q.fp_rd;
+  assign fp_dirty_mem = exmem_valid_q && exmem_ctrl_q.fp_rd &&
+                        exmem_ctrl_q.mem_read && !exmem_exc_q &&
+                        !mem_exc && !mem_stall;
+  assign fp_dirty = fp_dirty_ex || fp_dirty_mem;
+
   muserisc_muldiv u_muldiv (
       .funct3_i  (idex_ctrl_q.funct3),
       .word_op_i (idex_ctrl_q.word_op),
@@ -333,14 +432,16 @@ module muserisc_core import muserisc_pkg::*; (
   assign ex_serialize = ex_ret ||
                         (idex_valid_q && idex_ctrl_q.sfence &&
                          !idex_exc_q && !sys_illegal);
-  assign ex_illegal = idex_ctrl_q.csr ? csr_illegal :
+  assign ex_illegal = (idex_ctrl_q.csr ? csr_illegal :
                       ((idex_ctrl_q.mret || idex_ctrl_q.sret ||
-                        idex_ctrl_q.wfi || idex_ctrl_q.sfence) && sys_illegal);
+                        idex_ctrl_q.wfi || idex_ctrl_q.sfence) && sys_illegal)) ||
+                      fp_illegal;
 
   always_comb begin
     if (idex_ctrl_q.jal || idex_ctrl_q.jalr) ex_result = idex_pc_q + 64'd4;
     else if (idex_ctrl_q.csr)                ex_result = csr_rdata;
     else if (idex_ctrl_q.muldiv)             ex_result = muldiv_result;
+    else if (idex_ctrl_q.fp_op)              ex_result = fpu_result;
     else                                     ex_result = alu_result;
   end
 
@@ -548,7 +649,11 @@ module muserisc_core import muserisc_pkg::*; (
   end
 
   assign mem_result = exmem_ctrl_q.sc ? (sc_success ? 64'd0 : 64'd1)
-                    : exmem_ctrl_q.mem_read ? load_data : exmem_result_q;
+                    : exmem_ctrl_q.mem_read ?
+                        ((exmem_ctrl_q.fp_rd && !exmem_ctrl_q.fmt_d) ?
+                            {32'hFFFF_FFFF, load_shifted[31:0]} :
+                            load_data)
+                    : exmem_result_q;
 
   // LR/SC reservation (physical address + access size). Set
   // by a completing LR; cleared by any SC attempt, by a
@@ -610,6 +715,11 @@ module muserisc_core import muserisc_pkg::*; (
       .rdata_o       (csr_rdata),
       .illegal_o     (csr_illegal),
       .wr_en_i       (csr_we),  // module itself suppresses illegal writes
+      .frm_o         (csr_frm),
+      .fs_o          (csr_fs),
+      .fflags_we_i   (csr_fflags_we),
+      .fflags_i      (fpu_flags),
+      .fp_dirty_i    (fp_dirty),
       .wdata_i       (csr_wdata),
       .sys_illegal_o (sys_illegal),
       .sys_op_i      (sys_op),
@@ -747,6 +857,7 @@ module muserisc_core import muserisc_pkg::*; (
       memwb_result_q <= mem_result;
       memwb_rd_q <= exmem_rd_q;
       memwb_reg_write_q <= exmem_ctrl_q.reg_write;
+      memwb_fp_write_q <= exmem_ctrl_q.fp_rd;
       memwb_exc_q <= mem_exc;
       memwb_cause_q <= mem_cause;
       memwb_tval_q <= mem_tval;
@@ -756,7 +867,7 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_ctrl_q <= idex_ctrl_q;
       exmem_result_q <= ex_result;
       exmem_addr_q <= alu_result;
-      exmem_store_data_q <= ex_rs2;
+      exmem_store_data_q <= idex_ctrl_q.fp_rs2 ? ex_frs2 : ex_rs2;
       exmem_rd_q <= idex_rd_q;
       exmem_exc_q <= ex_exc;
       exmem_cause_q <= ex_cause;
@@ -788,6 +899,10 @@ module muserisc_core import muserisc_pkg::*; (
         idex_instr_q <= ifid_instr_q;
         idex_rs1_q <= id_rs1_val;
         idex_rs2_q <= id_rs2_val;
+        idex_frs1_q <= id_frs1_val;
+        idex_frs2_q <= id_frs2_val;
+        idex_frs3_q <= id_frs3_val;
+        idex_rs3_addr_q <= id_rs3;
         idex_rs1_addr_q <= id_rs1;
         idex_rs2_addr_q <= id_rs2;
         idex_rd_q <= id_rd;

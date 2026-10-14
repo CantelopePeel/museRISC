@@ -47,6 +47,11 @@ module muserisc_csr (
     output logic [63:0] mstatus_o,
     output logic [63:0] xret_pc_o,    // mepc or sepc per sys_op_i
     input  wire        retire_i,      // an instruction retired in WB
+    output logic [2:0] frm_o,
+    output logic [1:0] fs_o,
+    input  wire        fflags_we_i,   // OR flags from the FPU
+    input  wire [4:0]  fflags_i,
+    input  wire        fp_dirty_i,    // an FP reg write commits
     // PMP checks (physical addresses, combinational)
     input  wire [63:0] pmp_addr_a_i,
     input  wire [1:0]  pmp_acc_a_i,   // 0 read 1 write 2 exec
@@ -74,6 +79,9 @@ module muserisc_csr (
   logic mstatus_mprv_q, mstatus_sum_q, mstatus_mxr_q;
   logic mstatus_tvm_q, mstatus_tw_q, mstatus_tsr_q;
   logic [63:0] medeleg_q, mideleg_q, mie_q, mtvec_q, mcounteren_q;
+  logic [4:0]  fflags_q;
+  logic [2:0]  frm_q;
+  logic [1:0]  mstatus_fs_q;
   logic [63:0] mscratch_q, mepc_q, mcause_q, mtval_q;
   logic        mip_ssip_q, mip_seip_q, mip_stip_q;
   logic [63:0] menvcfg_q, mcountinhibit_q;
@@ -101,13 +109,19 @@ module muserisc_csr (
     mstatus_o[20]    = mstatus_tvm_q;
     mstatus_o[21]    = mstatus_tw_q;
     mstatus_o[22]    = mstatus_tsr_q;
+    mstatus_o[14:13] = mstatus_fs_q;
+    mstatus_o[63]    = (mstatus_fs_q == 2'b11);  // SD (XS = 0)
     mstatus_o[35:34] = 2'b10;  // SXL = 64-bit
     mstatus_o[33:32] = 2'b10;  // UXL = 64-bit
   end
 
   localparam logic [63:0] SSTATUS_MASK =
       (64'd1 << 1) | (64'd1 << 5) | (64'd1 << 8) |
-      (64'd1 << 18) | (64'd1 << 19) | (64'd3 << 32);
+      (64'd3 << 13) | (64'd1 << 18) | (64'd1 << 19) |
+      (64'd3 << 32) | (64'd1 << 63);
+
+  assign frm_o = frm_q;
+  assign fs_o = mstatus_fs_q;
 
   // mip assembly: pin-driven fields plus software SSIP/SEIP.
   logic [63:0] mip_val;
@@ -139,6 +153,9 @@ module muserisc_csr (
     csr_exists = 1'b1;
     csr_rdata = 64'd0;
     unique case (addr_i)
+      12'h001: csr_rdata = {59'd0, fflags_q};                     // fflags
+      12'h002: csr_rdata = {61'd0, frm_q};                        // frm
+      12'h003: csr_rdata = {56'd0, frm_q, fflags_q};              // fcsr
       12'h100: csr_rdata = mstatus_o & SSTATUS_MASK;              // sstatus
       12'h104: csr_rdata = mie_q & mideleg_q;                     // sie
       12'h105: csr_rdata = stvec_q;                               // stvec
@@ -151,7 +168,7 @@ module muserisc_csr (
       12'h144: csr_rdata = mip_val & mideleg_q;                   // sip
       12'h180: csr_rdata = satp_q;                                // satp
       12'h300: csr_rdata = mstatus_o;                             // mstatus
-      12'h301: csr_rdata = 64'h8000_0000_0014_1101;               // misa: RV64 IMA SU
+      12'h301: csr_rdata = 64'h8000_0000_0014_1129;               // misa: RV64 IMAFD SU
       12'h302: csr_rdata = medeleg_q;                             // medeleg
       12'h303: csr_rdata = mideleg_q;                             // mideleg
       12'h304: csr_rdata = mie_q;                                 // mie
@@ -216,6 +233,8 @@ module muserisc_csr (
   end
   // TVM: satp access from S-mode is illegal while TVM=1.
   assign illegal_o = !csr_exists || !csr_priv_ok || counter_blocked ||
+                     (((addr_i == 12'h001) || (addr_i == 12'h002) ||
+                       (addr_i == 12'h003)) && (mstatus_fs_q == 2'b00)) ||
                      ((addr_i == 12'h180) && (priv_q == PRIV_S) &&
                       mstatus_tvm_q) ||
                      (csr_write_attempt && (addr_i[11:10] == 2'b11));
@@ -386,6 +405,9 @@ module muserisc_csr (
       mie_q <= 64'd0;
       mtvec_q <= 64'd0;
       mcounteren_q <= 64'd0;
+      fflags_q <= 5'd0;
+      frm_q <= 3'd0;
+      mstatus_fs_q <= 2'd0;
       mscratch_q <= 64'd0;
       mepc_q <= 64'd0;
       mcause_q <= 64'd0;
@@ -415,6 +437,10 @@ module muserisc_csr (
       if (retire_i && !mcountinhibit_q[2]) begin
         minstret_q <= minstret_q + 64'd1;
       end
+      // FPU side effects (explicit CSR writes in the chain
+      // below win on the same edge by statement order).
+      if (fflags_we_i) fflags_q <= fflags_q | fflags_i;
+      if (fp_dirty_i) mstatus_fs_q <= 2'b11;
 
       if (trap_take_i) begin
         priv_q <= trap_priv_o;
@@ -450,12 +476,19 @@ module muserisc_csr (
         end
       end else if (wr_en_i && !illegal_o) begin
         unique case (addr_i)
+          12'h001: fflags_q <= wdata_i[4:0];
+          12'h002: frm_q <= wdata_i[2:0];
+          12'h003: begin
+            fflags_q <= wdata_i[4:0];
+            frm_q <= wdata_i[7:5];
+          end
           12'h100: begin  // sstatus: writable S-visible fields only
             mstatus_sie_q <= wdata_i[1];
             mstatus_spie_q <= wdata_i[5];
             mstatus_spp_q <= wdata_i[8];
             mstatus_sum_q <= wdata_i[18];
             mstatus_mxr_q <= wdata_i[19];
+            mstatus_fs_q <= wdata_i[14:13];
           end
           12'h104: mie_q <= (mie_q & ~mideleg_q) | (wdata_i & mideleg_q);
           12'h105: stvec_q <= {wdata_i[63:2], (wdata_i[1:0] < 2'd2) ? wdata_i[1:0] : 2'd0};
@@ -484,6 +517,7 @@ module muserisc_csr (
             mstatus_tvm_q <= wdata_i[20];
             mstatus_tw_q <= wdata_i[21];
             mstatus_tsr_q <= wdata_i[22];
+            mstatus_fs_q <= wdata_i[14:13];
           end
           12'h302: medeleg_q <= wdata_i & 64'hB35D;
           12'h303: mideleg_q <= wdata_i & 64'h222;

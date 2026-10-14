@@ -26,6 +26,15 @@ package muserisc_pkg;
   // Decoder output consumed by the datapath. One struct so stage 2
   // can register it verbatim between decode and execute.
   typedef struct packed {
+    logic [4:0] fpu_op;    // FPU operation (muserisc_fpu FPU_*)
+    logic [1:0] fpu_aux;   // sgnj/min-max/cmp select, cvt size
+    logic    fmt_d;        // FP format: 1=binary64, 0=binary32
+    logic    fp_op;        // result comes from the FPU in EX
+    logic    fp_rm;        // op consumes a rounding mode
+    logic    fp_rd;        // destination is an FP register
+    logic    fp_rs1;       // rs1 read from the FP regfile
+    logic    fp_rs2;       // rs2 read from the FP regfile
+    logic    fp;           // any FP instruction (FS must be > 0)
     logic [4:0] amo_op;    // AMO funct5 (instr[31:27])
     logic    sc;           // store-conditional (result = success flag)
     logic    lr;           // load-reserved (sets the reservation)

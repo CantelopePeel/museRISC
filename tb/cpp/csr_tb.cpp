@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
 
   // Reset state: M-mode, everything zero, misa constant.
   CHECK(d->priv_o == 3);
-  CHECK(rd(0x301) == 0x8000000000141101ULL);  // misa RV64 IMA SU
+  CHECK(rd(0x301) == 0x8000000000141129ULL);  // misa RV64 IMAFD SU
   CHECK(rd(0x300) == ((2ull << 34) | (2ull << 32)));  // mstatus: SXL/UXL only
   CHECK(rd(0xF14) == 0);                     // mhartid
   CHECK(illegal(0x7c0, false));              // nonexistent CSR
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
   CHECK(!illegal(0xF11, false));
   CHECK(!illegal(0x301, true));              // misa writes are WARL-ignored
   wr(0x301, 0);
-  CHECK(rd(0x301) == 0x8000000000141101ULL);
+  CHECK(rd(0x301) == 0x8000000000141129ULL);
   CHECK(!illegal(0x340, true));              // mscratch rw
 
   // Plain storage CSRs round-trip.
@@ -502,6 +502,35 @@ int main(int argc, char** argv) {
   d->trap_take_i = 0;
   d->eval();
   CHECK(d->priv_o == 3);
+
+  // fcsr/FS handling (stage 4b): FS=Off blocks FP CSRs; frm/
+  // fflags/fcsr round-trip; the FPU side-band accumulates
+  // flags and marks FS dirty (mstatus SD follows).
+  CHECK(d->fs_o == 0);
+  CHECK(illegal(0x003, false));
+  wr(0x300, rd(0x300) | (1ull << 13));        // FS = Initial
+  CHECK(d->fs_o == 1);
+  CHECK(!illegal(0x003, false));
+  wr(0x002, 3);                                // frm = RUP
+  CHECK(rd(0x002) == 3 && d->frm_o == 3);
+  CHECK(rd(0x003) == (3ull << 5));
+  wr(0x003, (2ull << 5) | 0x15ull);            // fcsr: RDN + NV|UF|NX
+  CHECK(rd(0x001) == 0x15 && d->frm_o == 2);
+  wr(0x001, 0);
+  d->fflags_i = 0x0A;                          // DZ|UF from the FPU
+  d->fflags_we_i = 1;
+  tick();
+  d->fflags_we_i = 0;
+  d->eval();
+  CHECK(rd(0x001) == 0x0A);
+  CHECK(d->fs_o == 1);
+  d->fp_dirty_i = 1;
+  tick();
+  d->fp_dirty_i = 0;
+  d->eval();
+  CHECK(d->fs_o == 3);
+  CHECK((rd(0x300) >> 63) == 1);               // SD
+  CHECK(((rd(0x100) >> 13) & 3) == 3);         // sstatus sees FS
 
   d->final();
   if (cov_path != nullptr) context.coveragep()->write(cov_path);

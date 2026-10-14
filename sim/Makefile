@@ -23,13 +23,15 @@ RISCV_PREFIX ?= $(shell command -v riscv64-unknown-elf-gcc >/dev/null 2>&1 \
                   && echo riscv64-unknown-elf- || echo riscv64-elf-)
 RISCV_GCC     := $(RISCV_PREFIX)gcc
 RISCV_OBJCOPY := $(RISCV_PREFIX)objcopy
-SWFLAGS       := -march=rv64ima_zicsr_zifencei -mabi=lp64 -nostdlib -T $(ROOT)/sw/core-tests/link.ld
+SWFLAGS       := -march=rv64imafd_zicsr_zifencei -mabi=lp64 -nostdlib -T $(ROOT)/sw/core-tests/link.ld
 
-CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv $(RTL)/muserisc_alu.sv \
-            $(RTL)/muserisc_muldiv.sv $(RTL)/muserisc_decoder.sv \
+CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
+            $(RTL)/muserisc_fpregfile.sv $(RTL)/muserisc_alu.sv \
+            $(RTL)/muserisc_muldiv.sv $(RTL)/muserisc_fpu.sv \
+            $(RTL)/muserisc_decoder.sv \
             $(RTL)/muserisc_csr.sv $(RTL)/muserisc_mmu.sv \
             $(RTL)/muserisc_core.sv
-TESTS    := rv64i_directed rv64m_directed amo_directed pipeline_directed priv_directed \
+TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed pipeline_directed priv_directed \
             vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
             trap_store_misalign trap_younger_store trap_instr_misalign \
@@ -131,6 +133,7 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_rv64i.dat ./core_tb rv64i_directed.bin
 	cd $(BUILD) && COV_FILE=cov_rv64m.dat ./core_tb rv64m_directed.bin
 	cd $(BUILD) && COV_FILE=cov_amo.dat ./core_tb amo_directed.bin
+	cd $(BUILD) && COV_FILE=cov_fp.dat ./core_tb fp_directed.bin
 	cd $(BUILD) && COV_FILE=cov_pipeline.dat ./core_tb pipeline_directed.bin
 	cd $(BUILD) && COV_FILE=cov_priv.dat ./core_tb priv_directed.bin --irq-timer-after 2000
 	cd $(BUILD) && COV_FILE=cov_vm.dat ./core_tb vm_directed.bin
@@ -154,7 +157,7 @@ COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
               $(BUILD)/cov_csr.dat $(BUILD)/cov_mmu.dat \
               $(BUILD)/cov_fpu.dat \
               $(BUILD)/cov_rv64i.dat $(BUILD)/cov_rv64m.dat \
-              $(BUILD)/cov_amo.dat \
+              $(BUILD)/cov_amo.dat $(BUILD)/cov_fp.dat \
               $(BUILD)/cov_pipeline.dat $(BUILD)/cov_priv.dat \
               $(BUILD)/cov_vm.dat \
               $(BUILD)/cov_trap_illegal.dat $(BUILD)/cov_trap_misalign.dat \

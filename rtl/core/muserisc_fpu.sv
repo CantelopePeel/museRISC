@@ -45,6 +45,8 @@ module muserisc_fpu (
   localparam logic [4:0] FPU_FMS   = 5'd13;  // a*b-c
   localparam logic [4:0] FPU_FNMS  = 5'd14;  // -(a*b)+c
   localparam logic [4:0] FPU_FNMA  = 5'd15;  // -(a*b)-c
+  localparam logic [4:0] FPU_MVXF  = 5'd16;  // int bits -> fp reg
+  localparam logic [4:0] FPU_MVFX  = 5'd17;  // fp raw bits -> int reg
 
   // Per-format parameters
   logic [6:0]  p;            // precision incl. hidden bit
@@ -727,6 +729,18 @@ module muserisc_fpu (
           rp_sig = to_window(uas.sig, fmt_d_i ? 7'd24 : 7'd53);
           rp_exp = uas.exp;
         end
+      end
+
+      FPU_MVXF: begin
+        use_rp = 1'b0;
+        direct_result = fmt_d_i ? a_i
+                                : {32'hFFFF_FFFF, a_i[31:0]};
+      end
+
+      FPU_MVFX: begin
+        use_rp = 1'b0;
+        direct_result = fmt_d_i ? a_i
+                                : {{32{a_i[31]}}, a_i[31:0]};
       end
 
       default: begin

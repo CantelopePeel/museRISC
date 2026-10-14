@@ -216,6 +216,159 @@ module muserisc_decoder import muserisc_pkg::*; (
           endcase
         end
       end
+      7'b0000111: begin  // FLW / FLD
+        if (funct3 == 3'b010 || funct3 == 3'b011) begin
+          ctrl_o.valid = 1'b1;
+          ctrl_o.mem_read = 1'b1;
+          ctrl_o.alu_src_imm = 1'b1;
+          ctrl_o.fp = 1'b1;
+          ctrl_o.fp_rd = 1'b1;
+          ctrl_o.fmt_d = funct3[0];
+        end
+      end
+      7'b0100111: begin  // FSW / FSD
+        imm_o = imm_s;
+        if (funct3 == 3'b010 || funct3 == 3'b011) begin
+          ctrl_o.valid = 1'b1;
+          ctrl_o.mem_write = 1'b1;
+          ctrl_o.alu_src_imm = 1'b1;
+          ctrl_o.fp = 1'b1;
+          ctrl_o.fp_rs2 = 1'b1;
+          ctrl_o.fmt_d = funct3[0];
+        end
+      end
+      7'b1000011, 7'b1000111, 7'b1001011, 7'b1001111: begin  // FMA
+        // rs3 = instr[31:27], fmt = instr[26:25], rm = funct3
+        if (instr_i[26:25] <= 2'b01 &&
+            (funct3 <= 3'b100 || funct3 == 3'b111)) begin
+          ctrl_o.valid = 1'b1;
+          ctrl_o.fp = 1'b1;
+          ctrl_o.fp_op = 1'b1;
+          ctrl_o.fp_rm = 1'b1;
+          ctrl_o.fp_rd = 1'b1;
+          ctrl_o.fp_rs1 = 1'b1;
+          ctrl_o.fp_rs2 = 1'b1;
+          ctrl_o.fmt_d = instr_i[25];
+          unique case (instr_i[6:0])
+            7'b1000011: ctrl_o.fpu_op = 5'd12;  // FMADD
+            7'b1000111: ctrl_o.fpu_op = 5'd13;  // FMSUB
+            7'b1001011: ctrl_o.fpu_op = 5'd14;  // FNMSUB
+            default:    ctrl_o.fpu_op = 5'd15;  // FNMADD
+          endcase
+        end
+      end
+      7'b1010011: begin  // OP-FP: funct7 = {funct5, fmt[1:0]}
+        if (instr_i[26:25] <= 2'b01) begin
+          ctrl_o.fp = 1'b1;
+          ctrl_o.fp_op = 1'b1;
+          ctrl_o.fmt_d = instr_i[25];
+          unique case (instr_i[31:27])
+            5'b00000, 5'b00001, 5'b00010, 5'b00011: begin
+              // FADD/FSUB/FMUL/FDIV
+              if (funct3 <= 3'b100 || funct3 == 3'b111) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.fp_rd = 1'b1;
+                ctrl_o.fp_rs1 = 1'b1;
+                ctrl_o.fp_rs2 = 1'b1;
+                ctrl_o.fp_rm = 1'b1;
+                ctrl_o.fpu_op = {3'b0, instr_i[28:27]};
+              end
+            end
+            5'b01011: begin  // FSQRT (rs2 must be x0/f0 field 0)
+              if ((instr_i[24:20] == 5'd0) &&
+                  (funct3 <= 3'b100 || funct3 == 3'b111)) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.fp_rd = 1'b1;
+                ctrl_o.fp_rs1 = 1'b1;
+                ctrl_o.fp_rm = 1'b1;
+                ctrl_o.fpu_op = 5'd4;
+              end
+            end
+            5'b00100: begin  // FSGNJ/N/X (funct3 selects)
+              if (funct3 <= 3'b010) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.fp_rd = 1'b1;
+                ctrl_o.fp_rs1 = 1'b1;
+                ctrl_o.fp_rs2 = 1'b1;
+                ctrl_o.fpu_op = 5'd5;
+                ctrl_o.fpu_aux = funct3[1:0];
+              end
+            end
+            5'b00101: begin  // FMIN/FMAX
+              if (funct3 <= 3'b001) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.fp_rd = 1'b1;
+                ctrl_o.fp_rs1 = 1'b1;
+                ctrl_o.fp_rs2 = 1'b1;
+                ctrl_o.fpu_op = 5'd6;
+                ctrl_o.fpu_aux = {1'b0, funct3[0]};
+              end
+            end
+            5'b01000: begin  // FCVT.fmt.fmt (rs2 = source fmt)
+              if ((instr_i[24:20] <= 5'd1) &&
+                  (instr_i[20] != instr_i[25]) &&
+                  (funct3 <= 3'b100 || funct3 == 3'b111)) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.fp_rd = 1'b1;
+                ctrl_o.fp_rs1 = 1'b1;
+                ctrl_o.fp_rm = 1'b1;
+                ctrl_o.fpu_op = 5'd11;
+              end
+            end
+            5'b11000: begin  // FCVT.W/WU/L/LU.fmt (rs2 = size)
+              if ((instr_i[24:20] <= 5'd3) &&
+                  (funct3 <= 3'b100 || funct3 == 3'b111)) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.reg_write = 1'b1;
+                ctrl_o.fp_rs1 = 1'b1;
+                ctrl_o.fp_rm = 1'b1;
+                ctrl_o.fpu_op = 5'd9;
+                ctrl_o.fpu_aux = instr_i[21:20];
+              end
+            end
+            5'b11010: begin  // FCVT.fmt.W/WU/L/LU
+              if ((instr_i[24:20] <= 5'd3) &&
+                  (funct3 <= 3'b100 || funct3 == 3'b111)) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.fp_rd = 1'b1;
+                ctrl_o.fp_rm = 1'b1;
+                ctrl_o.fpu_op = 5'd10;
+                ctrl_o.fpu_aux = instr_i[21:20];
+              end
+            end
+            5'b11100: begin  // FMV.X.fmt / FCLASS (rs2 = 0)
+              if (instr_i[24:20] == 5'd0 && funct3 <= 3'b001) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.reg_write = 1'b1;
+                ctrl_o.fp_rs1 = 1'b1;
+                ctrl_o.fpu_op = funct3[0] ? 5'd8 : 5'd17;
+              end
+            end
+            5'b11110: begin  // FMV.fmt.X (rs2 = 0, funct3 = 0)
+              if (instr_i[24:20] == 5'd0 && funct3 == 3'b000) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.fp_rd = 1'b1;
+                ctrl_o.fpu_op = 5'd16;
+              end
+            end
+            5'b10100: begin  // FEQ/FLT/FLE
+              if (funct3 <= 3'b010) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.reg_write = 1'b1;
+                ctrl_o.fp_rs1 = 1'b1;
+                ctrl_o.fp_rs2 = 1'b1;
+                ctrl_o.fpu_op = 5'd7;
+                ctrl_o.fpu_aux = funct3[1:0];
+              end
+            end
+            default: ctrl_o.fp = 1'b0;
+          endcase
+          if (!ctrl_o.valid) begin
+            ctrl_o.fp = 1'b0;
+            ctrl_o.fp_op = 1'b0;
+          end
+        end
+      end
       7'b1110011: begin  // SYSTEM
         if (funct3 == 3'b000) begin
           if (instr_i[31:20] == 12'd0) begin

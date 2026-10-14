@@ -23,6 +23,9 @@ struct Ctrl {
   bool wfi = false, sfence = false;
   bool amo = false, lr = false, sc = false;
   int amo_op = 0;
+  bool fp = false, fp_rs1 = false, fp_rs2 = false, fp_rd = false;
+  bool fp_rm = false, fp_op = false, fmt_d = false;
+  int fpu_op = 0, fpu_aux = 0;
   int alu_op = ADD;
   bool branch = false, jal = false, jalr = false, ecall = false, ebreak = false;
   uint64_t imm = 0;
@@ -99,6 +102,94 @@ Ctrl Golden(uint32_t insn) {
                    f5 == 0x1c) {
           c.valid = c.reg_write = c.mem_read = c.mem_write = c.amo = true;
         }
+      }
+      break;
+    }
+    case 0x07:  // FLW/FLD
+      if (f3 == 2 || f3 == 3) {
+        c.valid = c.mem_read = c.alu_src_imm = c.fp = c.fp_rd = true;
+        c.fmt_d = (f3 == 3); c.imm = imm_i;
+      }
+      break;
+    case 0x27:  // FSW/FSD
+      if (f3 == 2 || f3 == 3) {
+        c.valid = c.mem_write = c.alu_src_imm = c.fp = c.fp_rs2 = true;
+        c.fmt_d = (f3 == 3); c.imm = imm_s;
+      }
+      break;
+    case 0x43: case 0x47: case 0x4b: case 0x4f: {  // FMA group
+      const uint32_t fmt = (insn >> 25) & 3;
+      if (fmt <= 1 && (f3 <= 4 || f3 == 7)) {
+        c.valid = c.fp = c.fp_op = c.fp_rm = c.fp_rd = true;
+        c.fp_rs1 = c.fp_rs2 = true;
+        c.fmt_d = (fmt == 1);
+        c.fpu_op = 12 + static_cast<int>((op >> 2) & 3);
+      }
+      break;
+    }
+    case 0x53: {  // OP-FP
+      const uint32_t fmt = (insn >> 25) & 3;
+      const uint32_t f5 = insn >> 27;
+      const uint32_t rs2 = (insn >> 20) & 31u;
+      const bool rm_ok = (f3 <= 4 || f3 == 7);
+      if (fmt <= 1) {
+        c.fp = c.fp_op = true;
+        c.fmt_d = (fmt == 1);
+        switch (f5) {
+          case 0x00: case 0x01: case 0x02: case 0x03:
+            if (rm_ok) { c.valid = c.fp_rd = c.fp_rs1 = c.fp_rs2 =
+                         c.fp_rm = true;
+                         c.fpu_op = static_cast<int>(f5); }
+            break;
+          case 0x0b:
+            if (rs2 == 0 && rm_ok) { c.valid = c.fp_rd = c.fp_rs1 =
+                                     c.fp_rm = true; c.fpu_op = 4; }
+            break;
+          case 0x04:
+            if (f3 <= 2) { c.valid = c.fp_rd = c.fp_rs1 = c.fp_rs2 = true;
+                           c.fpu_op = 5;
+                           c.fpu_aux = static_cast<int>(f3); }
+            break;
+          case 0x05:
+            if (f3 <= 1) { c.valid = c.fp_rd = c.fp_rs1 = c.fp_rs2 = true;
+                           c.fpu_op = 6;
+                           c.fpu_aux = static_cast<int>(f3); }
+            break;
+          case 0x08:
+            if (rs2 <= 1 && ((rs2 & 1) != fmt) && rm_ok) {
+              c.valid = c.fp_rd = c.fp_rs1 = c.fp_rm = true;
+              c.fpu_op = 11;
+            }
+            break;
+          case 0x18:
+            if (rs2 <= 3 && rm_ok) { c.valid = c.reg_write = c.fp_rs1 =
+                                     c.fp_rm = true;
+                                     c.fpu_op = 9;
+                                     c.fpu_aux = static_cast<int>(rs2); }
+            break;
+          case 0x1a:
+            if (rs2 <= 3 && rm_ok) { c.valid = c.fp_rd = c.fp_rm = true;
+                                     c.fpu_op = 10;
+                                     c.fpu_aux = static_cast<int>(rs2); }
+            break;
+          case 0x1c:
+            if (rs2 == 0 && f3 <= 1) {
+              c.valid = c.reg_write = c.fp_rs1 = true;
+              c.fpu_op = (f3 == 1) ? 8 : 17;
+            }
+            break;
+          case 0x1e:
+            if (rs2 == 0 && f3 == 0) { c.valid = c.fp_rd = true;
+                                       c.fpu_op = 16; }
+            break;
+          case 0x14:
+            if (f3 <= 2) { c.valid = c.reg_write = c.fp_rs1 = c.fp_rs2 =
+                           true; c.fpu_op = 7;
+                           c.fpu_aux = static_cast<int>(f3); }
+            break;
+          default: break;
+        }
+        if (!c.valid) { c.fp = c.fp_op = false; c.fmt_d = (fmt == 1); }
       }
       break;
     }
@@ -191,7 +282,10 @@ int main(int argc, char** argv) {
               kAluSrcImm = 14, kMemWrite = 15, kMemRead = 16,
               kRegWrite = 17, kValid = 18, kMuldiv = 19, kCsr = 20,
               kCsrImm = 21, kMret = 22, kSret = 23, kWfi = 24, kSfence = 25,
-              kAmo = 26, kLr = 27, kSc = 28, kAmoOp = 29;
+              kAmo = 26, kLr = 27, kSc = 28, kAmoOp = 29,
+              kFp = 34, kFpRs2 = 35, kFpRs1 = 36, kFpRd = 37,
+              kFpRm = 38, kFpOp = 39, kFmtD = 40, kFpuAux = 41,
+              kFpuOp = 43;
     const Field fields[] = {
         {"valid", bit(kValid), g.valid},
         {"reg_write", bit(kRegWrite), g.reg_write && g.valid},
@@ -210,6 +304,13 @@ int main(int argc, char** argv) {
         {"amo", bit(kAmo), g.amo && g.valid},
         {"lr", bit(kLr), g.lr && g.valid},
         {"sc", bit(kSc), g.sc && g.valid},
+        {"fp", bit(kFp), g.fp && g.valid},
+        {"fp_rs1", bit(kFpRs1), g.fp_rs1 && g.valid},
+        {"fp_rs2", bit(kFpRs2), g.fp_rs2 && g.valid},
+        {"fp_rd", bit(kFpRd), g.fp_rd && g.valid},
+        {"fp_rm", bit(kFpRm), g.fp_rm && g.valid},
+        {"fp_op", bit(kFpOp), g.fp_op && g.valid},
+        {"fmt_d", bit(kFmtD), g.fmt_d && g.valid},
         {"ecall", bit(kEcall), g.ecall && g.valid},
         {"ebreak", bit(kEbreak), g.ebreak && g.valid},
     };
@@ -228,6 +329,14 @@ int main(int argc, char** argv) {
         std::printf("FAIL insn=0x%08x alu fields ctrl=0x%llx want op=%d src_imm=%d a_pc=%d word=%d\n",
                     insn, static_cast<unsigned long long>(c), g.alu_op, g.alu_src_imm ? 1 : 0, g.alu_a_pc ? 1 : 0,
                     g.word_op ? 1 : 0);
+        return false;
+      }
+      if (static_cast<int>((c >> kFpuOp) & 0x1f) != g.fpu_op ||
+          static_cast<int>((c >> kFpuAux) & 3u) != g.fpu_aux) {
+        std::printf("FAIL insn=0x%08x fpu_op/aux got=%d/%d want=%d/%d\n",
+                    insn, static_cast<int>((c >> kFpuOp) & 0x1f),
+                    static_cast<int>((c >> kFpuAux) & 3u),
+                    g.fpu_op, g.fpu_aux);
         return false;
       }
       if (static_cast<int>((c >> kAmoOp) & 0x1f) != g.amo_op) {
