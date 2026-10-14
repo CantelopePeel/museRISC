@@ -168,7 +168,7 @@ module muserisc_csr (
       12'h144: csr_rdata = mip_val & mideleg_q;                   // sip
       12'h180: csr_rdata = satp_q;                                // satp
       12'h300: csr_rdata = mstatus_o;                             // mstatus
-      12'h301: csr_rdata = 64'h8000_0000_0014_112B;               // misa: RV64 IMABFD SU
+      12'h301: csr_rdata = 64'h8000_0000_0014_112F;               // misa: RV64 IMABC FD SU
       12'h302: csr_rdata = medeleg_q;                             // medeleg
       12'h303: csr_rdata = mideleg_q;                             // mideleg
       12'h304: csr_rdata = mie_q;                                 // mie
@@ -495,7 +495,7 @@ module muserisc_csr (
           12'h106: scounteren_q <= wdata_i & 64'h7;  // CY|TM|IR exist
           12'h10A: senvcfg_q <= wdata_i;
           12'h140: sscratch_q <= wdata_i;
-          12'h141: sepc_q <= {wdata_i[63:2], 2'b00};
+          12'h141: sepc_q <= {wdata_i[63:1], 1'b0};
           12'h142: scause_q <= wdata_i;
           12'h143: stval_q <= wdata_i;
           12'h144: mip_ssip_q <= wdata_i[1];
@@ -527,7 +527,7 @@ module muserisc_csr (
           12'h30A: menvcfg_q <= wdata_i;
           12'h320: mcountinhibit_q <= wdata_i & 64'h5;  // CY|IR exist
           12'h340: mscratch_q <= wdata_i;
-          12'h341: mepc_q <= {wdata_i[63:2], 2'b00};
+          12'h341: mepc_q <= {wdata_i[63:1], 1'b0};
           12'h342: mcause_q <= wdata_i;
           12'h343: mtval_q <= wdata_i;
           12'h344: begin

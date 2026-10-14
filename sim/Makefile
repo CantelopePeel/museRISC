@@ -23,23 +23,24 @@ RISCV_PREFIX ?= $(shell command -v riscv64-unknown-elf-gcc >/dev/null 2>&1 \
                   && echo riscv64-unknown-elf- || echo riscv64-elf-)
 RISCV_GCC     := $(RISCV_PREFIX)gcc
 RISCV_OBJCOPY := $(RISCV_PREFIX)objcopy
-SWFLAGS       := -march=rv64imafd_zba_zbb_zbc_zbs_zicond_zbkb_zbkx_zkne_zknd_zknh_zicsr_zifencei -mabi=lp64 -nostdlib -T $(ROOT)/sw/core-tests/link.ld
+SWFLAGS       := -march=rv64imafdc_zba_zbb_zbc_zbs_zcb_zicond_zbkb_zbkx_zkne_zknd_zknh_zicsr_zifencei -mabi=lp64 -nostdlib -T $(ROOT)/sw/core-tests/link.ld
 
 CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
             $(RTL)/muserisc_fpregfile.sv $(RTL)/muserisc_alu.sv \
             $(RTL)/muserisc_muldiv.sv $(RTL)/muserisc_fpu.sv \
             $(RTL)/muserisc_bext.sv \
+            $(RTL)/muserisc_rvc.sv \
             $(RTL)/muserisc_decoder.sv \
             $(RTL)/muserisc_csr.sv $(RTL)/muserisc_mmu.sv \
             $(RTL)/muserisc_core.sv
-TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed pipeline_directed priv_directed \
+TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed rvc_directed pipeline_directed priv_directed \
             vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
-            trap_store_misalign trap_younger_store trap_instr_misalign \
+            trap_store_misalign trap_younger_store \
             trap_pa_fetch trap_pa_load
 
-.PHONY: all alu muldiv decoder regfile csr mmu fpu bext core sw coverage clean riscv-tests
-all: alu muldiv decoder regfile csr mmu fpu bext core coverage
+.PHONY: all alu muldiv decoder regfile csr mmu fpu bext rvc core sw coverage clean riscv-tests
+all: alu muldiv decoder regfile csr mmu fpu bext rvc core coverage
 
 ## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
 riscv-tests: $(BUILD)/core_tb
@@ -124,10 +125,20 @@ fpu: $(BUILD)/fpu_tb
 $(BUILD)/bext_tb: $(ROOT)/tb/cpp/bext_tb.cpp $(RTL)/muserisc_bext.sv | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/bext --top-module muserisc_bext \
 	  -o $(abspath $(BUILD)/bext_tb) $(RTL)/muserisc_bext.sv \
+            $(RTL)/muserisc_rvc.sv \
 	  $(abspath $(ROOT)/tb/cpp/bext_tb.cpp)
 
 bext: $(BUILD)/bext_tb
 	cd $(BUILD) && COV_FILE=cov_bext.dat ./bext_tb
+
+## ---- RVC decompressor unit test --------------------------------------------
+$(BUILD)/rvc_tb: $(ROOT)/tb/cpp/rvc_tb.cpp $(RTL)/muserisc_rvc.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/rvc --top-module muserisc_rvc \
+	  -o $(abspath $(BUILD)/rvc_tb) $(RTL)/muserisc_rvc.sv \
+	  $(abspath $(ROOT)/tb/cpp/rvc_tb.cpp)
+
+rvc: $(BUILD)/rvc_tb
+	cd $(BUILD) && COV_FILE=cov_rvc.dat ./rvc_tb
 
 ## ---- Core harness + directed software ---------------------------------
 $(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(CORE_RTL) | $(BUILD) $(OBJ)
@@ -145,6 +156,7 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_amo.dat ./core_tb amo_directed.bin
 	cd $(BUILD) && COV_FILE=cov_fp.dat ./core_tb fp_directed.bin
 	cd $(BUILD) && COV_FILE=cov_bextsw.dat ./core_tb bext_directed.bin
+	cd $(BUILD) && COV_FILE=cov_rvcsw.dat ./core_tb rvc_directed.bin
 	cd $(BUILD) && COV_FILE=cov_pipeline.dat ./core_tb pipeline_directed.bin
 	cd $(BUILD) && COV_FILE=cov_priv.dat ./core_tb priv_directed.bin --irq-timer-after 2000
 	cd $(BUILD) && COV_FILE=cov_vm.dat ./core_tb vm_directed.bin
@@ -154,7 +166,6 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_trap_ebreak.dat ./core_tb trap_ebreak.bin 100000 --expect-trap 3
 	cd $(BUILD) && COV_FILE=cov_trap_smisalign.dat ./core_tb trap_store_misalign.bin 100000 --expect-trap 6
 	cd $(BUILD) && COV_FILE=cov_trap_ystore.dat ./core_tb trap_younger_store.bin 100000 --expect-trap 4
-	cd $(BUILD) && COV_FILE=cov_trap_imisalign.dat ./core_tb trap_instr_misalign.bin 100000 --expect-trap 0
 	cd $(BUILD) && COV_FILE=cov_trap_pa_fetch.dat ./core_tb trap_pa_fetch.bin 100000 --expect-trap 1
 	cd $(BUILD) && COV_FILE=cov_trap_pa_load.dat ./core_tb trap_pa_load.bin 100000 --expect-trap 5
 
@@ -170,12 +181,13 @@ COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
               $(BUILD)/cov_rv64i.dat $(BUILD)/cov_rv64m.dat \
               $(BUILD)/cov_amo.dat $(BUILD)/cov_fp.dat \
               $(BUILD)/cov_bext.dat $(BUILD)/cov_bextsw.dat \
+              $(BUILD)/cov_rvc.dat $(BUILD)/cov_rvcsw.dat \
               $(BUILD)/cov_pipeline.dat $(BUILD)/cov_priv.dat \
               $(BUILD)/cov_vm.dat \
               $(BUILD)/cov_trap_illegal.dat $(BUILD)/cov_trap_misalign.dat \
               $(BUILD)/cov_trap_ecall.dat $(BUILD)/cov_trap_ebreak.dat \
               $(BUILD)/cov_trap_smisalign.dat $(BUILD)/cov_trap_ystore.dat \
-              $(BUILD)/cov_trap_imisalign.dat $(BUILD)/cov_trap_pa_fetch.dat \
+              $(BUILD)/cov_trap_pa_fetch.dat \
               $(BUILD)/cov_trap_pa_load.dat
 coverage:
 	@rm -f $(BUILD)/cov_merged.dat

@@ -913,6 +913,52 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   Zknh(8), all green; same `tor_zero` waiver. riscv-tests
   unchanged at 122/122 (no B/K suites exist upstream there).
 
+## In-house core stage 5 — C extension (Zca/Zcb/Zcd) (2026-10-13, #18)
+
+- New `rtl/core/muserisc_rvc.sv`: combinational decompressor
+  expanding every Zca/Zcb/Zcd 16-bit form (incl. RV64-only
+  `c.addiw`/`c.addw`/`c.subw`/`c.ld`/`c.sd` and Zcb
+  byte/halfword loads/stores) to its canonical 32-bit
+  instruction; reserved/hint space outside the declared
+  extensions raises illegal-instruction. Fetch gained a
+  realigner: misaligned (2-byte) PCs fetch the aligned word
+  and take the high parcel, and a 32-bit instruction
+  straddling a page boundary buffers its first half while
+  the second half is fetched (a fault on the second half
+  reports `tval = pc+2`, `epc = pc`). IALIGN is now 16:
+  jump/branch targets no longer raise address-misaligned
+  (fetch faults surface at fetch), `xepc` writes keep bit 1,
+  `misa` = `0x8000_0000_0014_112F` (RV64 IMABC FD SU).
+  `sw/core-tests/trap_instr_misalign.S` deleted (the case
+  no longer exists architecturally).
+- Verification: [`tb/cpp/rvc_tb.cpp`](../../tb/cpp/rvc_tb.cpp)
+  checks the decompressor against an independent golden
+  expander over all directed forms plus randomized parcels
+  (49,152 checks); `sw/core-tests/rvc_directed.S` covers
+  mixed 16/32-bit streams, misaligned branches/jumps, and
+  compressed loads/stores in the pipeline.
+- Gates: `make core-test` green;
+  [`riscv-tests-core-2026-10-13.csv`](riscv-tests-core-2026-10-13.csv)
+  now **123/123** (adds `rv64uc-p-rvc`);
+  [`act-core-impriv-2026-10-13.csv`](act-core-impriv-2026-10-13.csv)
+  now **543/544** (adds Zca/Zcb/Zcd and the ZcbZba/ZcbZbb/
+  ZcbZmmul combined suites, 49 tests; same single
+  `PMPSm_cfg_A_tor_zero` platform waiver — PA0 is RAM in
+  this harness but access-faults in the Sail memory map).
+- Three encoding bugs were caught by the RVC TB / ACT
+  before this gate and are regression-covered: D-form
+  load/store immediate bit order, Zcb `c.lh`/`c.sh` select
+  and offset mapping, and `c.mul` expanding to MULW
+  (OP-32) instead of MUL (OP).
+- Flow note: `ExceptionsSv` S/U initially "failed" against
+  stale ACT artifacts generated under the pre-C config
+  (Sail expectations assumed IALIGN=32; the ACT make does
+  not track DUT config changes as dependencies). The core
+  was correct; regenerating the priv suites from the
+  current config restored 543/544 with no RTL change. The
+  regeneration commands, including this caveat, are in
+  [`sw/act4-core/README.md`](../../sw/act4-core/README.md).
+
 ### Linux/OpenSBI boot attempt — blocked on A (stage 4)
 
 - Log: [`core-stage3d-linux-attempt-2026-10-13.log`](core-stage3d-linux-attempt-2026-10-13.log).

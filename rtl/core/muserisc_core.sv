@@ -100,6 +100,18 @@ module muserisc_core import muserisc_pkg::*; (
   logic        fetch_fault, fetch_stall;
   logic [63:0] fetch_cause;
 
+  // Fetch realignment for 16-bit parcels (stage 5 C):
+  // the MMU translates one aligned 32-bit fetch word at a
+  // time. A 32-bit instruction starting in the upper half
+  // latches its low parcel (straddle_q) and completes from
+  // the next aligned word next cycle; that second fetch is
+  // translated (and may fault) independently, with tval
+  // naming the second half's address.
+  logic        straddle_q;
+  logic [15:0] straddle_lo_q;
+  logic [63:0] fetch_va;
+  assign fetch_va = straddle_q ? (pc_q + 64'd2)
+                               : {pc_q[63:2], 2'b00};
   assign imem_addr_o = mmu_if_pa;
   // Physical addresses are 56 bits: an untranslated (M-mode /
   // Bare) address at or above 2^56 access-faults. Translated
@@ -108,15 +120,44 @@ module muserisc_core import muserisc_pkg::*; (
   // the raw VA, which may be a high canonical address.
   logic fetch_pa_illegal;
   assign fetch_pa_illegal = mmu_if_ok && |mmu_if_pa[63:56];
-  // IALIGN=32: a fetch target with pc[1] set raises the
-  // instruction-address-misaligned exception (highest priority),
-  // then translation faults, then the PMP check on the PA.
-  assign fetch_fault = pc_q[1] || mmu_if_fault || fetch_pa_illegal ||
+  // IALIGN=16 (C extension): only translation and PMP faults
+  // remain at fetch.
+  assign fetch_fault = mmu_if_fault || fetch_pa_illegal ||
                        (mmu_if_ok && !pmp_allow_fetch);
-  assign fetch_cause = pc_q[1] ? 64'd0
-      : mmu_if_fault ? (mmu_if_fault_page ? 64'd12 : 64'd1) : 64'd1;
-  assign fetch_stall = !pc_q[1] && !fetch_pa_illegal && !mmu_if_ok &&
+  assign fetch_cause = mmu_if_fault ?
+      (mmu_if_fault_page ? 64'd12 : 64'd1) : 64'd1;
+  assign fetch_stall = !fetch_pa_illegal && !mmu_if_ok &&
                        !mmu_if_fault;
+
+  // Parcel assembly and decompression.
+  logic [15:0] parcel16;
+  logic        parcel_long, rvc_illegal, straddle_enter;
+  logic [31:0] fetch_instr, rvc_expanded;
+  logic        fetch_rvc;
+  logic [63:0] fetch_tval;
+  assign parcel16 = pc_q[1] ? imem_rdata_i[31:16]
+                            : imem_rdata_i[15:0];
+  assign parcel_long = (parcel16[1:0] == 2'b11);
+  assign straddle_enter = !straddle_q && parcel_long && pc_q[1] &&
+                          !fetch_fault && !fetch_stall;
+  muserisc_rvc u_rvc (
+      .in_i      (parcel16),
+      .out_o     (rvc_expanded),
+      .illegal_o (rvc_illegal)
+  );
+  always_comb begin
+    if (straddle_q) begin
+      fetch_instr = {imem_rdata_i[15:0], straddle_lo_q};
+      fetch_rvc = 1'b0;
+    end else if (!parcel_long) begin
+      fetch_instr = rvc_illegal ? 32'b0 : rvc_expanded;
+      fetch_rvc = 1'b1;
+    end else begin
+      fetch_instr = imem_rdata_i;
+      fetch_rvc = 1'b0;
+    end
+  end
+  assign fetch_tval = straddle_q ? (pc_q + 64'd2) : pc_q;
 
   // IF/ID register
   logic        ifid_valid_q;
@@ -124,6 +165,9 @@ module muserisc_core import muserisc_pkg::*; (
   logic [31:0] ifid_instr_q;
   logic        ifid_exc_q;      // fetch fault (access or page)
   logic [63:0] ifid_cause_q;
+  logic        ifid_rvc_q;      // instruction was a 16-bit parcel
+  logic [15:0] ifid_parcel_q;   // raw parcel (illegal tval)
+  logic [63:0] ifid_tval_q;     // fetch-fault address
 
   // ------------------------------------------------------------
   // ID stage
@@ -150,7 +194,7 @@ module muserisc_core import muserisc_pkg::*; (
     if (ifid_exc_q) begin
       id_exc = ifid_valid_q;
       id_cause = ifid_cause_q;                // 1 access / 12 page fault
-      id_tval = ifid_pc_q;
+      id_tval = ifid_tval_q;
     end else if (id_ctrl.ecall) begin
       id_exc = ifid_valid_q;
       id_cause = (priv == 2'b11) ? 64'd11 : (priv == 2'b01) ? 64'd9 : 64'd8;
@@ -162,7 +206,8 @@ module muserisc_core import muserisc_pkg::*; (
     end else if (!id_ctrl.valid) begin
       id_exc = ifid_valid_q;
       id_cause = CAUSE_ILLEGAL_INSTR;
-      id_tval = {32'd0, ifid_instr_q};
+      id_tval = ifid_rvc_q ? {48'd0, ifid_parcel_q}
+                           : {32'd0, ifid_instr_q};
     end else begin
       id_exc = 1'b0;
       id_cause = 64'd0;
@@ -199,6 +244,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [4:0]  idex_rs3_addr_q;
   logic        idex_exc_q;
   logic [63:0] idex_cause_q, idex_tval_q;
+  logic        idex_rvc_q;
 
   // FP sources of the ID instruction (from the decoder ctrl).
   logic [4:0] id_rs3;
@@ -446,7 +492,7 @@ module muserisc_core import muserisc_pkg::*; (
                       fp_illegal;
 
   always_comb begin
-    if (idex_ctrl_q.jal || idex_ctrl_q.jalr) ex_result = idex_pc_q + 64'd4;
+    if (idex_ctrl_q.jal || idex_ctrl_q.jalr) ex_result = idex_pc_q + (idex_rvc_q ? 64'd2 : 64'd4);
     else if (idex_ctrl_q.csr)                ex_result = csr_rdata;
     else if (idex_ctrl_q.muldiv)             ex_result = muldiv_result;
     else if (idex_ctrl_q.fp_op)              ex_result = fpu_result;
@@ -466,13 +512,14 @@ module muserisc_core import muserisc_pkg::*; (
     endcase
   end
 
-  // A taken control transfer to a 2-byte-aligned target raises
-  // instruction-address-misaligned on the jump/branch itself
-  // (epc = this instruction, tval = target) and does not redirect.
+  // With IALIGN=16 a control target is misaligned only if
+  // bit 0 is set, which no encodable target can be (branch
+  // and JAL immediates are even, JALR clears bit 0); the
+  // check is retained in that form for completeness.
   logic jump_misalign;
   assign jump_misalign = idex_valid_q && !idex_exc_q && !ex_illegal &&
       (idex_ctrl_q.jal || idex_ctrl_q.jalr ||
-       (idex_ctrl_q.branch && branch_taken)) && redirect_pc[1];
+       (idex_ctrl_q.branch && branch_taken)) && redirect_pc[0];
 
   assign flush = idex_valid_q && !idex_exc_q && !ex_illegal &&
                  !jump_misalign &&
@@ -480,7 +527,7 @@ module muserisc_core import muserisc_pkg::*; (
                   (idex_ctrl_q.branch && branch_taken) || ex_serialize);
   always_comb begin
     if (ex_ret)                  redirect_pc = xret_pc;
-    else if (idex_ctrl_q.sfence) redirect_pc = idex_pc_q + 64'd4;
+    else if (idex_ctrl_q.sfence) redirect_pc = idex_pc_q + (idex_rvc_q ? 64'd2 : 64'd4);
     else if (idex_ctrl_q.jalr)   redirect_pc = (ex_rs1 + idex_imm_q) & ~64'd1;
     else                         redirect_pc = idex_pc_q + idex_imm_q;
   end
@@ -776,7 +823,7 @@ module muserisc_core import muserisc_pkg::*; (
       .mxr_i            (csr_mstatus[19]),
       .flush_i          (sfence_fire),
       .abort_i          (trap_take),
-      .if_va_i          (pc_q),
+      .if_va_i          (fetch_va),
       .if_priv_i        (priv),
       .if_pa_o          (mmu_if_pa),
       .if_ok_o          (mmu_if_ok),
@@ -805,8 +852,12 @@ module muserisc_core import muserisc_pkg::*; (
   // ------------------------------------------------------------
   always_comb begin
     if (flush)                             pc_d = redirect_pc;
-    else if (stall || freeze || fetch_stall) pc_d = pc_q;
-    else                                   pc_d = pc_q + 64'd4;
+    else if (stall || freeze || fetch_stall || straddle_enter)
+                                           pc_d = pc_q;
+    else if (fetch_fault)                  pc_d = pc_q + 64'd4;
+    else                                   pc_d = pc_q +
+                                                 (fetch_rvc ? 64'd2
+                                                            : 64'd4);
   end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -820,6 +871,12 @@ module muserisc_core import muserisc_pkg::*; (
       ifid_instr_q <= 32'd0;
       ifid_exc_q <= 1'b0;
       ifid_cause_q <= 64'd0;
+      ifid_rvc_q <= 1'b0;
+      ifid_parcel_q <= 16'd0;
+      ifid_tval_q <= 64'd0;
+      straddle_q <= 1'b0;
+      straddle_lo_q <= 16'd0;
+      idex_rvc_q <= 1'b0;
       idex_pc_q <= 64'd0;
       idex_ctrl_q <= '0;
       idex_imm_q <= 64'd0;
@@ -849,8 +906,10 @@ module muserisc_core import muserisc_pkg::*; (
       memwb_cause_q <= 64'd0;
       memwb_tval_q <= 64'd0;
     end else if (trap_take) begin
-      // Precise trap entry: redirect and empty the pipeline.
+      // Precise trap entry: redirect and empty the pipeline,
+      // including any half-fetched straddled instruction.
       pc_q <= trap_target;
+      straddle_q <= 1'b0;
       ifid_valid_q <= 1'b0;
       idex_valid_q <= 1'b0;
       exmem_valid_q <= 1'b0;
@@ -891,7 +950,8 @@ module muserisc_core import muserisc_pkg::*; (
         idex_pc_q <= ifid_pc_q;
         idex_ctrl_q <= '0;
         idex_imm_q <= 64'd0;
-      idex_instr_q <= 32'd0;
+        idex_instr_q <= 32'd0;
+        idex_rvc_q <= 1'b0;
         idex_rs1_q <= 64'd0;
         idex_rs2_q <= 64'd0;
         idex_rs1_addr_q <= 5'd0;
@@ -905,7 +965,9 @@ module muserisc_core import muserisc_pkg::*; (
         idex_pc_q <= ifid_pc_q;
         idex_ctrl_q <= ifid_exc_q ? '0 : id_ctrl;
         idex_imm_q <= id_imm;
-        idex_instr_q <= ifid_instr_q;
+        idex_instr_q <= ifid_rvc_q ? {16'b0, ifid_parcel_q}
+                                   : ifid_instr_q;
+        idex_rvc_q <= ifid_rvc_q;
         idex_rs1_q <= id_rs1_val;
         idex_rs2_q <= id_rs2_val;
         idex_frs1_q <= id_frs1_val;
@@ -923,12 +985,25 @@ module muserisc_core import muserisc_pkg::*; (
       if (flush) begin
         ifid_valid_q <= 1'b0;
         ifid_exc_q <= 1'b0;
+        straddle_q <= 1'b0;
       end else if (!stall && !fetch_stall) begin
-        ifid_valid_q <= 1'b1;
-        ifid_pc_q <= pc_q;
-        ifid_instr_q <= fetch_fault ? 32'd0 : imem_rdata_i;
-        ifid_exc_q <= fetch_fault;
-        ifid_cause_q <= fetch_cause;
+        if (straddle_enter) begin
+          // Hold the low parcel; complete it next cycle.
+          ifid_valid_q <= 1'b0;
+          ifid_exc_q <= 1'b0;
+          straddle_q <= 1'b1;
+          straddle_lo_q <= parcel16;
+        end else begin
+          ifid_valid_q <= 1'b1;
+          ifid_pc_q <= pc_q;
+          ifid_instr_q <= fetch_fault ? 32'd0 : fetch_instr;
+          ifid_exc_q <= fetch_fault;
+          ifid_cause_q <= fetch_cause;
+          ifid_rvc_q <= fetch_rvc && !fetch_fault;
+          ifid_parcel_q <= parcel16;
+          ifid_tval_q <= fetch_tval;
+          straddle_q <= 1'b0;
+        end
       end else if (fetch_stall && !stall) begin
         // Walker is resolving this PC: bubble ID until it lands.
         ifid_valid_q <= 1'b0;

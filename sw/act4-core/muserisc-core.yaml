@@ -51,6 +51,12 @@ implemented_extensions:
   - { name: Zbkc, version: "= 1.0.0" }
   - { name: Zbkx, version: "= 1.0.0" }
   - { name: Zkne, version: "= 1.0.1" }
+  # C via rtl/core/muserisc_rvc.sv decompressor + fetch
+  # realigner in muserisc_core.sv (IALIGN=16).
+  - { name: C, version: "= 2.0" }
+  - { name: Zca, version: "= 1.0.0" }
+  - { name: Zcb, version: "= 1.0.0" }
+  - { name: Zcd, version: "= 1.0.0" }
   - { name: Zknd, version: "= 1.0.1" }
   - { name: Zknh, version: "= 1.0.1" }
   - { name: Zicsr, version: "= 2.0" }
@@ -92,7 +98,7 @@ implemented_extensions:
   - { name: Ssu64xl, version: "= 1.0.0" }
 
   # Not implemented and deliberately absent: F, D, C (this
-  # core is IALIGN=32; compressed is stage 5), B, V, H, Zihpm
+  # B, V, H, Zihpm
   # (mhpmcounter3..31 decode as zero in M, their unprivileged
   # shadows trap, so the Zihpm contract is not met),
   # Svinval, Svpbmt, Sstc, Sdtrig, Zicbo*.
@@ -119,6 +125,7 @@ params:
   MUTABLE_MISA_F: false
   MUTABLE_MISA_D: false
   MUTABLE_MISA_B: false
+  MUTABLE_MISA_C: false
   # Hardware sets FS to Dirty whenever an FP register is
   # written (muserisc_core.sv fp_dirty).
   HW_MSTATUS_FS_DIRTY_UPDATE: precise

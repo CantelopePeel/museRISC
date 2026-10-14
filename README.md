@@ -223,10 +223,12 @@ green and its log/report is committed under `docs/evidence/`.
    in progress).** Ara (VLEN 512, 2 lanes) on the CVA6
    `cv64a6_imafdcv_sv39` target: toolchain bring-up, vector-kernel
    smoke, then ACT vector suites against a new DUT config.
-5. **In-house RV64GCV core ([#18](https://github.com/bubblebabyboi/museRISC/issues/18)).**
-   Clean-slate core replacing CVA6+Ara, verified against the same
-   stored directed/ACT/TestFloat oracles (plus the SV/cocotb port,
-   [#19](https://github.com/bubblebabyboi/museRISC/issues/19)).
+5. **In-house RV64GCV core ([#18](https://github.com/bubblebabyboi/museRISC/issues/18),
+   stages 1–5 done).** Clean-slate SystemVerilog core replacing
+   CVA6+Ara: RV64 IMABC FD SU + Sv39/PMP implemented and gated
+   (riscv-tests 123/123, ACT 543/544 with one documented waiver;
+   see `docs/CORE.md` and `docs/evidence/`). Remaining: the
+   in-house V unit, then Linux boot bring-up.
 6. **B4 — SoC integration (deferred).** Put `muse_crypto` behind
    the AXI crossbar at `0x2000_0000`, write the bare-metal driver,
    and run an end-to-end Ed25519/secp256k1 verify on the simulated

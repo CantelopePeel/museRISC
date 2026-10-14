@@ -35,6 +35,25 @@ Generation (as run for the evidence in
 
 1. `./scripts/build_act4_core.sh` (EXTENSIONS=I,M)
 2. `EXTENSIONS=ExceptionsSv,ExceptionsSvSm,PMPS,PMPSm,PMPU,
-   PMPF,Sv,SvPMP,SvSm,SvbareSm,SvaduPMP ./scripts/build_act4_core.sh`
-   (plus Sv39,Svbare,Svnapot,Svadu for the Sv* suites)
-3. `bash sim/run_act_core.sh <out.csv>`
+   PMPF,Sv,SvPMP,SvSm,SvbareSm,SvaduPMP,Sv39,Svbare,Svnapot,
+   Svadu ./scripts/build_act4_core.sh`
+3. `EXTENSIONS=Zaamo,Zalrsc,F,D,Zba,Zbb,Zbc,Zbs,Zbkb,Zbkc,
+   Zbkx,Zicond,Zkne,Zknd,Zknh ./scripts/build_act4_core.sh`,
+   then the A-priv variants by suite name:
+   `EXTENSIONS=ExceptionsSvZaamo,ExceptionsSvZaamoSm,
+   ExceptionsSvZalrsc,ExceptionsSvZalrscSm,PMPZaamo,
+   PMPZalrsc ./scripts/build_act4_core.sh`
+4. `EXTENSIONS=Zca,Zcb,Zcd ./scripts/build_act4_core.sh`
+   (also yields the ZcbZba/ZcbZbb/ZcbZmmul combined suites)
+5. `bash sim/run_act_core.sh <out.csv>`
+
+Warning: the ACT make does not track DUT config files as
+dependencies. After changing `muserisc-core.yaml`/`sail.json`
+in a way that alters architectural parameters (e.g. adding
+C changes IALIGN 32→16 and every trap-signature
+expectation), delete the affected suites under
+`third_party/riscv-arch-test/work/muserisc-core/{build,elfs}/`
+and regenerate, or stale ELFs will silently test the old
+configuration. This bit stage 5: `ExceptionsSv` appeared to
+fail against pre-C signatures until `build/priv` and
+`elfs/priv` were regenerated.
