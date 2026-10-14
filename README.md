@@ -7,288 +7,236 @@
 
 <p align="center">
   <a href="https://github.com/bubblebabyboi/museRISC/actions/workflows/regression.yml"><img alt="RTL regression" src="https://github.com/bubblebabyboi/museRISC/actions/workflows/regression.yml/badge.svg"></a>
-  <a href="https://github.com/bubblebabyboi/museRISC/actions/workflows/compliance.yml"><img alt="ACT4 compliance harness" src="https://github.com/bubblebabyboi/museRISC/actions/workflows/compliance.yml/badge.svg"></a>
-  <a href="https://github.com/bubblebabyboi/museRISC/actions/workflows/hardware-regression.yml"><img alt="Hardware regression B1 and B3" src="https://github.com/bubblebabyboi/museRISC/actions/workflows/hardware-regression.yml/badge.svg"></a>
+  <img alt="In-house core riscv-tests: 123/123" src="https://img.shields.io/badge/in--house%20core%20riscv--tests-123%2F123-brightgreen">
+  <img alt="In-house core ACT: 543/544, one waiver" src="https://img.shields.io/badge/in--house%20core%20ACT-543%2F544%20(1%20waiver)-yellowgreen">
+  <img alt="Linux 6.6 boot: pass" src="https://img.shields.io/badge/Linux%206.6%20boot-PASS-brightgreen">
+  <img alt="Crypto KATs: pass" src="https://img.shields.io/badge/crypto%20KATs-PASS-brightgreen">
   <a href="LICENSE"><img alt="Licence: GPLv3" src="https://img.shields.io/badge/licence-GPLv3-57D0B8"></a>
 </p>
 
 # museRISC
 
-An open RISC-V crypto-accelerator SoC project: a Linux-capable **RV64GCV**
-host with a hardware accelerator for the elliptic-curve and hashing
-primitives used by Bitcoin, Ethereum, and other blockchain systems —
-built to be verified with the official RISC-V compliance tests and
-hardened with OpenROAD.
+museRISC is an open RISC-V project building a Linux-capable
+processor and crypto accelerator in the open, one verified stage
+at a time. The processor is now a clean-slate, in-house
+SystemVerilog core: a 5-stage in-order RV64 design with
+M/S/U privilege, Sv39 virtual memory, atomics, IEEE-754
+floating point, compressed instructions, bit manipulation,
+Zicond, and scalar cryptography. It boots OpenSBI and Linux
+6.6 in a Verilator platform model. The companion crypto RTL
+covers SHA-256, SHA-512, Keccak-f1600, and elliptic-curve
+field arithmetic; the `muse_crypto` macro has a published
+OpenROAD-generated GDS, but it is not attached to the core yet
+and no chip has been taped out.
 
-> ## Status — B1–B3 + scalar ISA sweep complete (2026-10-13)
->
-> **The crypto RTL is KAT-verified, the integrated CVA6 host passes
-> the full scalar ISA verification sweep, and the crypto macro is
-> OpenROAD-closed with a published GDS — this is still not an
-> RV64GCV compliance claim and not a chip.** The SHA-256, SHA-512,
-> Keccak-f1600, and EC-field RTL passes known-answer tests
-> (`make test`), Verilator lint (`make lint`), and Yosys synthesis,
-> and the reference curve operations reproduce the Ed25519 RFC 8032
-> signatures byte-for-byte and verify a secp256k1 ECDSA vector. On
-> the pinned CVA6 Verilator model: all 174 directed `riscv-tests`
-> pass solo and in tandem Spike lockstep (one explained waiver);
-> ACT suites pass for I/M/A/F/D, B, C, Zicond, scalar-crypto and
-> privileged Sv39/PMP (documented waivers only); Berkeley
-> TestFloat passes 112/112 checkers / 1,528,080 vectors across all
-> rounding modes — see [Test & ISA coverage](#test--isa-coverage)
-> and `docs/evidence/`. The `muse_crypto` macro closes clean on
-> nangate45 at 100 MHz (DRC/antenna/electrical 0, GDS in the
-> `b3-nangate45-2026-10-13` GitHub release).
->
-> **Not done yet:** vector (Ara RVV, [#9](https://github.com/bubblebabyboi/museRISC/issues/9),
-> in progress), SoC integration of the accelerator (B4, deferred),
-> MPW readiness, and an in-house core. The integrated CVA6 + Ara
-> are the verification vehicle, not the end goal: once the ISA is
-> verified end-to-end against them, museRISC replaces them with a
-> clean-slate in-house RV64GCV core
-> ([#18](https://github.com/bubblebabyboi/museRISC/issues/18)),
-> judged by the same stored oracles. Work proceeds on branches
-> linked to GitHub issues, merged to `main` per milestone.
-
-## Verified in this baseline
-
-| Item | Evidence (reproduce with) |
-|---|---|
-| SHA-256 block core | FIPS 180-4 "abc"/empty KATs — `make test` |
-| SHA-512 block core | FIPS 180-4 / hashlib "abc"/empty KATs — `make test` |
-| Keccak-f1600 | Golden model cross-checked vs `hashlib` SHA3-256 — `make test` |
-| EC field add/sub/mul-mod | secp256k1 + Curve25519 edge vectors — `make test` |
-| Ed25519 sign/verify (ref) | RFC 8032 TEST 1+2 exact signatures — `python3 sw/ec_ops.py` |
-| secp256k1 ECDSA verify (ref) | `cryptography`-generated oracle vector — `python3 sw/ec_ops.py` |
-| RTL lint / synthesis | Verilator `-Wall` clean; Yosys synth clean — `make lint` |
-| ACT4 harness | 51 RV64I tests pass **on Sail** — `make compliance` |
-| CVA6 host smoke (B1) | `rv64ui-p-add`, `rv64ui-p-simple`: `*** SUCCESS ***` — `docs/evidence/` |
-| Spike solo baseline (B2.1) | All 174 directed-list ELFs pass on standalone Spike (`matched` config) — `scripts/spike_solo.sh` |
-| CVA6 solo regression (B2.2) | All 174 `asm,amo,mul` tests pass on the CVA6 model — `scripts/cva6_docker.sh` |
-| Spike tandem lockstep (B2.3) | 173/174 pass with 0 mismatches (+1 waived Spike-config divergence) — `docs/evidence/` |
-| ACT4 I/M on CVA6 (B2.4) | 64/64 self-checking ACT ELFs (51 I + 13 M) pass on the model — `scripts/build_act4_cva6.sh` |
-| ISA sweep F/D/A (sweep) | Directed FP 46/46 solo+Spike, tandem F 22/22, ACT A/F/D 220/222 (2 waived) — `docs/evidence/` |
-| ISA sweep B/C/crypto (sweep) | ACT B/C/Zicond/scalar-crypto 133/133 — `docs/evidence/` |
-| TestFloat (sweep) | 112/112 checkers, 1,528,080 vectors, all rounding modes — `scripts/build_testfloat.sh` |
-| Privileged ACT (sweep) | Sv39/PMP/exceptions 126/134 (8 documented waivers); misaligned traps proven — `docs/evidence/` |
-| OpenROAD closure (B3) | Clean route, timing met, liberty-electrical clean, GDS published (nangate45, 100 MHz) — `make openroad` |
-
-## Test & ISA coverage
-
-"Covered" means a green report is stored under `docs/evidence/` (see
-[docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the full matrix and
-scope limits). Anything unchecked is planned work, not a claim.
-
-### Tests
-
-- [x] Crypto RTL known-answer tests (SHA-256/512, Keccak, EC field) — `make test`
-- [x] Ed25519 / secp256k1 reference-model vectors — `python3 sw/ec_ops.py`
-- [x] Verilator lint + Yosys synthesis (CI on every push) — `make lint`
-- [x] ACT4 harness validation on Sail, 51 RV64I tests (harness only) — `make compliance`
-- [x] `riscv-tests` directed lists `asm,amo,mul` — 174 tests on Spike solo, CVA6 solo, and tandem lockstep
-- [x] ACT4 `I,M` self-checking ELFs on the CVA6 model — 64 tests (51 I + 13 M)
-- [x] Directed FP lists (46) + ACT4 `A,F,D` on the model (220/222, 2 waived `Zalrsc-sc` harness hangs) — sweep branch, see `docs/evidence/`
-- [x] Berkeley TestFloat level-1 against the FPU configuration — arithmetic + conversions + comparisons, all five rounding modes, 1,528,080 vectors, 112/112 (#7, #20)
-- [x] Privileged ACT suites on the model — 126/134 (8 waived divergences, see `docs/evidence/`) (#7)
-- [ ] Linux boot smoke (needs cva6-sdk images; assessed, follow-up)
-- [ ] Random instruction regression with riscv-dv in CI (#8)
-- [ ] ACT4 vector suite (#9)
-- [ ] Linux boot on the model
-- [ ] On-core crypto driver / end-to-end signature verify (B4, #4)
-- [x] OpenROAD signoff run with final metrics + GDS (B3, #3)
-
-### ISA (target: RV64GCV)
-
-The integrated host today is stock CVA6 `cv64a6_imafdc_sv39`
-(RV64GC-class scalar core; Ara vector unit not yet integrated, and
-the custom crypto accelerator not yet attached to it).
-
-- [x] **RV64I** base integer — directed `rv64ui` + ACT `I`
-- [x] **M** multiply/divide — directed `rv64um` + ACT `M`
-- [x] **A** atomics — directed `rv64ua` lists + ACT `A` 20/22 (2 waived `Zalrsc-sc` harness hangs, #7)
-- [x] **Zicsr / Zifencei** basics — via directed `rv64mi`/`rv64si` and `fence.i` tests
-- [x] **F / D** floating point — directed (46/46 solo+Spike, tandem F 22/22) + ACT F/D 200/200 + TestFloat level-1 112/112, all rounding modes (1,528,080 vectors, #7/#20)
-- [x] **C** compressed (Zca/Zcb/Zcd ACT suites pass; #16) — sweep branch, see `docs/evidence/`
-- [ ] **V** vector (RVV 1.0, SIMD) — in-house unit pending ([#23](https://github.com/bubblebabyboi/museRISC/issues/23), third priority; CVA6+Ara path superseded)
-- [x] **Privileged M/S/U + Sv39** — directed priv/`-v-` tests + ACT privileged suites 126/134 (Svnapot declared; 8 waived divergences in `docs/evidence/`); separately, Linux 6.6 boots to an embedded `/init` on the in-house core in Verilator ([#21](https://github.com/bubblebabyboi/museRISC/issues/21))
-- [ ] **H** hypervisor — not implemented/verified on any core here ([#22](https://github.com/bubblebabyboi/museRISC/issues/22), second priority). Not needed for single-level Linux; needed to host KVM. Not the same extension as V
-- [x] **B** bitmanip (Zba/Zbb/Zbc/Zbs), **Zicond**, scalar crypto (Zbkb/Zbkc/Zkne/Zknd/Zknh) — ACT suites pass 133/133 with C/Zicsr/Zifencei (#17)
-
-## Locked decisions (2026-10-12)
-
-| Decision | Choice |
-|---|---|
-| ISA target | **RV64GCV** — RV64I + M/A/F/D/C + Vector 1.0 (phased, see roadmap) |
-| Host core strategy | Integrate **CVA6** (RV64GC) + **Ara** (RVV); do not rewrite them |
-| Crypto scope | **Both curves + Keccak**: Ed25519/Curve25519 + secp256k1, SHA-256/512, SHA3/Keccak-256 |
-| Tapeout (v1) | **Simulation + OpenROAD only**; Caravel/MPW harness is a later phase |
-| PDK (v1 flow) | Nangate45 (default ORFS) + Sky130HD configs for the crypto macro |
-
-Why not from-scratch RV64GCV? Vector alone (RVV 1.0) is larger than a
-base core, F/D needs IEEE-754 verification (TestFloat), and "fully
-compliant" means passing `riscv-arch-test` + random testing. Integrating
-CVA6+Ara is the credible route to a real MPW chip; our engineering
-effort goes into the accelerator, SoC, drivers, and physical closure.
+Third-party CVA6 and Ara were useful verification reference
+points early in the project. They are no longer the product
+core: current CPU claims refer to the in-house core under
+`rtl/core/` and the evidence in `docs/evidence/`.
 
 ## Architecture
 
-```
-            ┌─────────────────────────────────────────────┐
-            │  CVA6  RV64GC (6-stage, MMU, AXI)           │
-            │    + Ara RVV 1.0 vector co-processor        │
-            └──────────────────┬──────────────────────────┘
-                               │ AXI4 / AXI-Lite
-        ┌──────────────────────┼───────────────────────┐
-        │                      │                       │
-   ┌────▼─────┐          ┌─────▼────────┐        ┌─────▼─────┐
-   │ SRAM /   │          │ muse_crypto  │        │ UART/SPI/ │
-   │ DRAM ctl │          │ accelerator  │        │ GPIO/TRNG │
-   └──────────┘          │ ─ SHA-256 ✓  │        └───────────┘
-                         │ ─ SHA-512 ✓  │  ✓ RTL+KAT in this repo
-                         │ ─ Keccak ✓   │  ◌ algorithm verified in ref
-                         │ ─ EC field ✓ │    model; HW sequencer next
-                         │ ─ Ed25519 ◌  │
-                         │ ─ secp256k1 ◌│
-                         └──────────────┘
+```text
+                         museRISC in-house core
+  +----------------------------------------------------------------+
+  |  5-stage in-order pipeline  IF -> ID -> EX -> MEM -> WB       |
+  |  RV64 IMABC + F/D + B/Zicond/scalar crypto                     |
+  |  M/S/U privilege, Sv39 MMU, PMP, traps and interrupts          |
+  +-----------------------------+----------------------------------+
+                                | instruction/data SRAM-style ports
+          +---------------------+----------------------+
+          |                                            |
+  +-------v------------------+              +----------v-----------+
+  | core_tb                  |              | soc_tb platform      |
+  | directed asm, riscvtests |              | RAM, CLINT, PLIC,    |
+  | and ACT compliance gates |              | UART, DTB, OpenSBI   |
+  +--------------------------+              | and Linux 6.6        |
+                                            +----------------------+
+
+  +----------------------------------------------------------------+
+  | muse_crypto macro (currently separate)                         |
+  | SHA-256 | SHA-512 | Keccak-f1600 | EC field arithmetic         |
+  | KAT-verified RTL; OpenROAD place-and-route complete; GDS made  |
+  +----------------------------------------------------------------+
+                       - - - future SoC attach (B4, #4) - - -
 ```
 
-Ed25519 signatures use SHA-512 with Curve25519 arithmetic. Ethereum
-mapping: secp256k1 ECDSA + Keccak-256. Bitcoin mapping: secp256k1 + SHA-256.
+Key implementation files are
+[`rtl/core/muserisc_core.sv`](rtl/core/muserisc_core.sv),
+[`muserisc_csr.sv`](rtl/core/muserisc_csr.sv),
+[`muserisc_mmu.sv`](rtl/core/muserisc_mmu.sv), and
+[`muserisc_decoder.sv`](rtl/core/muserisc_decoder.sv). See
+[`docs/CORE.md`](docs/CORE.md) for the staged design record.
+
+## Current status
+
+- **On `main`:** Stages 1–5 (scalar core, privilege, Sv39,
+  A/F/D/B/C) and Stage 6 (OpenSBI/Linux boot) are merged.
+- **Linux:** OpenSBI v1.9 and Linux 6.6 boot on one hart to
+  an embedded initramfs `/init`; the run reaches
+  `MUSERISC_LINUX_BOOT_OK` and `SOC TB PASS` at 508,905,040
+  cycles.
+- **Next CPU work:** H hypervisor
+  ([#22](https://github.com/bubblebabyboi/museRISC/issues/22))
+  is in progress on its issue branch, followed by V vector
+  ([#23](https://github.com/bubblebabyboi/museRISC/issues/23)).
+  H is for hosting KVM/hypervisors; V is SIMD. Neither is
+  claimed on `main`.
+- **Crypto:** KATs pass and the standalone macro is
+  place-and-route complete with GDS generated. Core attach
+  (B4, [#4](https://github.com/bubblebabyboi/museRISC/issues/4))
+  remains deferred.
+
+## Supported features and coverage
+
+“Covered” below means the result is reproduced by a repository
+gate and recorded under `docs/evidence/`. The core target is
+RV64GCV, built in stages; unchecked items are not claims.
+
+### In-house core ISA
+
+- [x] **RV64I + M** — base integer and multiply/divide
+- [x] **A** — atomics, LR/SC and AMOs
+- [x] **F/D** — single/double-precision floating point
+- [x] **C** — compressed instructions (Zca/Zcb/Zcd),
+      IALIGN=16, fetch realignment and page-straddle handling
+- [x] **B + Zicond + scalar crypto** — Zba/Zbb/Zbc/Zbs,
+      Zicond, Zbkb/Zbkc/Zkne/Zknd/Zknh
+- [x] **Privilege M/S/U** — CSRs, precise traps, delegation,
+      interrupts, PMP
+- [x] **Sv39** — virtual memory, page faults, SFENCE.VMA
+- [ ] **H hypervisor** — VS/VU modes and two-stage Sv39x4;
+      in progress ([#22](https://github.com/bubblebabyboi/museRISC/issues/22))
+- [ ] **V vector** — RVV 1.0 SIMD unit
+      ([#23](https://github.com/bubblebabyboi/museRISC/issues/23))
+
+### Tests and platform gates
+
+- [x] Fast C++ Verilator unit testbenches for core modules —
+      `make core-test`
+- [x] Directed self-checking assembly suites —
+      `sw/core-tests/`
+- [x] Upstream `riscv-tests` on the in-house core —
+      **123/123 PASS**
+- [x] RISC-V ACT/arch-tests on the in-house core —
+      **543/544 PASS**, one documented platform waiver
+      (`PMPSm_cfg_A_tor_zero-00`)
+- [x] OpenSBI boot smoke in `soc_tb`
+- [x] **Linux boot smoke** — Linux 6.6 to embedded
+      initramfs `/init`,
+      [`MUSERISC_LINUX_BOOT_OK`](docs/evidence/core-stage6-linux-boot-2026-10-14.log)
+- [x] Crypto RTL KATs — `make test`
+      (`ALL PHASE-0 KATs PASS`)
+- [x] Verilator lint — `make lint`
+- [x] Standalone `muse_crypto` OpenROAD closure and GDS
+      (GDS generated / place-and-route complete; not taped out)
+- [ ] H/KVM guest smoke ([#22](https://github.com/bubblebabyboi/museRISC/issues/22))
+- [ ] ACT vector suite ([#23](https://github.com/bubblebabyboi/museRISC/issues/23))
+- [ ] Core-attached crypto end-to-end test (B4,
+      [#4](https://github.com/bubblebabyboi/museRISC/issues/4))
+- [ ] Random-instruction riscv-dv regression in CI
+      ([#8](https://github.com/bubblebabyboi/museRISC/issues/8))
+
+### Current evidence snapshot
+
+| Gate | Result | Evidence |
+|---|---:|---|
+| `make core-test` | PASS | `tb/cpp/`, `sw/core-tests/` |
+| `riscv-tests` | 123/123 | [`riscv-tests-core-2026-10-14.csv`](docs/evidence/riscv-tests-core-2026-10-14.csv) |
+| ACT | 543/544, 1 waiver | [`act-core-impriv-2026-10-14.csv`](docs/evidence/act-core-impriv-2026-10-14.csv) |
+| OpenSBI | PASS | [`core-stage6a-opensbi-2026-10-14.log`](docs/evidence/core-stage6a-opensbi-2026-10-14.log) |
+| Linux 6.6 | PASS to `/init` | [`core-stage6-linux-boot-2026-10-14.log`](docs/evidence/core-stage6-linux-boot-2026-10-14.log) |
+| Crypto KATs | PASS | `make test` |
+
+The ACT waiver is a harness/platform-model mismatch at
+physical address 0, documented in
+[`docs/evidence/README.md`](docs/evidence/README.md); it is
+not hidden in the count above.
 
 ## Quick start
 
-Host tools used for this baseline: Verilator, Icarus Verilog, Yosys,
-`riscv64-elf-gcc`, Python 3, Docker. OpenROAD and the CVA6 build run
-in Docker (the CVA6 flow is Linux-only).
+Prerequisites for the fast gates are Verilator, a RISC-V ELF
+toolchain (`riscv64-elf-gcc` or compatible), Python 3, and
+Icarus Verilog for the legacy crypto KAT flow. The setup
+script checks tools and fetches pinned third-party sources.
 
 ```sh
-git clone https://github.com/bubblebabyboi/museRISC.git && cd museRISC
-./scripts/setup.sh   # tool check + fetch pinned third-party sources
-make test            # crypto KATs: RTL + Python golden models
-make lint            # Verilator lint on all RTL
-make compliance      # ACT4 RV64I harness validation on Sail
-make openroad        # Docker ORFS run on muse_crypto (long; Linux/CI best)
-./scripts/cva6_docker.sh  # CVA6 Verilator build + ISA-test smoke (long)
-TEST_LISTS=asm,amo,mul RUN_NAME=solo-full ./scripts/cva6_docker.sh regression  # B2 solo regression (long)
-./scripts/build_act4_cva6.sh  # Generate ACT4 I,M ELFs for the CVA6 model (B2.4)
+git clone https://github.com/bubblebabyboi/museRISC.git
+cd museRISC
+./scripts/setup.sh
+
+make core-test   # in-house core: C++ TBs + directed asm + coverage
+make test        # crypto RTL KATs and Python golden models
+make lint        # Verilator lint on RTL
 ```
 
-`third_party/` (CVA6, Ara, riscv-arch-test, Sail) is intentionally not
-committed — `setup.sh` records the pinned commits and fetch commands.
-
-## Automated regression on GitHub
-
-Every push and pull request runs the fast RTL gate. Heavier compliance
-and hardware flows run weekly or on demand from the repository's
-**Actions** tab because they take much longer and build large tools.
-
-| Workflow | When | What it proves |
-|---|---|---|
-| RTL regression | Every push/PR + daily | Crypto KATs, Verilator lint, Yosys synthesis, script/SVG checks |
-| ACT4 compliance harness | Weekly + manual | ACT4 RV64 tests generated and run on Sail — harness only, not hardware |
-| Hardware regression (B1/B3) | Weekly + manual | B1 CVA6 `rv64ui` smoke tests and/or B3 OpenROAD route, with uploaded logs |
-
-Run a heavy gate manually with the GitHub CLI:
+Run the upstream core gates after setup and a core build:
 
 ```sh
-gh workflow run "Hardware regression (B1/B3)" -f target=b1
-gh workflow run "Hardware regression (B1/B3)" -f target=openroad
-gh workflow run "ACT4 compliance harness" -f extensions=I
-gh run watch
+bash sim/run_riscv_tests.sh
+bash scripts/build_act4_core.sh
+bash sim/run_act_core.sh
 ```
 
-The workflows upload logs and summaries as Actions artifacts. A green
-ACT4 badge does **not** make the core compliant; hardware claims rest
-only on the B1/B2 evidence committed under `docs/evidence/`.
+Reproduce the Linux boot with the commands in
+[`sw/linux/README.md`](sw/linux/README.md). The boot is a
+long Verilator run (about 509M cycles), not a per-commit gate.
 
-## What's left — the baseline plan
+## Roadmap
 
-In priority order; do not start later items until the earlier gate is
-green and its log/report is committed under `docs/evidence/`.
+All major work is tracked as GitHub epics with native
+sub-issues. Each milestone lands on an issue branch and is
+merged to `main` only with its gates and evidence.
 
-1. **B1 — Host smoke. ✅ Done.** The CVA6 Verilator model passes
-   `rv64ui-p-add` / `rv64ui-p-simple` with
-   `*** SUCCESS *** (tohost = 0)`; evidence is in `docs/evidence/`.
-2. **B2 — Host regression. ✅ Done (2026-10-12).** All 174 directed
-   `asm,amo,mul` tests pass on Spike solo and CVA6 solo; tandem
-   lockstep agrees on 173/174 with zero mismatches (one waived
-   Spike-config divergence); ACT4 `I,M` passes 64/64 on the model.
-   Combined matrix: `docs/evidence/b2-combined-matrix-2026-10-12.csv`.
-3. **B3 — Macro closure. ✅ Done (2026-10-13).** Clean OpenROAD
-   run for `muse_crypto` on nangate45 at 100 MHz: detail-route
-   DRC 0, antenna 0, liberty electrical 0, setup +4.52 ns / hold
-   +0.039 ns, 95,431 µm², 20.16 mW; final metrics in
-   `docs/evidence/b3-openroad-nangate45-2026-10-13.log` and the GDS
-   published as the `b3-nangate45-2026-10-13` GitHub release.
-4. **Ara RVV integration — superseded.** The exploratory CVA6+Ara
-   path is no longer the product direction; vector work now means
-   the in-house RVV unit in
-   [#23](https://github.com/bubblebabyboi/museRISC/issues/23).
-5. **In-house RV64GCV core ([#18](https://github.com/bubblebabyboi/museRISC/issues/18),
-   stages 1–5 on `main`; stage 6 done on its branch).**
-   Clean-slate SystemVerilog core replacing CVA6+Ara: RV64
-   IMABC FD SU + Sv39/PMP implemented and gated
-   (riscv-tests 123/123, ACT 543/544 with one documented
-   waiver; see `docs/CORE.md` and `docs/evidence/`).
-   Stage 6 boots OpenSBI and Linux 6.6 to an embedded
-   initramfs `/init` in the Verilator platform harness
-   ([#21](https://github.com/bubblebabyboi/museRISC/issues/21)).
-   Remaining, in priority order:
-   (a) **H hypervisor extension** ([#22](https://github.com/bubblebabyboi/museRISC/issues/22)) —
-   VS-mode + two-stage translation for a KVM/hypervisor
-   host; not implemented or verified today, and not needed
-   for single-level Linux;
-   (b) **V vector unit** ([#23](https://github.com/bubblebabyboi/museRISC/issues/23)) —
-   RVV 1.0 SIMD, unrelated to hypervisor/OS support.
-6. **B4 — SoC integration (deferred,
-   [#4](https://github.com/bubblebabyboi/museRISC/issues/4)).**
-   Attach `muse_crypto` to the in-house core at `0x2000_0000`,
-   write the bare-metal driver, and run an end-to-end
-   Ed25519/secp256k1 verify on the simulated core — after the
-   core/software strategy above is settled.
-7. **Then:** crypto accelerator/security work under
-   [#25](https://github.com/bubblebabyboi/museRISC/issues/25),
-   full-SoC OpenROAD closure and a Caravel/MPW decision under
-   [#26](https://github.com/bubblebabyboi/museRISC/issues/26).
-
-### Roadmap epics
-
-All remaining open issues are grouped under four parent epics;
-each child is also linked as a native GitHub sub-issue.
-
-| Epic | Child issues, in dependency order | Current gate |
+| Epic | Ordered work | Status |
 |---|---|---|
-| [#18 Core + software platform](https://github.com/bubblebabyboi/museRISC/issues/18) | [#21 Linux](https://github.com/bubblebabyboi/museRISC/issues/21) → [#22 H](https://github.com/bubblebabyboi/museRISC/issues/22) → [#23 V](https://github.com/bubblebabyboi/museRISC/issues/23) | #21 done; #22 next |
-| [#24 Verification + CI](https://github.com/bubblebabyboi/museRISC/issues/24) | [#20 ISA follow-ups](https://github.com/bubblebabyboi/museRISC/issues/20), [#8 riscv-dv/CI](https://github.com/bubblebabyboi/museRISC/issues/8), [#19 SV/cocotb port](https://github.com/bubblebabyboi/museRISC/issues/19) | Supports #18 |
-| [#25 Crypto + security](https://github.com/bubblebabyboi/museRISC/issues/25) | [#6 streaming](https://github.com/bubblebabyboi/museRISC/issues/6), [#5 scalar-mul](https://github.com/bubblebabyboi/museRISC/issues/5), [#12 security review](https://github.com/bubblebabyboi/museRISC/issues/12), [#10 benchmark](https://github.com/bubblebabyboi/museRISC/issues/10) | #12 gates key use |
-| [#26 SoC + physical + MPW](https://github.com/bubblebabyboi/museRISC/issues/26) | [#4 B4 integration](https://github.com/bubblebabyboi/museRISC/issues/4) → [#11 OpenROAD](https://github.com/bubblebabyboi/museRISC/issues/11) → [#13 MPW](https://github.com/bubblebabyboi/museRISC/issues/13) | Deferred/blocked |
+| [#18 Core + software](https://github.com/bubblebabyboi/museRISC/issues/18) | [#21 Linux](https://github.com/bubblebabyboi/museRISC/issues/21) → [#22 H hypervisor](https://github.com/bubblebabyboi/museRISC/issues/22) → [#23 V vector](https://github.com/bubblebabyboi/museRISC/issues/23) | Linux done; H next |
+| [#24 Verification + CI](https://github.com/bubblebabyboi/museRISC/issues/24) | [#20 ISA follow-ups](https://github.com/bubblebabyboi/museRISC/issues/20) · [#8 riscv-dv/CI](https://github.com/bubblebabyboi/museRISC/issues/8) · [#19 SV/cocotb](https://github.com/bubblebabyboi/museRISC/issues/19) | Supports #18 |
+| [#25 Crypto + security](https://github.com/bubblebabyboi/museRISC/issues/25) | [#6 streaming](https://github.com/bubblebabyboi/museRISC/issues/6) · [#5 scalar-mul](https://github.com/bubblebabyboi/museRISC/issues/5) · [#12 security review](https://github.com/bubblebabyboi/museRISC/issues/12) · [#10 benchmark](https://github.com/bubblebabyboi/museRISC/issues/10) | Security review gates key use |
+| [#26 SoC + physical](https://github.com/bubblebabyboi/museRISC/issues/26) | [#4 B4 SoC attach](https://github.com/bubblebabyboi/museRISC/issues/4) → [#11 OpenROAD](https://github.com/bubblebabyboi/museRISC/issues/11) → [#13 MPW](https://github.com/bubblebabyboi/museRISC/issues/13) | Deferred |
 
-Full detail: [docs/ROADMAP.md](docs/ROADMAP.md) ·
-[docs/SPEC.md](docs/SPEC.md) · [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
+More detail: [`docs/ROADMAP.md`](docs/ROADMAP.md) ·
+[`docs/SPEC.md`](docs/SPEC.md) ·
+[`docs/COMPLIANCE.md`](docs/COMPLIANCE.md) ·
+[`docs/CORE.md`](docs/CORE.md)
 
-## Repo layout
+## Repository layout
 
+```text
+rtl/core/     In-house SystemVerilog RV64 core
+rtl/crypto/   SHA-256/512, Keccak, EC-field accelerator RTL
+rtl/soc/      Standalone crypto/SoC top and register interface
+tb/cpp/       C++ Verilator unit, core, and platform testbenches
+sw/core-tests/ Directed assembly suites for the in-house core
+sw/linux/     DT, boot stub, OpenSBI/Linux build inputs, init
+sim/          Core/platform runners and upstream-suite scripts
+scripts/      Setup, ACT/OpenSBI/Linux/OpenROAD build scripts
+docs/         Specs, roadmap, compliance notes, and evidence/
+flow/         OpenROAD designs for the crypto macro
+third_party/  Pinned external sources (fetched, not the product core)
 ```
-.github/      GitHub Actions: RTL, ACT4 and heavy hardware regression
-rtl/crypto/   Novel verified RTL: sha256, sha512, keccak_f1600, ec_field, top
-rtl/core/     Core integration glue (CVA6/Ara live in third_party/)
-rtl/soc/      SoC top, AXI-Lite accelerator port
-tb/           Testbenches + known-answer vectors
-sw/           Register map header + golden/reference models + ACT4 DUT config (act4-cva6/)
-flow/         OpenROAD-flow-scripts designs (nangate45, sky130hd)
-docs/         SPEC.md · ROADMAP.md · COMPLIANCE.md · SPIKE_CONFIG.md · TASKS.md · evidence/ · assets/
-scripts/      setup, CVA6 Docker regression, Spike solo, ACT4 build/compliance, ORFS Docker
-third_party/  (not committed) cva6, ara, riscv-arch-test, sail — pinned
-```
+
+## Claim boundaries
+
+- “Linux boots” means the recorded single-hart Verilator run
+  reaches the embedded initramfs `/init`. It is not a distro,
+  SMP, block/network, KVM, or hardware claim.
+- “GDS generated / place-and-route complete” describes the
+  standalone crypto macro flow. It does not mean taped out,
+  fabricated, or silicon-verified.
+- ACT and riscv-tests results apply to the configurations
+  and evidence files linked above; unchecked ISA items are
+  future work.
+- Phase-0 crypto is a functional reference, not
+  side-channel-hardened production key hardware.
 
 ## Licence
 
-Original museRISC code and documentation are licensed under the
-**GNU General Public License v3.0** — see [LICENSE](LICENSE). Integrated
-cores keep their own licences (CVA6/Ara: Solderpad/Apache-2.0). Check
-`third_party/` before any commercial tapeout. Phase-0 crypto is a
-functional reference, not side-channel hardened — no production keys;
-see `docs/SPEC.md`.
+Original museRISC code and documentation are licensed under
+the **GNU General Public License v3.0** — see
+[LICENSE](LICENSE). External cores and tools under
+`third_party/` keep their own licences.
 
-The museRISC logo is an original project mark, not an official Muse or
-RISC-V logo. “RISC-V” is used descriptively for the instruction-set target.
+The museRISC logo is an original project mark, not an
+official Muse or RISC-V logo. “RISC-V” is used descriptively
+for the instruction-set target.
