@@ -100,7 +100,8 @@ hs_code:
     la t1, guest_trap_stack_top
     addi t1, t1, -64
     csrw 0x240, t1                 // vsscratch
-    csrw 0x200, x0                 // vsstatus (SPP VU by default)
+    li t1, (1 << 1)
+    csrw 0x200, t1                 // vsstatus.SIE (for guest IRQ)
     csrw 0x280, x0                 // vsatp Bare (guest enables it)
     la t1, g_root
     srli t1, t1, 12
@@ -109,6 +110,10 @@ hs_code:
     csrw 0x680, t1                 // hgatp
     li t1, (1 << 8)
     csrw 0x602, t1                 // hedeleg: VU ecall -> VS
+    li t1, (1 << 2)
+    csrw 0x603, t1                 // hideleg: delegate VSSI
+    csrw 0x604, t1                 // hie.VSSIE
+    csrw 0x645, t1                 // hvip.VSSIP (inject on entry)
     csrw hcounteren, 0x7
     // Enter VS.
     li t1, (1 << 7)
@@ -165,6 +170,13 @@ hs_finish:
     la a1, guest_handled
     ld a1, 0(a1)
     li a2, 1
+    bne a1, a2, fail
+    li t0, 24
+    la a1, guest_irq_cause
+    ld a1, 0(a1)
+    li a2, 1
+    slli a2, a2, 63
+    ori a2, a2, 1                  // interrupt | SSI (translated)
     bne a1, a2, fail
 
     // Stage 7c from HS: HLV/HSV under vsatp+hgatp. SPVP=1
@@ -338,13 +350,19 @@ handler_vs:
     sd t0, 0(sp)
     sd t1, 8(sp)
     sd t2, 16(sp)
+    csrr t1, scause
+    bltz t1, 1f                    // interrupt: do not advance epc
     la t2, guest_handled
     li t1, 1
     sd t1, 0(t2)
     csrr t1, sepc
     addi t1, t1, 4
     csrw sepc, t1
-    ld t0, 0(sp)
+    j 2f
+1:  la t2, guest_irq_cause
+    sd t1, 0(t2)
+    csrw sip, x0                   // clear VS SSIP (hvip.VSSIP)
+2:  ld t0, 0(sp)
     ld t1, 8(sp)
     ld t2, 16(sp)
     addi sp, sp, 32
@@ -372,6 +390,7 @@ guest_vsatp:  .dword 0
 guest_vs_flag: .dword 0
 guest_vu_flag: .dword 0
 guest_handled: .dword 0
+guest_irq_cause: .dword 0
     .skip 512
 main_stack_top:
     .skip 512

@@ -476,12 +476,20 @@ module muserisc_csr (
   // ------------------------------------------------------------
   // Interrupt selection
   // ------------------------------------------------------------
-  logic [63:0] pend_m, pend_s;
-  logic [63:0] sel_cause_m, sel_cause_s;
-  assign pend_m = mip_val & mie_q & ~mideleg_q;
-  assign pend_s = mip_val & mie_q & mideleg_q;
+  // VS-level interrupts are always delegated past M (their
+  // mideleg bits read as one), so selection uses the effective
+  // delegation value. Pending sets are split by destination:
+  // HS gets delegated HS interrupts plus VS interrupts whose
+  // hideleg bit is clear; VS gets only hideleg-delegated VS
+  // interrupts, and only while executing in the guest.
+  logic [63:0] pend_m, pend_hs, pend_vs, eff_mideleg;
+  logic [63:0] sel_cause_m, sel_cause_hs, sel_cause_vs;
+  assign eff_mideleg = mideleg_q | 64'h444;
+  assign pend_m  = mip_val & mie_q & ~eff_mideleg;
+  assign pend_hs = mip_val & mie_q & eff_mideleg & ~hideleg_q;
+  assign pend_vs = mip_val & mie_q & hideleg_q;
 
-  /* verilator lint_off UNUSEDSIGNAL */  // pend has only 6 live bits
+  /* verilator lint_off UNUSEDSIGNAL */  // pend uses the low 12 bits
   function automatic logic [63:0] pick_irq(input logic [63:0] pend);
     if (pend[11])      pick_irq = 64'd11;
     else if (pend[3])  pick_irq = 64'd3;
@@ -491,19 +499,43 @@ module muserisc_csr (
     else if (pend[5])  pick_irq = 64'd5;
     else               pick_irq = 64'd0;
   endfunction
+  // HS destination priority: SEI, SSI, STI, VSEI, VSSI, VSTI.
+  function automatic logic [63:0] pick_irq_hs(input logic [63:0] pend);
+    if (pend[9])       pick_irq_hs = 64'd9;
+    else if (pend[1])  pick_irq_hs = 64'd1;
+    else if (pend[5])  pick_irq_hs = 64'd5;
+    else if (pend[10]) pick_irq_hs = 64'd10;
+    else if (pend[2])  pick_irq_hs = 64'd2;
+    else if (pend[6])  pick_irq_hs = 64'd6;
+    else               pick_irq_hs = 64'd0;
+  endfunction
+  // VS destination priority follows the translated S order.
+  function automatic logic [63:0] pick_irq_vs(input logic [63:0] pend);
+    if (pend[10])      pick_irq_vs = 64'd10;
+    else if (pend[2])  pick_irq_vs = 64'd2;
+    else if (pend[6])  pick_irq_vs = 64'd6;
+    else               pick_irq_vs = 64'd0;
+  endfunction
   /* verilator lint_on UNUSEDSIGNAL */
 
-  assign sel_cause_m = pick_irq(pend_m);
-  assign sel_cause_s = pick_irq(pend_s);
+  assign sel_cause_m  = pick_irq(pend_m);
+  assign sel_cause_hs = pick_irq_hs(pend_hs);
+  assign sel_cause_vs = pick_irq_vs(pend_vs);
 
-  logic take_m, take_s;
+  logic take_m, take_hs, take_vs;
   assign take_m = (pend_m != 64'd0) &&
                   ((priv_q < PRIV_M) || mstatus_mie_q);
-  assign take_s = !take_m && (pend_s != 64'd0) &&
-                  ((priv_q < PRIV_S) ||
-                   ((priv_q == PRIV_S) && mstatus_sie_q));
-  assign irq_valid_o = take_m || take_s;
-  assign irq_cause_o = {1'b1, 63'd0} | (take_m ? sel_cause_m : sel_cause_s);
+  // VS/VU are less privileged than HS, so HS interrupts trap
+  // out of a guest regardless of both SIE bits.
+  assign take_hs = !take_m && (pend_hs != 64'd0) &&
+                   (virt_q || (priv_q == PRIV_U) ||
+                    ((priv_q == PRIV_S) && mstatus_sie_q));
+  assign take_vs = !take_m && !take_hs && virt_q &&
+                   (pend_vs != 64'd0) &&
+                   ((priv_q == PRIV_U) || vs_sie_q);
+  assign irq_valid_o = take_m || take_hs || take_vs;
+  assign irq_cause_o = {1'b1, 63'd0} |
+      (take_m ? sel_cause_m : take_hs ? sel_cause_hs : sel_cause_vs);
 
   // ------------------------------------------------------------
   // Trap target (delegated traps go to S when taken from S/U)

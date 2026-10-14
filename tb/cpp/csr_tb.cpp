@@ -552,6 +552,8 @@ int main(int argc, char** argv) {
   wr(0x602, (1ull << 8));                            // delegate VU ecall
   wr(0x603, (1ull << 10));                           // delegate VSEI
   wr(0x302, (1ull << 8) | (1ull << 10));             // medeleg U/VS ecalls
+  wr(0x303, 0x222ull);                               // mideleg HS ints
+  wr(0x304, (1ull << 9) | 0x444ull);                 // mie SEI + VS ints
   wr(0x306, 7);
   wr(0x606, 7);
   wr(0x106, 7);
@@ -648,6 +650,101 @@ int main(int argc, char** argv) {
   d->eval();
   CHECK(d->priv_o == 1 && d->virt_o == 1);           // delivered to VS
   CHECK(rd(0x141) == 0x904 && rd(0x142) == 8);       // via substitution
+
+  // Interrupt virtualization: hvip injection, hideleg
+  // routing, translated vscause, and HS priority in a guest.
+  d->trap_take_i = 1;
+  d->trap_cause_i = 10;
+  d->trap_pc_i = 0x908;
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 0);           // back in HS
+  wr(0x603, 0x444ull);                               // hideleg all VS
+  wr(0x604, 0x444ull);                               // hie all VS
+  wr(0x200, (1ull << 8) | (1ull << 1));              // vsstatus SPP|SIE
+  wr(0x645, (1ull << 2));                            // hvip.VSSIP
+  d->eval();
+  CHECK(!d->irq_valid_o);                            // delegated: no HS trap
+  CHECK(rd(0x244) == (1ull << 1));                   // vsip.SSIP alias
+  // A pending HS external interrupt wins over the VS one.
+  wr(0x100, (1ull << 8) | (1ull << 1));              // sstatus SPP|SIE
+  d->irq_s_ext_i = 1;
+  d->eval();
+  CHECK(d->irq_valid_o &&
+        d->irq_cause_o == (0x8000000000000000ULL | 9));
+  d->irq_s_ext_i = 0;
+  d->eval();
+  CHECK(!d->irq_valid_o);
+  // Enter VS: VSSI is selected and lands translated as SSI.
+  d->sys_op_i = 2;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 1);
+  CHECK(d->irq_valid_o &&
+        d->irq_cause_o == (0x8000000000000000ULL | 2));
+  d->trap_cause_i = d->irq_cause_o;
+  d->trap_pc_i = 0x908;
+  d->eval();
+  CHECK(d->trap_target_o == 0x4000);                 // vstvec
+  d->trap_take_i = 1;
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 1);
+  CHECK(rd(0x142) == (0x8000000000000000ULL | 1));   // vscause SSI
+  wr(0x144, 0);                                      // vsip clears VSSIP
+  d->eval();
+  CHECK(!d->irq_valid_o);
+  // All three VS interrupts pending: VSEI has top priority.
+  d->trap_take_i = 1;
+  d->trap_cause_i = 10;
+  d->trap_pc_i = 0x90c;
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  wr(0x200, (1ull << 8) | (1ull << 1));
+  wr(0x645, 0x444ull);
+  d->sys_op_i = 2;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->irq_valid_o &&
+        d->irq_cause_o == (0x8000000000000000ULL | 10));
+  // With hideleg clear for VSTI, it traps to HS as cause 6.
+  d->trap_take_i = 1;
+  d->trap_cause_i = 10;
+  d->trap_pc_i = 0x910;
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  wr(0x603, (1ull << 2));                            // only VSSI delegated
+  wr(0x645, (1ull << 6));                            // hvip.VSTIP only
+  d->sys_op_i = 2;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 1);
+  CHECK(d->irq_valid_o &&
+        d->irq_cause_o == (0x8000000000000000ULL | 6));
+  d->trap_cause_i = d->irq_cause_o;
+  d->trap_pc_i = 0x910;
+  d->eval();
+  CHECK(d->trap_target_o == 0x3000);                 // HS stvec
+  d->trap_take_i = 1;
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 0);
+  CHECK(rd(0x142) == (0x8000000000000000ULL | 6));   // HS scause VSTI
+  wr(0x645, 0);
 
   d->final();
   if (cov_path != nullptr) context.coveragep()->write(cov_path);
