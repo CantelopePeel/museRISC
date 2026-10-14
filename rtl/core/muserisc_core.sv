@@ -60,7 +60,8 @@ module muserisc_core import muserisc_pkg::*; (
   logic [1:0]  priv;
   // The core consumes mstatus.MPRV/MPP today; satp feeds the MMU.
   /* verilator lint_off UNUSEDSIGNAL */
-  logic [63:0] csr_mstatus, csr_satp;
+  logic [63:0] csr_mstatus, csr_satp, csr_hgatp;
+  logic        virt, csr_virt_inst, csr_sum, csr_mxr;
   /* verilator lint_on UNUSEDSIGNAL */
   logic [1:0]  eff_priv_data;  // MPRV-adjusted privilege for data
   assign eff_priv_data = (priv == 2'b11 && csr_mstatus[17])
@@ -197,7 +198,8 @@ module muserisc_core import muserisc_pkg::*; (
       id_tval = ifid_tval_q;
     end else if (id_ctrl.ecall) begin
       id_exc = ifid_valid_q;
-      id_cause = (priv == 2'b11) ? 64'd11 : (priv == 2'b01) ? 64'd9 : 64'd8;
+      id_cause = (priv == 2'b11) ? 64'd11 :
+                 (priv == 2'b01) ? (virt ? 64'd10 : 64'd9) : 64'd8;
       id_tval = 64'd0;
     end else if (id_ctrl.ebreak) begin
       id_exc = ifid_valid_q;
@@ -556,7 +558,7 @@ module muserisc_core import muserisc_pkg::*; (
       ex_tval = idex_tval_q;
     end else if (ex_illegal) begin
       ex_exc = idex_valid_q;
-      ex_cause = CAUSE_ILLEGAL_INSTR;
+      ex_cause = csr_virt_inst ? 64'd22 : CAUSE_ILLEGAL_INSTR;
       ex_tval = {32'd0, idex_instr_q};
     end else if (jump_misalign) begin
       ex_exc = 1'b1;
@@ -789,6 +791,8 @@ module muserisc_core import muserisc_pkg::*; (
       .trap_cause_i  (memwb_cause_q),
       .trap_pc_i     (memwb_pc_q),
       .trap_tval_i   (memwb_tval_q),
+      .trap_gpa_i    (64'd0),  // supplied by two-stage MMU in 7b
+      .trap_tinst_i  (64'd0),
       .trap_target_o (trap_target),
       .trap_priv_o   (trap_priv_unused),
       .irq_valid_o   (irq_valid),
@@ -799,7 +803,12 @@ module muserisc_core import muserisc_pkg::*; (
       .irq_s_timer_i (irq_s_timer_i),
       .irq_s_ext_i   (irq_s_ext_i),
       .priv_o        (priv),
+      .virt_o        (virt),
+      .virt_inst_o   (csr_virt_inst),
+      .sum_o         (csr_sum),
+      .mxr_o         (csr_mxr),
       .satp_o        (csr_satp),
+      .hgatp_o       (csr_hgatp),
       .mstatus_o     (csr_mstatus),
       .xret_pc_o     (xret_pc),
       .retire_i      (memwb_valid_q && !memwb_exc_q && !mem_stall),
@@ -824,8 +833,8 @@ module muserisc_core import muserisc_pkg::*; (
       .clk_i            (clk_i),
       .rst_ni           (rst_ni),
       .satp_i           (csr_satp),
-      .sum_i            (csr_mstatus[18]),
-      .mxr_i            (csr_mstatus[19]),
+      .sum_i            (csr_sum),
+      .mxr_i            (csr_mxr),
       .flush_i          (sfence_fire),
       .abort_i          (trap_take),
       .if_va_i          (fetch_va),

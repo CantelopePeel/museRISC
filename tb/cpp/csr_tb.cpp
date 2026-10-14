@@ -69,6 +69,8 @@ int main(int argc, char** argv) {
   d->trap_cause_i = 0;
   d->trap_pc_i = 0;
   d->trap_tval_i = 0;
+  d->trap_gpa_i = 0;
+  d->trap_tinst_i = 0;
   d->irq_m_timer_i = 0;
   d->irq_m_soft_i = 0;
   d->irq_m_ext_i = 0;
@@ -91,7 +93,7 @@ int main(int argc, char** argv) {
 
   // Reset state: M-mode, everything zero, misa constant.
   CHECK(d->priv_o == 3);
-  CHECK(rd(0x301) == 0x800000000014112FULL);  // misa RV64 IMAFD SU
+  CHECK(rd(0x301) == 0x80000000001411AFULL);  // misa RV64 IMABC FDH SU
   CHECK(rd(0x300) == ((2ull << 34) | (2ull << 32)));  // mstatus: SXL/UXL only
   CHECK(rd(0xF14) == 0);                     // mhartid
   CHECK(illegal(0x7c0, false));              // nonexistent CSR
@@ -99,7 +101,7 @@ int main(int argc, char** argv) {
   CHECK(!illegal(0xF11, false));
   CHECK(!illegal(0x301, true));              // misa writes are WARL-ignored
   wr(0x301, 0);
-  CHECK(rd(0x301) == 0x800000000014112FULL);
+  CHECK(rd(0x301) == 0x80000000001411AFULL);
   CHECK(!illegal(0x340, true));              // mscratch rw
 
   // Plain storage CSRs round-trip.
@@ -118,11 +120,11 @@ int main(int argc, char** argv) {
 
   // Masked CSRs: medeleg/mideleg/mie keep only implemented bits.
   wr(0x302, ~0ull);
-  CHECK(rd(0x302) == 0xB35DULL);
+  CHECK(rd(0x302) == 0xF0B75DULL);  // + VS-ecall/guest/virtual bits
   wr(0x303, ~0ull);
-  CHECK(rd(0x303) == 0x222ULL);
+  CHECK(rd(0x303) == 0x666ULL);  // 222 writable + VS bits always delegated
   wr(0x304, ~0ull);
-  CHECK(rd(0x304) == 0xAAAULL);
+  CHECK(rd(0x304) == 0xEEEULL);  // + hie aliases (VSSIE/VSTIE/VSEIE)
   wr(0x302, 0);
   wr(0x303, 0);
   wr(0x304, 0);
@@ -536,6 +538,103 @@ int main(int argc, char** argv) {
   CHECK(d->fs_o == 3);
   CHECK((rd(0x300) >> 63) == 1);               // SD
   CHECK(((rd(0x100) >> 13) & 3) == 3);         // sstatus sees FS
+
+  // Hypervisor stage 7a: CSR banks, V transitions and
+  // M -> HS -> VS trap delegation with hgatp storage only.
+  CHECK(d->virt_o == 0);
+  wr(0x600, ~0ull);
+  CHECK(rd(0x600) == ((2ull << 32) | 0x7003c0ull));  // hstatus WARL
+  wr(0x602, ~0ull);
+  CHECK(rd(0x602) == 0xCB1FEull);                    // hedeleg
+  wr(0x603, ~0ull);
+  CHECK(rd(0x603) == 0x444ull);                      // hideleg
+  wr(0x602, (1ull << 8));                            // delegate VU ecall
+  wr(0x603, (1ull << 10));                           // delegate VSEI
+  wr(0x302, (1ull << 8) | (1ull << 10));             // medeleg U/VS ecalls
+  wr(0x306, 7);
+  wr(0x606, 7);
+  wr(0x106, 7);
+  wr(0x105, 0x3000);                                 // HS stvec
+  wr(0x205, 0x4000);                                 // vstvec
+  wr(0x200, (1ull << 8) | (1ull << 18));             // vsstatus SPP|SUM
+  wr(0x280, (8ull << 60) | 0x12345ull);              // vsatp Sv39
+  wr(0x680, (8ull << 60) | 0x4567ull);               // hgatp Sv39x4 value
+  CHECK(d->hgatp_o == ((8ull << 60) | 0x4567ull));
+  wr(0x600, (1ull << 7));                            // hstatus.SPV = 1
+  wr(0x100, (1ull << 8));                            // sstatus.SPP = VS
+  wr(0x141, 0x880);                                  // sepc
+  // Enter HS by MRET, then VS by SRET from HS.
+  wr(0x341, 0x800);
+  wr(0x300, (1ull << 11) | (1ull << 8) | (1ull << 7));  // MPP=S, SPP=VS
+  d->sys_op_i = 1;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 0);
+  CHECK(!illegal(0x600, false));                     // H CSR from HS
+  CHECK(!illegal(0x200, false));                     // VS CSR from HS
+  d->sys_op_i = 2;
+  d->eval();
+  CHECK(d->xret_pc_o == 0x880);
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 1);           // now VS
+  CHECK(d->satp_o == ((8ull << 60) | 0x12345ull));
+  CHECK(rd(0x180) == ((8ull << 60) | 0x12345ull));   // satp substitutes
+  CHECK(((rd(0x100) >> 18) & 1) == 1);               // vsstatus.SUM
+  wr(0x140, 0xfeedfaceull);                          // -> vsscratch
+  d->addr_i = 0x600; d->eval();
+  CHECK(d->illegal_o && d->virt_inst_o);             // hstatus from VS
+  d->addr_i = 0x200; d->eval();
+  CHECK(d->illegal_o && d->virt_inst_o);             // vsstatus direct
+  // Ecall-from-VS (cause 10) is medeleg-delegated to HS.
+  d->trap_take_i = 1;
+  d->trap_cause_i = 10;
+  d->trap_pc_i = 0x884;
+  d->eval();
+  CHECK(d->trap_priv_o == 1 && d->trap_target_o == 0x3000);
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 0);
+  CHECK(rd(0x141) == 0x884 && rd(0x142) == 10);
+  CHECK(((rd(0x600) >> 7) & 1) == 1);                // SPV
+  CHECK(((rd(0x600) >> 8) & 1) == 1);                // SPVP
+  CHECK(rd(0x240) == 0xfeedfaceull);                 // guest scratch
+  // Return to VS, then a hedeleg-delegated U-ecall stays in VS.
+  d->sys_op_i = 2;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 1);
+  wr(0x100, 0);                                      // vsstatus.SPP = VU
+  wr(0x141, 0x900);                                  // -> vsepc
+  d->sys_op_i = 2;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 0 && d->virt_o == 1);           // now VU
+  d->addr_i = 0x100; d->eval();
+  CHECK(d->illegal_o && d->virt_inst_o);             // S CSR from VU
+  d->trap_take_i = 1;
+  d->trap_cause_i = 8;
+  d->trap_pc_i = 0x904;
+  d->eval();
+  CHECK(d->trap_priv_o == 1 && d->trap_target_o == 0x4000);
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1 && d->virt_o == 1);           // delivered to VS
+  CHECK(rd(0x141) == 0x904 && rd(0x142) == 8);       // via substitution
 
   d->final();
   if (cov_path != nullptr) context.coveragep()->write(cov_path);
