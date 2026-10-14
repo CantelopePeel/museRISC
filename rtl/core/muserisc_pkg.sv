@@ -172,12 +172,14 @@ package muserisc_pkg;
   localparam logic [6:0] VOP_CPOP  = 7'd84;  // scalar result
   localparam logic [6:0] VOP_FIRST = 7'd85;  // scalar result
   localparam logic [6:0] VOP_MVR   = 7'd86;  // vmv<nr>r.v
+  localparam logic [6:0] VOP_WRED  = 7'd87;  // vwredsum(u), imm[0]=sgn
   // Vector load/store classes (bext_op on vec mem ops).
   localparam logic [6:0] VLS_UNIT  = 7'd100;
   localparam logic [6:0] VLS_STRIDED = 7'd101;
   localparam logic [6:0] VLS_INDEXED = 7'd102;
   localparam logic [6:0] VLS_WHOLE = 7'd103;  // vl<nr>r / vs<nr>r
   localparam logic [6:0] VLS_FF    = 7'd104;  // fault-only-first
+  localparam logic [6:0] VLS_MASK  = 7'd105;  // vlm.v / vsm.v
   localparam logic [1:0] VFORM_VV = 2'd0;
   localparam logic [1:0] VFORM_VX = 2'd1;
   localparam logic [1:0] VFORM_VI = 2'd2;

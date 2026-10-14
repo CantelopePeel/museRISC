@@ -81,11 +81,13 @@ enum Op {
 };
 
 uint64_t GoldenEl(Op op, uint64_t a, uint64_t b, uint64_t old_el,
-                  bool carry, int sew, bool* sat) {
+                  bool carry, int sew, bool* sat, bool vi = false) {
   const uint64_t m = MaskFor(sew);
   const uint64_t bm = b & m;
   const int64_t as = SextEl(a, sew), bs = SextEl(b, sew);
-  const int sh = static_cast<int>(b & static_cast<uint64_t>(sew - 1));
+  // VI shift amounts are the zero-extended 5-bit immediate.
+  const int sh = static_cast<int>(
+      (vi ? (b & 31ull) : b) & static_cast<uint64_t>(sew - 1));
   *sat = false;
   auto sat_s = [&](__int128 v) -> uint64_t {
     const __int128 hi = (static_cast<__int128>(1) << (sew - 1)) - 1;
@@ -236,13 +238,11 @@ int main(int argc, char** argv) {
                 bool sat_i = false;
                 SetEl(want, i, sew,
                       GoldenEl(op, a, b, GetEl(old_vd, i, sew),
-                               mask_bit(i), sew, &sat_i));
+                               mask_bit(i), sew, &sat_i, form == 2));
                 want_sat = want_sat || sat_i;
-              } else if (static_cast<uint64_t>(i) >= vl) {
-                if (vta) SetEl(want, i, sew, MaskFor(sew));
-              } else if (vma && !unmasked_op) {
-                SetEl(want, i, sew, MaskFor(sew));
               }
+              // Tail/inactive: agnostic = undisturbed, so
+              // want (initialised to old_vd) already holds.
             }
           }
           if (op == kSadd || op == kSaddu || op == kSsub ||
@@ -322,11 +322,13 @@ int main(int argc, char** argv) {
       CHECK(((got.w[0] >> i) & 1) == (want ? 1ull : 0ull));
     }
     // Masked compare (vmseq.vx, scalar 2): only mask-set
-    // elements compare; others become 1 (vma=1).
+    // elements compare; others keep the old bit (agnostic =
+    // undisturbed).
     got = run(33, 1, vlmax, 0, false, 0, 2, vs2, vs1, old_vd, maskg);
     for (int i = 0; i < vlmax; ++i) {
       const bool mbit = ((maskg.w[0] >> i) & 1) != 0;
-      const bool want = mbit ? (GetEl(vs2, i, sew) == 2) : true;
+      const bool want = mbit ? (GetEl(vs2, i, sew) == 2)
+                             : (((old_vd.w[0] >> i) & 1) != 0);
       CHECK(((got.w[0] >> i) & 1) == (want ? 1ull : 0ull));
     }
     // Mask logical vmxor.mm (sub=3) between vs2/vs1 low bits.

@@ -36,6 +36,12 @@ module muserisc_vec
     output logic          sat_o      // an active element saturated
 );
 
+  // Agnostic policies behave as undisturbed in this
+  // implementation (a spec-legal choice, matching the Sail
+  // reference configuration), so vta_i/vma_i do not change
+  // any result.
+  wire unused_agnostic = vta_i ^ vma_i;
+
   // Element extraction at width code w (width = 8<<w, w<=3).
   function automatic logic [63:0] get_el(
       input logic [4095:0] grp, input int idx, input logic [2:0] w);
@@ -122,7 +128,8 @@ module muserisc_vec
   // ---- Classification ----
   logic is_wide, is_narrow, is_mask_dest, unmasked_op;
   logic [2:0] dw;  // destination width code
-  assign is_wide = (op_i >= VOP_WADD) && (op_i <= VOP_WMACCUS);
+  assign is_wide = ((op_i >= VOP_WADD) && (op_i <= VOP_WMACCUS)) ||
+                   (op_i == VOP_WRED);
   assign is_narrow = (op_i >= VOP_NSRL) && (op_i <= VOP_NCLIPU);
   assign is_mask_dest = (op_i == VOP_MADC) || (op_i == VOP_MSBC) ||
       ((op_i >= VOP_CMPEQ) && (op_i <= VOP_CMPGT)) ||
@@ -180,14 +187,6 @@ module muserisc_vec
           wp++;
         end
       end
-      if (vta_i) begin
-        for (int i = 0; i < (512 >> sew_i); i++) begin
-          if ((64'(unsigned'(i)) >= 64'(unsigned'(wp))) &&
-              (64'(unsigned'(i)) < vlmax_i)) begin
-            result_o = put_el(result_o, i, sew_i, ones_v);
-          end
-        end
-      end
     end else if (is_mask_dest) begin
       // Destination is a mask register: one bit per element.
       seen_v = 1'b0;
@@ -242,25 +241,32 @@ module muserisc_vec
         endcase
         if (op_i == VOP_MSBIT) begin
           if (src_act) result_o[i] = bit_v;
-          else if ((64'(unsigned'(i)) >= vstart_i) &&
-                   (64'(unsigned'(i)) < vl_i) && vma_i) result_o[i] = 1'b1;
-          else if ((64'(unsigned'(i)) >= vl_i) &&
-                   (64'(unsigned'(i)) < vlmax_i) && vta_i) result_o[i] = 1'b1;
           if (src_act && vs2_i[i]) seen_v = 1'b1;
         end else if ((op_i == VOP_MADC) || (op_i == VOP_MSBC) ||
                      (op_i == VOP_MLOG)) begin
           // No element masking for carry-out / mask logicals.
           if ((64'(unsigned'(i)) >= vstart_i) &&
               (64'(unsigned'(i)) < vl_i)) result_o[i] = bit_v;
-          else if ((64'(unsigned'(i)) >= vl_i) &&
-                   (64'(unsigned'(i)) < vlmax_i) && vta_i) result_o[i] = 1'b1;
         end else begin  // compares respect the v0 mask
           if (src_act) result_o[i] = bit_v;
-          else if ((64'(unsigned'(i)) >= vstart_i) &&
-                   (64'(unsigned'(i)) < vl_i) && vma_i) result_o[i] = 1'b1;
-          else if ((64'(unsigned'(i)) >= vl_i) &&
-                   (64'(unsigned'(i)) < vlmax_i) && vta_i) result_o[i] = 1'b1;
         end
+      end
+    end else if (op_i == VOP_WRED) begin
+      // Widening reduction sum into element 0 at 2*SEW; the
+      // vs1 element 0 (already 2*SEW wide) seeds it.
+      acc = signed'({64'd0, get_el(vs1_i, 0, dw)});
+      for (int i = 0; i < (512 >> sew_i); i++) begin
+        a = get_el(vs2_i, i, sew_i) & ones_s;
+        if ((64'(unsigned'(i)) >= vstart_i) &&
+            (64'(unsigned'(i)) < vl_i) && (vm_i || mask_i[i])) begin
+          acc = acc + (imm_i[0]
+                       ? signed'({{64{sext_el(a, sew_i)[63]}},
+                                   sext_el(a, sew_i)})
+                       : signed'({64'd0, a}));
+        end
+      end
+      if (vl_i != 64'd0) begin
+        result_o = put_el(result_o, 0, dw, acc[63:0]);
       end
     end else if (op_i == VOP_RED) begin
       // Reduction into element 0; vs1 element 0 seeds it.
@@ -290,11 +296,6 @@ module muserisc_vec
       if (vl_i != 64'd0) begin
         result_o = put_el(result_o, 0, sew_i, acc[63:0] & ones_v);
       end
-      if (vta_i) begin
-        for (int i = 1; i < (64 >> sew_i); i++) begin
-          result_o = put_el(result_o, i, sew_i, ones_v);
-        end
-      end
     end else begin
       // Element-wise classes (incl. slides/gather/extends).
       iota_cnt = 0;
@@ -306,8 +307,13 @@ module muserisc_vec
         a_s = sext_el(a, aw);
         b_s = sext_el(b, sew_i);
         old_el = get_el(old_vd_i, i, dw);
-        shamt = b[5:0] & (6'd1 << shamt_bits) - 6'd1;
-        shamt_w = b[5:0] & (6'd1 << (shamt_bits + 1)) - 6'd1;
+        // The VI shift amount is the zero-extended 5-bit
+        // immediate (the decoder sign-extends imm5 for the
+        // arithmetic forms).
+        shamt = ((form_i == VFORM_VI) ? {1'b0, b[4:0]} : b[5:0]) &
+                ((6'd1 << shamt_bits) - 6'd1);
+        shamt_w = ((form_i == VFORM_VI) ? {1'b0, b[4:0]} : b[5:0]) &
+                  ((6'd1 << (shamt_bits + 1)) - 6'd1);
         r = a;
         sat_i = 1'b0;
         unique case (op_i)
@@ -409,9 +415,13 @@ module muserisc_vec
           VOP_WMULSU: r = 64'(signed'(a_s) *
                               signed'(b & ones_s));
           VOP_WMACC: r = old_el + 64'(signed'(a_s) * signed'(b_s));
-          VOP_WMACCSU: r = old_el + 64'(signed'(a_s) *
+          // For the macc forms the su/us suffix refers to
+          // the assembly operands (vs1 field = b first):
+          // su: signed(b) * unsigned(a); us: conversely.
+          VOP_WMACCSU: r = old_el + 64'(signed'(b_s) *
+                                        signed'(a & ones_s));
+          VOP_WMACCUS: r = old_el + 64'(signed'(a_s) *
                                         signed'(b & ones_s));
-          VOP_WMACCUS: r = old_el + (a & ones_v) * b_s;
           VOP_NSRL: r = a >> shamt_w;
           VOP_NSRA: r = 64'(signed'(a_s) >>> shamt_w);
           VOP_NCLIP: r = sat_s(signed'(rnd_shift(128'(signed'(a_s)),
@@ -487,17 +497,12 @@ module muserisc_vec
             result_o = put_el(result_o, 0, sew_i, r & ones_v);
           end
         end else if (64'(unsigned'(i)) >= vstart_i) begin
+          // Inactive/tail elements keep the old destination
+          // value under both undisturbed and agnostic
+          // policies (agnostic = undisturbed, matching the
+          // Sail reference configuration).
           if (active) begin
             result_o = put_el(result_o, i, dw, r & ones_v);
-          end else if (64'(unsigned'(i)) >= vl_i) begin
-            if (vta_i && !((op_i == VOP_SLIDEUP) &&
-                           (64'(unsigned'(i)) < off64))) begin
-              result_o = put_el(result_o, i, dw, ones_v);
-            end
-          end else if (vma_i && !unmasked_op &&
-                       !((op_i == VOP_SLIDEUP) &&
-                         (64'(unsigned'(i)) < off64))) begin
-            result_o = put_el(result_o, i, dw, ones_v);
           end
         end
       end

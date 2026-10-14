@@ -125,7 +125,9 @@ Ctrl Golden(uint32_t insn) {
             vec_ls = nf == 0 || nf == 1 || nf == 3 || nf == 7;
             vclass = 103;
           } else if (!is_store && lumop == 16) {
-            vec_ls = nf == 0; vclass = 104;
+            vec_ls = true; vclass = 104;
+          } else if (lumop == 11 && f3 == 0) {
+            vec_ls = nf == 0; vclass = 105;
           }
         } else {
           vec_ls = true;
@@ -138,7 +140,7 @@ Ctrl Golden(uint32_t insn) {
         c.mem_write = is_store;
         c.vec_rd = !is_store;
         c.bext_op = vclass;
-        c.imm = vclass == 103 ? nf + 1 : 0;
+        c.imm = 0;
       } else if (f3 == 2 || f3 == 3) {
         c.valid = c.alu_src_imm = c.fp = true;
         c.mem_read = !is_store;
@@ -431,6 +433,8 @@ Ctrl Golden(uint32_t insn) {
           case 41: vop = 8; break;
           case 42: vop = 53; break;
           case 43: vop = 54; break;
+          case 48: vop = 87; ok = f3 == 0; c.imm = 0; break;
+          case 49: vop = 87; ok = f3 == 0; c.imm = 1; break;
           case 44: vop = 70; break;
           case 45: vop = 71; break;
           case 46: vop = 73; break;

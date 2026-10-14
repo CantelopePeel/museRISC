@@ -246,6 +246,8 @@ module muserisc_csr (
       3'd7: vset_vlmax = 64'd256 / sew_bits;
       default: vset_vlmax = 64'd0;
     endcase
+    // vill: reserved fields or SEW > ELEN. Fractional LMUL
+    // with SEW/LMUL > ELEN (VLMAX < 8) is also supported.
     vset_vill = (vset_vtype_i[5:3] > 3'd3) ||
                 (vset_vtype_i[2:0] == 3'd4) ||
                 (vset_vtype_i[63:8] != 56'd0) || (vset_vlmax == 64'd0);

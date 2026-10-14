@@ -552,7 +552,8 @@ module muserisc_core import muserisc_pkg::*; (
       ex_vd_log2 = ex_lmul_log2;
       ex_vs2_log2 = ex_lmul_log2 + 4'sd1;
     end else if (ex_is_mask_dest ||
-                 (idex_ctrl_q.bext_op == VOP_RED)) begin
+                 (idex_ctrl_q.bext_op == VOP_RED) ||
+                 (idex_ctrl_q.bext_op == VOP_WRED)) begin
       ex_vd_log2 = -4'sd3;  // single register: no constraint
       // Mask-register sources (logicals, vmsbf family) are
       // single registers; data sources use the full group.
@@ -593,6 +594,7 @@ module muserisc_core import muserisc_pkg::*; (
        align_bad(idex_instr_q[24:20], ex_vs2_log2) ||
        ((idex_ctrl_q.fpu_aux == VFORM_VV) &&
         (idex_ctrl_q.bext_op != VOP_RED) &&
+        (idex_ctrl_q.bext_op != VOP_WRED) &&
         (idex_ctrl_q.bext_op != VOP_EXT) &&
         (idex_ctrl_q.bext_op != VOP_MSBIT) &&
         (idex_ctrl_q.bext_op != VOP_MLOG) &&
@@ -601,8 +603,15 @@ module muserisc_core import muserisc_pkg::*; (
         (idex_ctrl_q.bext_op != VOP_ID) &&
         (idex_ctrl_q.bext_op != VOP_MVR) &&
         align_bad(idex_instr_q[19:15], ex_vs1_log2)) ||
-       // Masked destination may not overlap the v0 register.
+       // Masked destination may not overlap the v0 register,
+       // except mask-register destinations (compares and
+       // friends), which may write v0 under its own mask.
        (idex_ctrl_q.vec_rd && !idex_instr_q[25] &&
+        !ex_is_mask_dest &&
+        // Reductions write a single element and may target
+        // v0 under a mask.
+        (idex_ctrl_q.bext_op != VOP_RED) &&
+        (idex_ctrl_q.bext_op != VOP_WRED) &&
         (idex_ctrl_q.bext_op != VOP_ADC) &&
         (idex_ctrl_q.bext_op != VOP_SBC) &&
         (idex_ctrl_q.bext_op != VOP_MERGE) &&
@@ -616,6 +625,9 @@ module muserisc_core import muserisc_pkg::*; (
   assign ex_vec_bad =
       (ex_is_wide && ((csr_vtype[5:3] == 3'd3) ||
                       (ex_lmul_log2 == 4'sd3))) ||
+      // Widening reductions: 2*SEW dest, any LMUL.
+      ((idex_ctrl_q.bext_op == VOP_WRED) &&
+       (csr_vtype[5:3] == 3'd3)) ||
       (ex_is_narrow && ((csr_vtype[5:3] == 3'd3) ||
                         (ex_lmul_log2 == 4'sd3))) ||
       ((idex_ctrl_q.bext_op == VOP_EXT) &&
@@ -628,7 +640,8 @@ module muserisc_core import muserisc_pkg::*; (
                   (idex_instr_q[19:15] == 5'd3) ? 3'd2 :
                   (idex_instr_q[19:15] == 5'd7) ? 3'd3 : 3'd0;
     end else if (ex_is_mask_dest ||
-                 (idex_ctrl_q.bext_op == VOP_RED)) begin
+                 (idex_ctrl_q.bext_op == VOP_RED) ||
+                 (idex_ctrl_q.bext_op == VOP_WRED)) begin
       vec_wlmul = 3'd0;
     end else begin
       vec_wlmul = (ex_vd_log2 < 0) ? 3'd0 : ex_vd_log2[2:0];
@@ -659,7 +672,9 @@ module muserisc_core import muserisc_pkg::*; (
     whole_log2 = (idex_instr_q[31:29] == 3'd1) ? 4'sd1 :
                  (idex_instr_q[31:29] == 3'd3) ? 4'sd2 :
                  (idex_instr_q[31:29] == 3'd7) ? 4'sd3 : 4'sd0;
-    if (idex_ctrl_q.bext_op == VLS_WHOLE) begin
+    if (idex_ctrl_q.bext_op == VLS_MASK) begin
+      ex_vls_bad = !idex_instr_q[25];  // vlm/vsm are unmasked-only
+    end else if (idex_ctrl_q.bext_op == VLS_WHOLE) begin
       ex_vls_bad = !idex_instr_q[25] ||
                    align_bad(idex_rd_q, whole_log2);
     end else begin
@@ -698,7 +713,10 @@ module muserisc_core import muserisc_pkg::*; (
   assign vset_en = idex_valid_q && idex_ctrl_q.vset && !idex_exc_q &&
                    !vec_illegal && !trap_fire && !mem_exc && !mem_stall &&
                    !vec_wb_stall;
+  // Vector loads complete through the MEM sequencer/WB path;
+  // they must not also write the (garbage) EX vec result.
   assign vec_we = idex_valid_q && idex_ctrl_q.vec_rd && !idex_exc_q &&
+                  !idex_ctrl_q.mem_read && !idex_ctrl_q.mem_write &&
                   !vec_illegal && !trap_fire && !mem_exc && !mem_stall &&
                   !vec_wb_stall;
 
@@ -916,7 +934,7 @@ module muserisc_core import muserisc_pkg::*; (
   // fault-only-first loads instead trim vl and do not trap
   // unless the first accessed element faults.
   logic        vls_is, vls_has_cur, vls_more, vls_elem_done, vls_done;
-  logic        vls_whole, vls_strided, vls_indexed, vls_ff;
+  logic        vls_whole, vls_strided, vls_indexed, vls_ff, vls_maskls;
   logic        vls_started_q, vls_any_done_q;
   logic [63:0] vls_idx_q, vls_cur, vls_addr, vls_index;
   logic [63:0] vls_vl_eff, vls_start_eff, vls_vl_merge;
@@ -929,6 +947,7 @@ module muserisc_core import muserisc_pkg::*; (
   assign vls_strided = exmem_ctrl_q.bext_op == VLS_STRIDED;
   assign vls_indexed = exmem_ctrl_q.bext_op == VLS_INDEXED;
   assign vls_ff = exmem_ctrl_q.bext_op == VLS_FF;
+  assign vls_maskls = exmem_ctrl_q.bext_op == VLS_MASK;
   assign vls_idx_eew = (exmem_ctrl_q.funct3 == 3'b000) ? 3'd0 :
                        (exmem_ctrl_q.funct3 == 3'b101) ? 3'd1 :
                        (exmem_ctrl_q.funct3 == 3'b110) ? 3'd2 : 3'd3;
@@ -936,9 +955,10 @@ module muserisc_core import muserisc_pkg::*; (
   assign vls_eew_code = vls_whole ? 3'd0 :
                         vls_indexed ? csr_vtype[5:3] : vls_idx_eew;
   assign vls_vl_eff = vls_whole
-      ? {55'd0, (exmem_vec_nf_q + 3'd1), 6'd0} : csr_vl;
+      ? {54'd0, ({1'b0, exmem_vec_nf_q} + 4'd1), 6'd0}
+      : vls_maskls ? ((csr_vl + 64'd7) >> 3) : csr_vl;
   assign vls_start_eff = vls_whole ? 64'd0 : csr_vstart;
-  assign vls_vm_eff = vls_whole ? 1'b1 : exmem_vm_q;
+  assign vls_vm_eff = (vls_whole || vls_maskls) ? 1'b1 : exmem_vm_q;
   logic [63:0] vls_idx_eff;
   assign vls_idx_eff = vls_started_q ? vls_idx_q : vls_start_eff;
   always_comb begin
@@ -977,8 +997,11 @@ module muserisc_core import muserisc_pkg::*; (
   assign vls_seg = !vls_whole && (exmem_vec_nf_q != 3'd0);
   assign vls_nfields = vls_seg
       ? ({1'b0, exmem_vec_nf_q} + 4'd1) : 4'd1;
-  assign vls_field_stride = 4'd1 <<
-      ((vls_emul_log2 < 0) ? 3'd0 : vls_emul_log2[2:0]);
+  // Whole-register transfers span nf+1 consecutive
+  // registers as a single field.
+  assign vls_field_stride = vls_whole
+      ? ({1'b0, exmem_vec_nf_q} + 4'd1)
+      : (4'd1 << ((vls_emul_log2 < 0) ? 3'd0 : vls_emul_log2[2:0]));
   assign vls_field = vls_started_q ? vls_field_q : 3'd0;
   always_comb begin
     unique case (vls_eew_code)
@@ -1013,7 +1036,8 @@ module muserisc_core import muserisc_pkg::*; (
   logic vls_fault_raw;
   assign vls_fault_raw = vls_is &&
       (mem_trans_fault || mem_pmp_fault || vls_misalign);
-  assign vls_ff_trim = vls_ff && vls_fault_raw && vls_any_done_q;
+  assign vls_ff_trim = vls_ff && vls_fault_raw && vls_any_done_q &&
+                       (!vls_seg || (vls_cur > vls_start_eff));
   assign vls_vl_merge = vls_ff_trim ? vls_cur : vls_vl_eff;
   assign vls_done = vls_is &&
                     (vls_ff_trim || !vls_has_cur ||
@@ -1069,23 +1093,9 @@ module muserisc_core import muserisc_pkg::*; (
             3'd2: vls_merged[mpos +: 32] = cap_el[31:0];
             default: vls_merged[mpos +: 64] = cap_el;
           endcase
-        end else if (vls_done && (64'(unsigned'(i)) >= vls_vl_merge) &&
-                     csr_vtype[6]) begin
-          unique case (vls_eew_code)
-            3'd0: vls_merged[mpos +: 8] = 8'hff;
-            3'd1: vls_merged[mpos +: 16] = 16'hffff;
-            3'd2: vls_merged[mpos +: 32] = 32'hffff_ffff;
-            default: vls_merged[mpos +: 64] = 64'hffff_ffff_ffff_ffff;
-          endcase
-        end else if (vls_done && (64'(unsigned'(i)) < vls_vl_merge) &&
-                     csr_vtype[7]) begin
-          unique case (vls_eew_code)
-            3'd0: vls_merged[mpos +: 8] = 8'hff;
-            3'd1: vls_merged[mpos +: 16] = 16'hffff;
-            3'd2: vls_merged[mpos +: 32] = 32'hffff_ffff;
-            default: vls_merged[mpos +: 64] = 64'hffff_ffff_ffff_ffff;
-          endcase
         end
+        // Elements not written above keep the old vd value
+        // (agnostic = undisturbed in this implementation).
       end
      end
     end
@@ -1103,8 +1113,9 @@ module muserisc_core import muserisc_pkg::*; (
       3'd7: lmul_log2 = -4'sd1;
       default: lmul_log2 = 4'(signed'({1'b0, csr_vtype[2:0]}));
     endcase
-    vls_emul_log2 = 4'(signed'({1'b0, vls_eew_code})) -
-                    4'(signed'({1'b0, csr_vtype[5:3]})) + lmul_log2;
+    vls_emul_log2 = vls_maskls ? 4'sd0
+        : (4'(signed'({1'b0, vls_eew_code})) -
+           4'(signed'({1'b0, csr_vtype[5:3]})) + lmul_log2);
   end
   assign vls_wnum = vls_whole ? ({1'b0, exmem_vec_nf_q} + 4'd1)
                               : (vls_nfields * vls_field_stride);

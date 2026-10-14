@@ -24,7 +24,7 @@ description: museRISC in-house RV64IM core (5-stage, Sv39) in the C++ Verilator 
 implemented_extensions:
   # misa is a read mux constant (writes WARL-ignored):
   # rtl/core/muserisc_csr.sv "12'h301: csr_rdata =
-  # 64'h8000_0000_0014_11AF"  (MXL=2, I, M, A, F, D, C, B, H, S, U).
+  # 64'h8000_0000_0034_11AF"  (MXL=2, I, M, A, F, D, C, B, H, V, S, U).
   - { name: I, version: "= 2.1" }
   - { name: M, version: "= 2.0" }
   # A via MEM-stage RMW on the combinational memory port
@@ -58,6 +58,21 @@ implemented_extensions:
   - { name: Zcb, version: "= 1.0.0" }
   - { name: Zcd, version: "= 1.0.0" }
   - { name: Zknd, version: "= 1.0.1" }
+  # Integer vector (stage 8, issue #23): combinational RVV
+  # 1.0 integer unit (rtl/core/muserisc_vec.sv) + MEM-stage
+  # element sequencer for all load/store classes in
+  # muserisc_core.sv; VLEN=512, ELEN=64 (see params below).
+  # misa.V is set in the RTL, but the FP vector classes
+  # (Zve32f/Zve64f/Zve64d) are NOT implemented and trap as
+  # illegal, so only the integer Zve*x extensions are
+  # declared here and the Vf* ACT suites are not generated.
+  - { name: Zve32x, version: "= 1.0.0" }
+  - { name: Zve64x, version: "= 1.0.0" }
+  - { name: Zvl32b, version: "= 1.0.0" }
+  - { name: Zvl64b, version: "= 1.0.0" }
+  - { name: Zvl128b, version: "= 1.0.0" }
+  - { name: Zvl256b, version: "= 1.0.0" }
+  - { name: Zvl512b, version: "= 1.0.0" }
   - { name: Zknh, version: "= 1.0.1" }
   - { name: Zicsr, version: "= 2.0" }
   - { name: Zifencei, version: "= 2.0.0" }
@@ -104,8 +119,8 @@ implemented_extensions:
   # UXL is hardwired 2 (64-bit) in mstatus assembly.
   - { name: Ssu64xl, version: "= 1.0.0" }
 
-  # Not implemented and deliberately absent: F, D, C (this
-  # B, V, H, Zihpm
+  # Not implemented and deliberately absent: FP vector
+  # (Zve32f/Zve64f/Zve64d and full V), Zihpm
   # (mhpmcounter3..31 decode as zero in M, their unprivileged
   # shadows trap, so the Zihpm contract is not met),
   # Svinval, Svpbmt, Sstc, Sdtrig, Zicbo*.
@@ -136,7 +151,7 @@ params:
   # Hardware sets FS to Dirty whenever an FP register is
   # written (muserisc_core.sv fp_dirty).
   HW_MSTATUS_FS_DIRTY_UPDATE: precise
-  MSTATUS_VS_LEGAL_VALUES: [0]
+  MSTATUS_VS_LEGAL_VALUES: [0, 1, 2, 3]
   # The time CSR (0xC01) is readable (mirrors cycle).
   TIME_CSR_IMPLEMENTED: true
 
@@ -280,3 +295,125 @@ params:
       false, false, false, false, false, false, false, false,
       false, false, false, false, false, false, false, false,
     ]
+
+  # ------------------------------------------------------ Vector (stage 8)
+  # VLEN=512 (vlenb=64), ELEN=64: rtl/core/muserisc_vregfile.sv
+  # (32 x 512-bit registers), vlenb CSR in muserisc_csr.sv.
+  VLEN: 512
+  ELEN: 64
+  SEW_MIN: 8
+  # mstatus.VS is a plain 2-bit state register in each of the
+  # M/HS/VS views (mstatus_vs_q / vs_vs_q in muserisc_csr.sv),
+  # software-writable to all encodings; a committing vector
+  # register write or vset raises it to Dirty in EX.
+  HW_MSTATUS_VS_DIRTY_UPDATE: precise
+  # vsstatus exists (H extension, stage 7) with its own VS.
+  VSSTATUS_VS_EXISTS: true
+  VSXLEN: [64]
+  VUXLEN: [64]
+  VSTVEC_MODES: [0, 1]
+
+  # ---------------------------------- H params (required since VSXLEN)
+  # hgatp/vsatp Bare modes are supported (muserisc_mmu.sv
+  # mode decode); invalid vsatp MODE writes when V=0 are
+  # WARL-ignored like other satp writes.
+  GSTAGE_MODE_BARE: true
+  VSSTAGE_MODE_BARE: true
+  IGNORE_INVALID_VSATP_MODE_WRITES_WHEN_V_EQ_ZERO: true
+  MUTABLE_MISA_H: false
+  # GEILEN = 0 (hgeie/hgeip reads zero, muserisc_csr.sv).
+  NUM_EXTERNAL_GUEST_INTERRUPTS: 0
+  VMID_WIDTH: 14
+  # htinst is always written 0 (trap_tinst_i tied to 0 in
+  # muserisc_core.sv, a legal choice).
+  TINST_VALUE_ON_MCALL: "always zero"
+  TINST_VALUE_ON_SCALL: "always zero"
+  TINST_VALUE_ON_STORE_AMO_ACCESS_FAULT: "always zero"
+  TINST_VALUE_ON_STORE_AMO_ADDRESS_MISALIGNED: "always zero"
+  TINST_VALUE_ON_STORE_AMO_PAGE_FAULT: "always zero"
+  TINST_VALUE_ON_UCALL: "always zero"
+  TINST_VALUE_ON_VIRTUAL_INSTRUCTION: "always zero"
+  TINST_VALUE_ON_VSCALL: "always zero"
+  TRAP_ON_ECALL_FROM_VS: true
+  # hvip-injected VS interrupts (stage 7d); no guest
+  # external interrupt files (GEILEN = 0).
+  VSEI_INTR_IMPL: false
+  VSSI_INTR_IMPL: false
+  VSTI_INTR_IMPL: true
+  VS_MODE_ENDIANNESS: little
+  VU_MODE_ENDIANNESS: little
+  # Trap reporting: VA in vstval, GPA in htval (stage 7
+  # two-stage fault path in muserisc_core/mmu), Sv39-only.
+  REPORT_GPA_IN_TVAL_ON_LOAD_GUEST_PAGE_FAULT: true
+  REPORT_GPA_IN_TVAL_ON_STORE_AMO_GUEST_PAGE_FAULT: true
+  REPORT_VA_IN_VSTVAL_ON_BREAKPOINT: true
+  REPORT_VA_IN_VSTVAL_ON_INSTRUCTION_ACCESS_FAULT: true
+  REPORT_VA_IN_VSTVAL_ON_INSTRUCTION_MISALIGNED: true
+  REPORT_VA_IN_VSTVAL_ON_INSTRUCTION_PAGE_FAULT: true
+  REPORT_ENCODING_IN_VSTVAL_ON_ILLEGAL_INSTRUCTION: true
+  REPORT_ENCODING_IN_VSTVAL_ON_VIRTUAL_INSTRUCTION: true
+  REPORT_GPA_IN_HTVAL_ON_GUEST_PAGE_FAULT: true
+  REPORT_GPA_IN_TVAL_ON_INSTRUCTION_GUEST_PAGE_FAULT: true
+  REPORT_GPA_IN_TVAL_ON_INTERMEDIATE_GUEST_PAGE_FAULT: true
+  REPORT_VA_IN_VSTVAL_ON_LOAD_ACCESS_FAULT: true
+  REPORT_VA_IN_VSTVAL_ON_LOAD_MISALIGNED: true
+  REPORT_VA_IN_VSTVAL_ON_LOAD_PAGE_FAULT: true
+  REPORT_VA_IN_VSTVAL_ON_STORE_AMO_ACCESS_FAULT: true
+  REPORT_VA_IN_VSTVAL_ON_STORE_AMO_MISALIGNED: true
+  REPORT_VA_IN_VSTVAL_ON_STORE_AMO_PAGE_FAULT: true
+  SV39X4_TRANSLATION: true
+  SV39_VSMODE_TRANSLATION: true
+  SV48X4_TRANSLATION: false
+  SV48_VSMODE_TRANSLATION: false
+  SV57X4_TRANSLATION: false
+  SV57_VSMODE_TRANSLATION: false
+  TINST_VALUE_ON_BREAKPOINT: "always zero"
+  TINST_VALUE_ON_FINAL_INSTRUCTION_GUEST_PAGE_FAULT: "always zero"
+  TINST_VALUE_ON_FINAL_LOAD_GUEST_PAGE_FAULT: "always zero"
+  TINST_VALUE_ON_FINAL_STORE_AMO_GUEST_PAGE_FAULT: "always zero"
+  TINST_VALUE_ON_INSTRUCTION_ADDRESS_MISALIGNED: "always zero"
+  TINST_VALUE_ON_LOAD_ACCESS_FAULT: "always zero"
+  TINST_VALUE_ON_LOAD_ADDRESS_MISALIGNED: "always zero"
+  TINST_VALUE_ON_LOAD_PAGE_FAULT: "always zero"
+  # hcounteren writable bits are CY/TM/IR only (12'h606).
+  HCOUNTENABLE_EN:
+    [true, true, true, false, false, false, false, false,
+     false, false, false, false, false, false, false, false,
+     false, false, false, false, false, false, false, false,
+     false, false, false, false, false, false, false, false]
+  # FP vector reductions are not implemented (no Zve*f/d);
+  # values mirror the Sail reference and gate nothing here.
+  VFREDUSUM_FINAL_NODE_ELEMENT_BEHAVIOR: "additive_identity"
+  VFREDUSUM_INACTIVE_NODE_ELEMENT_BEHAVIOR: "additive_identity"
+  VFREDUSUM_NAN: "no_change"
+  VFREDUSUM_NODE_ROUNDING_BEHAVIOR: "SEW_precision"
+  # vtype resets with vill=1 (reset branch in muserisc_csr.sv).
+  FOLLOW_VTYPE_RESET_RECOMMENDATION: true
+  # vl = min(AVL, VLMAX) exactly (vset_vl_o computation).
+  RVV_VL_WHEN_AVL_LT_DOUBLE_VLMAX: VLMAX
+  # All SEW at all fractional LMULs execute (vset_vill only
+  # on reserved encodings or SEW > ELEN), which is beyond
+  # the required SEW <= LMUL*ELEN set.
+  SUPPORT_FRACTIONAL_LMUL_BEYOND_REQUIRED: "custom"
+  VILL_SET_ON_RESERVED_VTYPE: true
+  # x0/x0 keep-vl form: vill only when the vtype encoding
+  # itself is reserved (never for the VLMAX-change case);
+  # vl clamps to the new VLMAX (change always applied).
+  RESERVED_VSET_X0X0_VILL_SET: "never"
+  RESERVED_VSET_X0X0_VLMAX_CHANGE: "always"
+  VECTOR_LS_INDEX_MAX_EEW: "XLEN"
+  # Element accesses check alignment in MEM and trap
+  # (cause 4/6); whole-register transfers are byte accesses.
+  VECTOR_LS_MISALIGNED_LEGAL: false
+  VECTOR_LS_WHOLEREG_MISALIGNED_LEGAL: true
+  VECTOR_LOAD_PAST_TRAP: false
+  VECTOR_LS_SEG_PARTIAL_ACCESS: false
+  # Fault-only-first trims vl to the faulting element and
+  # updates no destination element at or past it.
+  VECTOR_FF_UPDATE_PAST_TRIM: "update_none"
+  VECTOR_FF_SEG_EXCEPTION_PARTIAL_LOAD: "no_subsegment_loaded"
+  VECTOR_LOAD_SEG_FF_OVERWRITE_ELEMENTS_AFTER_FAULT: "no_overwrite"
+  VECTOR_FF_NO_EXCEPTION_TRIM: false
+  # vstart is an unmasked CSR write target (12'h008).
+  LEGAL_VSTART: "1_stride"
+  IMPRECISE_VECTOR_TRAP_SETTABLE: false
