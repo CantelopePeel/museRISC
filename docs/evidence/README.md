@@ -1003,3 +1003,60 @@ stages 4c/5:
   The boot is therefore gated on stage 4 (A) and, for
   stock binaries, stage 5 (C); harness CLINT/UART models
   are the remaining small pieces. No boot is claimed.
+  This historical block was superseded by stage 6 below.
+
+## In-house core stage 6 — OpenSBI and Linux boot (2026-10-14, #21)
+
+- New platform harness
+  [`tb/cpp/soc_tb.cpp`](../../tb/cpp/soc_tb.cpp) around the
+  same core (the compliance `core_tb` remains the gate
+  harness): boot ROM at `0x1000` presenting `a0=hartid` /
+  `a1=DTB`, CLINT at `0x0200_0000`, PLIC at `0x0C00_0000`,
+  byte-wide 16550 UART at `0x1000_0000`, and 128 MiB RAM at
+  `0x8000_0000`. The machine is described by
+  [`sw/linux/muserisc.dts`](../../sw/linux/muserisc.dts).
+- [`scripts/build_opensbi.sh`](../../scripts/build_opensbi.sh)
+  builds generic OpenSBI `fw_jump` (`0x8020_0000`) and the
+  DTB in Docker. OpenSBI v1.9 boots and enters an S-mode
+  payload: [`core-stage6a-opensbi-2026-10-14.log`](core-stage6a-opensbi-2026-10-14.log)
+  ends with `HELLO FROM S-MODE`.
+- [`scripts/build_linux_kernel.sh`](../../scripts/build_linux_kernel.sh)
+  builds Linux 6.6 `defconfig` (modules and debug info off)
+  with the static embedded-initramfs `/init` from
+  [`sw/linux/init.c`](../../sw/linux/init.c). The recorded
+  boot used this explicit kernel command line from the DT:
+  `console=ttyS0,115200 earlycon=sbi cryptomgr.notests
+  initcall_debug loglevel=8 rw`; in particular, crypto
+  self-tests are disabled for this evidence run.
+- Linux gate:
+  [`core-stage6-linux-boot-2026-10-14.log`](core-stage6-linux-boot-2026-10-14.log).
+  `SOC TB PASS` at **508,905,040 cycles**. The kernel
+  reaches `Run /init as init process`, `/init` prints
+  `muserisc init: userspace alive`, reports
+  `uname: Linux 6.6.0 ... riscv64`, reads `/proc/version`,
+  and prints `MUSERISC_LINUX_BOOT_OK`.
+- Two real core bugs were found by this boot and are now
+  regression-covered. (1) CSR writes commit in EX while
+  traps commit at WB, so OpenSBI's younger `mtvec` restore
+  beat its probing trap to the vector;
+  `trap_younger_csr.S` failed before the `!mem_exc` gate and
+  passes after it. (2) `time` was aliased to inhibited
+  `mcycle`; OpenSBI PMU stop-all sets `mcountinhibit.CY`,
+  which froze Linux's clocksource at `pmu_sbi_devinit`.
+  `time` now has an independent real-time counter, covered
+  by the CSR unit TB and `counter_time_directed.S`. A
+  harness-only walker-starvation bug (page-table walks do
+  not assert `dmem_re_o`) was also found and fixed in
+  `soc_tb`; the page tables and core walker were correct.
+- Final gates after both RTL fixes: `make core-test` and
+  `make lint` green, `make test` = `ALL PHASE-0 KATs PASS`,
+  [`riscv-tests-core-2026-10-14.csv`](riscv-tests-core-2026-10-14.csv)
+  **123/123**, and
+  [`act-core-impriv-2026-10-14.csv`](act-core-impriv-2026-10-14.csv)
+  **543/544** (same `PMPSm_cfg_A_tor_zero` PA0 platform
+  waiver).
+- Claim boundary: this is a single-hart Verilator platform
+  boot to a small embedded initramfs `/init`, not a distro,
+  shell, block/network-device, SMP, H/KVM or V claim, and
+  it does not integrate `muse_crypto_top` with the core
+  (B4/#4 remains deferred).

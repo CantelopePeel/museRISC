@@ -87,7 +87,7 @@ module muserisc_csr (
   logic [63:0] menvcfg_q, mcountinhibit_q;
   logic [63:0] stvec_q, scounteren_q, sscratch_q, sepc_q, scause_q;
   logic [63:0] stval_q, senvcfg_q, satp_q;
-  logic [63:0] mcycle_q, minstret_q;
+  logic [63:0] mcycle_q, minstret_q, mtime_q;
   logic [7:0]  pmpcfg_q [0:15];
   logic [63:0] pmpaddr_q [0:15];
 
@@ -186,7 +186,7 @@ module muserisc_csr (
       12'hB00: csr_rdata = mcycle_q;                              // mcycle
       12'hB02: csr_rdata = minstret_q;                            // minstret
       12'hC00: csr_rdata = mcycle_q;                              // cycle
-      12'hC01: csr_rdata = mcycle_q;                              // time
+      12'hC01: csr_rdata = mtime_q;                               // time
       12'hC02: csr_rdata = minstret_q;                            // instret
       12'hF11: csr_rdata = 64'd0;                                 // mvendorid
       12'hF12: csr_rdata = 64'h4D55_5345;                         // marchid "MUSE"
@@ -427,12 +427,17 @@ module muserisc_csr (
       satp_q <= 64'd0;
       mcycle_q <= 64'd0;
       minstret_q <= 64'd0;
+      mtime_q <= 64'd0;
       for (int i = 0; i < 16; i++) begin
         pmpcfg_q[i] <= 8'd0;
         pmpaddr_q[i] <= 64'd0;
       end
     end else begin
-      // Free-running counters (inhibit bits honored).
+      // Free-running counters. CY/IR inhibit mcycle/minstret
+      // only: `time` is a real-time counter and must advance
+      // even while CY is inhibited (OpenSBI PMU stop-all relies
+      // on this distinction; Linux takes its clocksource here).
+      mtime_q <= mtime_q + 64'd1;
       if (!mcountinhibit_q[0]) mcycle_q <= mcycle_q + 64'd1;
       if (retire_i && !mcountinhibit_q[2]) begin
         minstret_q <= minstret_q + 64'd1;

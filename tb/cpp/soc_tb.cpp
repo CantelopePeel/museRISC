@@ -317,6 +317,7 @@ int main(int argc, char** argv) {
   bool trace_traps = false;
   std::vector<uint64_t> breakpoints;
   long trace_after_trap = 0;
+  uint64_t sample_pc_every = 0, sample_pc_from = 0;
   std::vector<std::pair<uint64_t, uint64_t>> dumps;
   for (int i = 1; i < argc; ++i) {
     auto need = [&](int i) { return i + 1 < argc; };
@@ -342,6 +343,12 @@ int main(int argc, char** argv) {
       const char* colon = std::strchr(spec, ':');
       dumps.push_back({std::strtoull(spec, nullptr, 0),
                        colon ? std::strtoull(colon + 1, nullptr, 0) : 64});
+    } else if (std::strcmp(argv[i], "--sample-pc") == 0 && need(i)) {
+      // FROM:EVERY guest fetch sampler for long-boot diagnosis.
+      const char* spec = argv[++i];
+      const char* colon = std::strchr(spec, ':');
+      sample_pc_from = std::strtoull(spec, nullptr, 0);
+      sample_pc_every = colon ? std::strtoull(colon + 1, nullptr, 0) : 0;
     } else if (std::strcmp(argv[i], "--trace-after-trap") == 0 && need(i)) {
       trace_after_trap = std::atol(argv[++i]);
     } else if (std::strcmp(argv[i], "--bp") == 0 && need(i)) {
@@ -437,6 +444,13 @@ int main(int argc, char** argv) {
       if (trace_after_trap > 0 && pc_window == 0) {
         pc_window = trace_after_trap;
       }
+    }
+    if (sample_pc_every != 0 && cycle >= sample_pc_from &&
+        (cycle % sample_pc_every) == 0) {
+      std::fprintf(stderr, "sample cy=%llu fetch_pa=0x%llx daddr=0x%llx\n",
+                   static_cast<unsigned long long>(cycle),
+                   static_cast<unsigned long long>(dut->imem_addr_o),
+                   static_cast<unsigned long long>(dut->dmem_addr_o));
     }
     if (pc_window > 0) {
       std::fprintf(stderr, "  fetch cy=%llu pc=0x%llx\n",

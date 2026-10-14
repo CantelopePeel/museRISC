@@ -110,7 +110,7 @@ the custom crypto accelerator not yet attached to it).
 - [x] **F / D** floating point — directed (46/46 solo+Spike, tandem F 22/22) + ACT F/D 200/200 + TestFloat level-1 112/112, all rounding modes (1,528,080 vectors, #7/#20)
 - [x] **C** compressed (Zca/Zcb/Zcd ACT suites pass; #16) — sweep branch, see `docs/evidence/`
 - [ ] **V** vector (RVV 1.0, SIMD) — in-house unit pending ([#23](https://github.com/bubblebabyboi/museRISC/issues/23), third priority; CVA6+Ara path superseded)
-- [x] **Privileged M/S/U + Sv39** — directed priv/`-v-` tests + ACT privileged suites 126/134 (Svnapot declared; 8 waived divergences in `docs/evidence/`); Linux boot pending ([#21](https://github.com/bubblebabyboi/museRISC/issues/21), next priority)
+- [x] **Privileged M/S/U + Sv39** — directed priv/`-v-` tests + ACT privileged suites 126/134 (Svnapot declared; 8 waived divergences in `docs/evidence/`); separately, Linux 6.6 boots to an embedded `/init` on the in-house core in Verilator ([#21](https://github.com/bubblebabyboi/museRISC/issues/21))
 - [ ] **H** hypervisor — not implemented/verified on any core here ([#22](https://github.com/bubblebabyboi/museRISC/issues/22), second priority). Not needed for single-level Linux; needed to host KVM. Not the same extension as V
 - [x] **B** bitmanip (Zba/Zbb/Zbc/Zbs), **Zicond**, scalar crypto (Zbkb/Zbkc/Zkne/Zknd/Zknh) — ACT suites pass 133/133 with C/Zicsr/Zifencei (#17)
 
@@ -225,20 +225,20 @@ green and its log/report is committed under `docs/evidence/`.
    the in-house RVV unit in
    [#23](https://github.com/bubblebabyboi/museRISC/issues/23).
 5. **In-house RV64GCV core ([#18](https://github.com/bubblebabyboi/museRISC/issues/18),
-   stages 1–5 done, on `main`).** Clean-slate SystemVerilog
-   core replacing CVA6+Ara: RV64 IMABC FD SU + Sv39/PMP
-   implemented and gated (riscv-tests 123/123, ACT 543/544
-   with one documented waiver; see `docs/CORE.md` and
-   `docs/evidence/`). Remaining, in priority order:
-   (a) **Linux/OpenSBI boot** ([#21](https://github.com/bubblebabyboi/museRISC/issues/21)) —
-   a normal OS needs only S-mode + Sv39 (already verified);
-   the work is harness CLINT/PLIC/UART/DTB models plus the
-   OpenSBI/Linux build, no new CPU extension;
-   (b) **H hypervisor extension** ([#22](https://github.com/bubblebabyboi/museRISC/issues/22)) —
+   stages 1–5 on `main`; stage 6 done on its branch).**
+   Clean-slate SystemVerilog core replacing CVA6+Ara: RV64
+   IMABC FD SU + Sv39/PMP implemented and gated
+   (riscv-tests 123/123, ACT 543/544 with one documented
+   waiver; see `docs/CORE.md` and `docs/evidence/`).
+   Stage 6 boots OpenSBI and Linux 6.6 to an embedded
+   initramfs `/init` in the Verilator platform harness
+   ([#21](https://github.com/bubblebabyboi/museRISC/issues/21)).
+   Remaining, in priority order:
+   (a) **H hypervisor extension** ([#22](https://github.com/bubblebabyboi/museRISC/issues/22)) —
    VS-mode + two-stage translation for a KVM/hypervisor
    host; not implemented or verified today, and not needed
    for single-level Linux;
-   (c) **V vector unit** ([#23](https://github.com/bubblebabyboi/museRISC/issues/23)) —
+   (b) **V vector unit** ([#23](https://github.com/bubblebabyboi/museRISC/issues/23)) —
    RVV 1.0 SIMD, unrelated to hypervisor/OS support.
 6. **B4 — SoC integration (deferred,
    [#4](https://github.com/bubblebabyboi/museRISC/issues/4)).**
@@ -258,7 +258,7 @@ each child is also linked as a native GitHub sub-issue.
 
 | Epic | Child issues, in dependency order | Current gate |
 |---|---|---|
-| [#18 Core + software platform](https://github.com/bubblebabyboi/museRISC/issues/18) | [#21 Linux](https://github.com/bubblebabyboi/museRISC/issues/21) → [#22 H](https://github.com/bubblebabyboi/museRISC/issues/22) → [#23 V](https://github.com/bubblebabyboi/museRISC/issues/23) | #21 active |
+| [#18 Core + software platform](https://github.com/bubblebabyboi/museRISC/issues/18) | [#21 Linux](https://github.com/bubblebabyboi/museRISC/issues/21) → [#22 H](https://github.com/bubblebabyboi/museRISC/issues/22) → [#23 V](https://github.com/bubblebabyboi/museRISC/issues/23) | #21 done; #22 next |
 | [#24 Verification + CI](https://github.com/bubblebabyboi/museRISC/issues/24) | [#20 ISA follow-ups](https://github.com/bubblebabyboi/museRISC/issues/20), [#8 riscv-dv/CI](https://github.com/bubblebabyboi/museRISC/issues/8), [#19 SV/cocotb port](https://github.com/bubblebabyboi/museRISC/issues/19) | Supports #18 |
 | [#25 Crypto + security](https://github.com/bubblebabyboi/museRISC/issues/25) | [#6 streaming](https://github.com/bubblebabyboi/museRISC/issues/6), [#5 scalar-mul](https://github.com/bubblebabyboi/museRISC/issues/5), [#12 security review](https://github.com/bubblebabyboi/museRISC/issues/12), [#10 benchmark](https://github.com/bubblebabyboi/museRISC/issues/10) | #12 gates key use |
 | [#26 SoC + physical + MPW](https://github.com/bubblebabyboi/museRISC/issues/26) | [#4 B4 integration](https://github.com/bubblebabyboi/museRISC/issues/4) → [#11 OpenROAD](https://github.com/bubblebabyboi/museRISC/issues/11) → [#13 MPW](https://github.com/bubblebabyboi/museRISC/issues/13) | Deferred/blocked |

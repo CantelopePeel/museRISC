@@ -159,6 +159,7 @@ int main(int argc, char** argv) {
   CHECK(rd(0xB00) >= c0 + 2);
   wr(0xB00, 1000);
   CHECK(rd(0xC00) >= 1000 && rd(0xC00) <= 1010);
+  CHECK(rd(0xC01) < 1000);  // time is not an mcycle alias
   wr(0xB02, 500);
   d->retire_i = 1;
   tick();
@@ -168,10 +169,14 @@ int main(int argc, char** argv) {
   CHECK(rd(0xC02) == 502);
   wr(0x320, 0x5);  // inhibit cycle + instret
   const uint64_t ci = rd(0xB00);
+  const uint64_t ti = rd(0xC01);
   d->retire_i = 1;
+  tick();
+  tick();
   tick();
   d->retire_i = 0;
   CHECK(rd(0xB00) == ci);
+  CHECK(rd(0xC01) >= ti + 3);  // real time is not CY-inhibited
   CHECK(rd(0xB02) == 502);
   wr(0x320, 0);
   CHECK(rd(0xB03) == 0);  // mhpmcounter3 reads zero
@@ -407,7 +412,7 @@ int main(int argc, char** argv) {
   CHECK(rd(0xF12) == 0x4D555345ULL);  // marchid "MUSE"
   CHECK(rd(0xF13) == 0x30000ULL);     // mimpid
   CHECK(rd(0xF15) == 0);              // mconfigptr
-  CHECK(rd(0xC01) == rd(0xC00));      // time mirrors cycle (same eval)
+  CHECK(rd(0xC01) != rd(0xC00));      // independent time/cycle counters
   wr(0x142, 0x1234);                  // scause write port
   CHECK(rd(0x142) == 0x1234);
   wr(0x143, 0xabcd);                  // stval write port

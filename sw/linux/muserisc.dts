@@ -9,7 +9,7 @@
 	model = "museRISC in-house RV64GC core (Verilator)";
 
 	chosen {
-		bootargs = "console=ttyS0,115200 earlycon=sbi rw";
+		bootargs = "console=ttyS0,115200 earlycon=sbi cryptomgr.notests initcall_debug loglevel=8 rw";
 		stdout-path = "serial0";
 	};
 
@@ -66,7 +66,7 @@
 			reg = <0x0 0x10000000 0x0 0x100>;
 			reg-shift = <0>;
 			reg-io-width = <1>;
-			clock-frequency = <115200>;
+			clock-frequency = <1843200>;
 			current-speed = <115200>;
 			interrupt-parent = <&plic>;
 			interrupts = <10>;

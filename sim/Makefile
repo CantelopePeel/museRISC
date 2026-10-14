@@ -33,7 +33,7 @@ CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
             $(RTL)/muserisc_decoder.sv \
             $(RTL)/muserisc_csr.sv $(RTL)/muserisc_mmu.sv \
             $(RTL)/muserisc_core.sv
-TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed rvc_directed pipeline_directed priv_directed \
+TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed \
             vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
             trap_store_misalign trap_younger_store trap_younger_csr \
@@ -185,6 +185,7 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_trap_smisalign.dat ./core_tb trap_store_misalign.bin 100000 --expect-trap 6
 	cd $(BUILD) && COV_FILE=cov_trap_ystore.dat ./core_tb trap_younger_store.bin 100000 --expect-trap 4
 	cd $(BUILD) && COV_FILE=cov_trap_ycsr.dat ./core_tb trap_younger_csr.bin
+	cd $(BUILD) && COV_FILE=cov_counter_time.dat ./core_tb counter_time_directed.bin
 	cd $(BUILD) && COV_FILE=cov_trap_pa_fetch.dat ./core_tb trap_pa_fetch.bin 100000 --expect-trap 1
 	cd $(BUILD) && COV_FILE=cov_trap_pa_load.dat ./core_tb trap_pa_load.bin 100000 --expect-trap 5
 
@@ -206,7 +207,7 @@ COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
               $(BUILD)/cov_trap_illegal.dat $(BUILD)/cov_trap_misalign.dat \
               $(BUILD)/cov_trap_ecall.dat $(BUILD)/cov_trap_ebreak.dat \
               $(BUILD)/cov_trap_smisalign.dat $(BUILD)/cov_trap_ystore.dat \
-              $(BUILD)/cov_trap_ycsr.dat \
+              $(BUILD)/cov_trap_ycsr.dat $(BUILD)/cov_counter_time.dat \
               $(BUILD)/cov_trap_pa_fetch.dat \
               $(BUILD)/cov_trap_pa_load.dat
 coverage:
