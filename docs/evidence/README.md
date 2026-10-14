@@ -1113,3 +1113,40 @@ stages 4c/5:
   AIA/IMSIC or external-interrupt-virtualization claim
   (GEILEN=0, no PLIC guest context), and not a substitute
   for a future ACT hypervisor suite.
+
+## In-house core stage 8 — integer V vector (2026-10-14, #23)
+
+- Scope: integer RVV 1.0 (Zve32x/Zve64x, Zvl512b) with
+  VLEN=512, ELEN=64 in `muserisc_vec.sv` /
+  `muserisc_vregfile.sv` plus the MEM-stage element
+  sequencer in `muserisc_core.sv`. Floating-point vector
+  (Zve32f/Zve64f/Zve64d, i.e. full V) is **not**
+  implemented; `misa.V` is set on the strength of the
+  integer subset, so the claim for stage 8 is the integer
+  vector subset only. Tail/mask-agnostic is implemented
+  as undisturbed (matching the Sail reference
+  configuration in `sw/act4-core/sail.json`).
+- First-party gates: vector unit TB
+  **1,014,476 checks** and `vec_directed.S` inside
+  `make core-test`; `make lint` green.
+- ACT vector result:
+  [`act-core-stage8-2026-10-14.csv`](act-core-stage8-2026-10-14.csv)
+  records all 1,936 generated self-checking ELFs run on
+  the core (1,872 Vx/Vls vector + 51 I + 13 M):
+  **1,936/1,936 PASS**. Generation used
+  `scripts/build_act4_core.sh` with `sw/act4-core/`
+  config; ELFs run via `build/sim/core_tb`.
+- Tests not run (43), listed in
+  [`act-vector-core-genfail-2026-10-14.csv`](act-vector-core-genfail-2026-10-14.csv):
+  34 ordered-indexed load/store tests (`vlox*`/`vsoxseg*`
+  in Vls8/16/32) fail Sail signature *generation* with
+  `Trap signature overflow in sig mode` before any DUT
+  is involved, so no self-checking ELF exists for them;
+  9 Vx64 `vmulh`/`vsmul` tests are deselected by ACT's
+  extension filter because their test config requires
+  full `V`. Unordered indexed (`vlux*`/`vsux*`) and
+  `vmulh` at SEW 8/16/32 are inside the passing set.
+- Not re-run at this stage: the SoC Linux/KVM smokes
+  (green at stages 6/7) and riscv-tests (123/123 at
+  stage 7); scalar behavior is covered here by
+  `make core-test` and the I/M ACT ELFs above.

@@ -29,18 +29,19 @@ CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
             $(RTL)/muserisc_fpregfile.sv $(RTL)/muserisc_alu.sv \
             $(RTL)/muserisc_muldiv.sv $(RTL)/muserisc_fpu.sv \
             $(RTL)/muserisc_bext.sv \
+            $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
             $(RTL)/muserisc_rvc.sv \
             $(RTL)/muserisc_decoder.sv \
             $(RTL)/muserisc_csr.sv $(RTL)/muserisc_mmu.sv \
             $(RTL)/muserisc_core.sv
-TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed \
+TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed vec_directed \
             vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
             trap_store_misalign trap_younger_store trap_younger_csr \
             trap_pa_fetch trap_pa_load
 
-.PHONY: all alu muldiv decoder regfile csr mmu fpu bext rvc core sw coverage clean riscv-tests
-all: alu muldiv decoder regfile csr mmu fpu bext rvc core coverage
+.PHONY: all alu muldiv decoder regfile csr mmu fpu bext rvc vec core sw coverage clean riscv-tests
+all: alu muldiv decoder regfile csr mmu fpu bext rvc vec core coverage
 
 ## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
 riscv-tests: $(BUILD)/core_tb
@@ -140,6 +141,15 @@ $(BUILD)/rvc_tb: $(ROOT)/tb/cpp/rvc_tb.cpp $(RTL)/muserisc_rvc.sv | $(BUILD) $(O
 rvc: $(BUILD)/rvc_tb
 	cd $(BUILD) && COV_FILE=cov_rvc.dat ./rvc_tb
 
+## ---- Vector unit test ------------------------------------------------------
+$(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(RTL)/muserisc_vec.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/vec --top-module muserisc_vec \
+	  -o $(abspath $(BUILD)/vec_tb) $(PKG) $(RTL)/muserisc_vec.sv \
+	  $(abspath $(ROOT)/tb/cpp/vec_tb.cpp)
+
+vec: $(BUILD)/vec_tb
+	cd $(BUILD) && COV_FILE=cov_vec.dat ./vec_tb
+
 ## ---- Core harness + directed software ---------------------------------
 $(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(CORE_RTL) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/core --top-module muserisc_core \
@@ -187,6 +197,7 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_trap_ycsr.dat ./core_tb trap_younger_csr.bin
 	cd $(BUILD) && COV_FILE=cov_counter_time.dat ./core_tb counter_time_directed.bin
 	cd $(BUILD) && COV_FILE=cov_hyp.dat ./core_tb hyp_directed.bin
+	cd $(BUILD) && COV_FILE=cov_vecsw.dat ./core_tb vec_directed.bin
 	cd $(BUILD) && COV_FILE=cov_trap_pa_fetch.dat ./core_tb trap_pa_fetch.bin 100000 --expect-trap 1
 	cd $(BUILD) && COV_FILE=cov_trap_pa_load.dat ./core_tb trap_pa_load.bin 100000 --expect-trap 5
 
@@ -208,6 +219,7 @@ COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
               $(BUILD)/cov_trap_illegal.dat $(BUILD)/cov_trap_misalign.dat \
               $(BUILD)/cov_trap_ecall.dat $(BUILD)/cov_trap_ebreak.dat \
               $(BUILD)/cov_trap_smisalign.dat $(BUILD)/cov_trap_ystore.dat \
+              $(BUILD)/cov_vec.dat $(BUILD)/cov_vecsw.dat \
               $(BUILD)/cov_trap_ycsr.dat $(BUILD)/cov_counter_time.dat $(BUILD)/cov_hyp.dat \
               $(BUILD)/cov_trap_pa_fetch.dat \
               $(BUILD)/cov_trap_pa_load.dat

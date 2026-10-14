@@ -8,6 +8,7 @@ CORE_RTL := rtl/core/muserisc_pkg.sv rtl/core/muserisc_regfile.sv \
             rtl/core/muserisc_fpregfile.sv rtl/core/muserisc_alu.sv \
             rtl/core/muserisc_muldiv.sv rtl/core/muserisc_fpu.sv \
             rtl/core/muserisc_bext.sv \
+            rtl/core/muserisc_vregfile.sv rtl/core/muserisc_vec.sv \
             rtl/core/muserisc_rvc.sv \
             rtl/core/muserisc_decoder.sv rtl/core/muserisc_csr.sv \
             rtl/core/muserisc_mmu.sv rtl/core/muserisc_core.sv

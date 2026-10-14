@@ -72,6 +72,12 @@ int main(int argc, char** argv) {
   d->trap_gpa_i = 0;
   d->trap_gva_i = 0;
   d->trap_tinst_i = 0;
+  d->vset_en_i = 0;
+  d->vset_avl_i = 0;
+  d->vset_vtype_i = 0;
+  d->vset_keep_vl_i = 0;
+  d->vset_vlmax_i = 0;
+  d->vec_dirty_i = 0;
   d->irq_m_timer_i = 0;
   d->irq_m_soft_i = 0;
   d->irq_m_ext_i = 0;
@@ -94,7 +100,7 @@ int main(int argc, char** argv) {
 
   // Reset state: M-mode, everything zero, misa constant.
   CHECK(d->priv_o == 3);
-  CHECK(rd(0x301) == 0x80000000001411AFULL);  // misa RV64 IMABC FDH SU
+  CHECK(rd(0x301) == 0x80000000003411AFULL);  // misa RV64 IMABC FDHV SU
   CHECK(rd(0x300) == ((2ull << 34) | (2ull << 32)));  // mstatus: SXL/UXL only
   CHECK(rd(0xF14) == 0);                     // mhartid
   CHECK(illegal(0x7c0, false));              // nonexistent CSR
@@ -102,7 +108,7 @@ int main(int argc, char** argv) {
   CHECK(!illegal(0xF11, false));
   CHECK(!illegal(0x301, true));              // misa writes are WARL-ignored
   wr(0x301, 0);
-  CHECK(rd(0x301) == 0x80000000001411AFULL);
+  CHECK(rd(0x301) == 0x80000000003411AFULL);
   CHECK(!illegal(0x340, true));              // mscratch rw
 
   // Plain storage CSRs round-trip.
@@ -745,6 +751,42 @@ int main(int argc, char** argv) {
   CHECK(d->priv_o == 1 && d->virt_o == 0);
   CHECK(rd(0x142) == (0x8000000000000000ULL | 6));   // HS scause VSTI
   wr(0x645, 0);
+
+  // Vector stage 8a: VS state, vset computation, vill.
+  CHECK(d->vec_vs_o == 0);
+  d->addr_i = 0xC21; d->eval();
+  CHECK(d->illegal_o);                               // vtype while VS=Off
+  wr(0x100, (1ull << 9));                            // sstatus.VS=Initial
+  CHECK(d->vec_vs_o == 1);
+  CHECK(rd(0xC22) == 64);                            // vlenb
+  d->vset_vtype_i = 0xDB;                            // e64, m8, ta, ma
+  d->vset_avl_i = 100;
+  d->eval();
+  CHECK(d->vset_vl_o == 64);                         // VLMAX cap
+  d->vset_en_i = 1;
+  tick();
+  d->vset_en_i = 0;
+  d->eval();
+  CHECK(d->vl_o == 64 && rd(0xC21) == 0xDB);
+  CHECK(d->vec_vs_o == 3);                           // dirty after vset
+  d->vset_vtype_i = (4ull << 3);                     // SEW=128 > ELEN
+  d->eval();
+  CHECK(d->vset_vl_o == 0);
+  d->vset_en_i = 1;
+  tick();
+  d->vset_en_i = 0;
+  d->eval();
+  CHECK(d->vl_o == 0 && (rd(0xC21) >> 63) == 1);     // vill
+  d->vset_vtype_i = (2ull << 3) | 1;                 // e32, m2
+  d->vset_vlmax_i = 1;
+  d->eval();
+  CHECK(d->vset_vl_o == 32);
+  d->vset_en_i = 1;
+  tick();
+  d->vset_en_i = 0;
+  d->vset_vlmax_i = 0;
+  d->eval();
+  CHECK(d->vl_o == 32 && rd(0xC20) == 32);
 
   d->final();
   if (cov_path != nullptr) context.coveragep()->write(cov_path);
