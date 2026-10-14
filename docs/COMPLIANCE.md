@@ -2,7 +2,7 @@
 
 "Compliant" here means: passes the named public test suite with a
 stored report. Anything else is marked **not yet claimed**.
-Last updated: 2026-10-13 (B2 complete; pre-GDS ISA sweep on branch `isa-verify-sweep`: F/D/A directed + ACT, B/C/Zicond/Zkn ACT, TestFloat, and privileged ACT archived; B3 deferred).
+Last updated: 2026-10-14 (in-house core stages 1–7: RV64 IMABC FD SU + Sv39/PMP, B/Zicond/scalar crypto, Linux boot, and H hypervisor with a KVM smoke; earlier rows are the historical CVA6 characterization).
 
 | Block | Suite | Status |
 |---|---|---|
@@ -24,6 +24,8 @@ Last updated: 2026-10-13 (B2 complete; pre-GDS ISA sweep on branch `isa-verify-s
 | RVV 1.0 | ACT4 vector suite (fixed VLEN) | Phase 3, not yet claimed |
 | Privileged/Sv39 (sweep, #7) | ACT privileged suites for this config (134: Sv/Svbare/Svade/Svnapot/SvSm/SvPMP, PMP S/U/Sm/F/Za, ExceptionsSv*) on model | 126/134 PASS solo — `docs/evidence/act-priv-cva6-2026-10-13.csv`; 8 waived (6 LR cause-class, 1 PMP G=1 readback, 1 PA0 data); Misalign/Svadu/Svinval/Svpbmt/Zicbo suites deselected (not implemented); Linux boot not yet claimed |
 | OpenROAD macro (B3, #3) | ORFS nangate45, `muse_crypto_top` @ 100 MHz | PASS — detail-route DRC 0, antenna 0, liberty max-cap/slew/fanout 0 (signoff script in repo), setup WS +4.52 ns / hold WS +0.039 ns @ 10 ns, TNS 0; 61,590 cells, 95,431 µm², 20.16 mW; GDS in GitHub release `b3-nangate45-2026-10-13`; see `docs/evidence/b3-openroad-nangate45-2026-10-13.log`. Local Docker (emulated amd64) run, not a foundry signoff |
+| In-house core scalar+priv (stages 1–6, #18/#21) | Own C++ Verilator TBs + directed asm (`make core-test`), riscv-tests, ACT, OpenSBI/Linux boot in `soc_tb` | PASS — riscv-tests 123/123, ACT 543/544 (1 PA0 waiver), Linux 6.6 to `/init` at 508,905,040 cycles; see stage-6 section of `docs/evidence/README.md` |
+| In-house core H hypervisor (stage 7, #22) | Own CSR/MMU/decoder TBs + `hyp_directed.S`; Linux KVM ioctl/entry/exit smoke in `soc_tb`. No ACT H suite exists in the pinned ACT tree | PASS (smoke scope) — KVM reports Sv39x4/VMID14, a 4-instruction VS guest exits via `KVM_EXIT_MMIO` with the expected data, `SOC TB PASS` at 502,972,620 cycles; ACT H **not yet claimed** (no suite to run); see stage-7 section of `docs/evidence/README.md` |
 
 Reproduce locally:
 

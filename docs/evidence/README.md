@@ -1060,3 +1060,56 @@ stages 4c/5:
   shell, block/network-device, SMP, H/KVM or V claim, and
   it does not integrate `muse_crypto_top` with the core
   (B4/#4 remains deferred).
+
+## In-house core stage 7 — H hypervisor and KVM smoke (2026-10-14, #22)
+
+- Stage 7a adds the virtualization mode bit, HS/VS CSR banks
+  with S↔VS substitution, two-level trap delegation
+  (M → HS → VS), virtual-instruction exceptions, and
+  `misa.H`. Stage 7b adds two-stage Sv39 + Sv39x4 address
+  translation in `muserisc_mmu.sv`, including G-stage
+  translation of VS page-table accesses, combined 4 KiB TLB
+  fills tagged by ASID/VMID, and guest-page faults
+  (causes 20/21/23) with `htval`/`mtval2`. Stage 7c adds
+  HLV/HSV/HLVX and HFENCE.VVMA/GVMA. Stage 7d completes VS
+  interrupt selection and `hvip` injection. GEILEN is 0.
+- First-party gates: CSR TB **196 checks**, MMU TB
+  **74 checks**, decoder TB **12,332 checks**, and
+  `hyp_directed.S` (M → HS → VS → VU entry, guest ecalls,
+  virtual instructions, two-stage store, guest-page fault
+  with `htval`, HLV/HSV/HLVX from HS, HFENCE remapping, an
+  HLV guest fault reporting `hstatus.GVA`, and an injected
+  VSSI handled and cleared in VS) — all inside
+  `make core-test`, with `make lint` green.
+- Upstream gates re-run on the Stage 7 core:
+  [`riscv-tests-core-stage7-2026-10-14.csv`](riscv-tests-core-stage7-2026-10-14.csv)
+  **123/123**, and
+  [`act-core-stage7-2026-10-14.csv`](act-core-stage7-2026-10-14.csv)
+  **543/544** (only the known `PMPSm_cfg_A_tor_zero-00`
+  PA0 platform waiver). The pinned ACT tree contains no
+  hypervisor suite (`tests/priv/` has no H tests), so there
+  is no ACT H result to report; the ACT config now declares
+  H for when a suite exists. `make test` still reports
+  `ALL PHASE-0 KATs PASS`.
+- KVM smoke:
+  [`core-stage7-kvm-smoke-2026-10-14.log`](core-stage7-kvm-smoke-2026-10-14.log).
+  With `riscv,isa = "rv64imafdcbh"` in the DT, Linux 6.6
+  reports `kvm [1]: hypervisor extension available`,
+  `using Sv39x4 G-stage page table format`, and `VMID 14
+  bits available`. The embedded `/init`
+  ([`sw/linux/kvm_smoke.c`](../../sw/linux/kvm_smoke.c),
+  built with `MUSERISC_INIT_SRC=sw/linux/kvm_smoke.c
+  MUSERISC_IMAGE_OUT=build/linux/Image-kvm
+  scripts/build_linux_kernel.sh`) opens `/dev/kvm`,
+  creates a VM and one vCPU with a 4 KiB RAM slot at GPA
+  `0x1000`, and runs a four-instruction VS-mode guest. The
+  guest's store of 42 to MMIO GPA `0x2000` exits with
+  `KVM_EXIT_MMIO` (`addr=0x2000 len=4 write=1 data=42`),
+  `/init` prints `MUSERISC_KVM_OK`, and the harness reports
+  `SOC TB PASS` at **502,972,620 cycles**.
+- Claim boundary: this is a one-vCPU KVM entry/exit smoke
+  with a four-instruction bare-metal guest on the Verilator
+  platform. It is not a guest-OS boot, not SMP, not an
+  AIA/IMSIC or external-interrupt-virtualization claim
+  (GEILEN=0, no PLIC guest context), and not a substitute
+  for a future ACT hypervisor suite.

@@ -22,8 +22,11 @@ at a time. The processor is now a clean-slate, in-house
 SystemVerilog core: a 5-stage in-order RV64 design with
 M/S/U privilege, Sv39 virtual memory, atomics, IEEE-754
 floating point, compressed instructions, bit manipulation,
-Zicond, and scalar cryptography. It boots OpenSBI and Linux
-6.6 in a Verilator platform model. The companion crypto RTL
+Zicond, scalar cryptography, and the H hypervisor extension
+(HS/VS/VU modes with two-stage Sv39x4 translation). It boots
+OpenSBI and Linux 6.6 in a Verilator platform model, and
+Linux KVM on the core creates a VM and runs a tiny guest to
+an MMIO exit. The companion crypto RTL
 covers SHA-256, SHA-512, Keccak-f1600, and elliptic-curve
 field arithmetic; the `muse_crypto` macro has a published
 OpenROAD-generated GDS, but it is not attached to the core yet
@@ -40,8 +43,8 @@ core: current CPU claims refer to the in-house core under
                          museRISC in-house core
   +----------------------------------------------------------------+
   |  5-stage in-order pipeline  IF -> ID -> EX -> MEM -> WB       |
-  |  RV64 IMABC + F/D + B/Zicond/scalar crypto                     |
-  |  M/S/U privilege, Sv39 MMU, PMP, traps and interrupts          |
+  |  RV64 IMABC + F/D + B/Zicond/scalar crypto + H                 |
+  |  M/HS/VS/VU/U, Sv39 + Sv39x4 MMU, PMP, traps and interrupts    |
   +-----------------------------+----------------------------------+
                                 | instruction/data SRAM-style ports
           +---------------------+----------------------+
@@ -71,17 +74,20 @@ Key implementation files are
 ## Current status
 
 - **On `main`:** Stages 1–5 (scalar core, privilege, Sv39,
-  A/F/D/B/C) and Stage 6 (OpenSBI/Linux boot) are merged.
+  A/F/D/B/C), Stage 6 (OpenSBI/Linux boot), and Stage 7
+  (H hypervisor) are merged.
 - **Linux:** OpenSBI v1.9 and Linux 6.6 boot on one hart to
   an embedded initramfs `/init`; the run reaches
   `MUSERISC_LINUX_BOOT_OK` and `SOC TB PASS` at 508,905,040
   cycles.
-- **Next CPU work:** H hypervisor
-  ([#22](https://github.com/bubblebabyboi/museRISC/issues/22))
-  is in progress on its issue branch, followed by V vector
+- **KVM smoke:** Linux KVM on the core reports the
+  hypervisor extension with Sv39x4, creates a VM/vCPU, and
+  a four-instruction VS-mode guest exits via `KVM_EXIT_MMIO`
+  with the expected data (`SOC TB PASS`, 502,972,620
+  cycles). This is an entry/exit smoke, not a guest-OS boot.
+- **Next CPU work:** V vector
   ([#23](https://github.com/bubblebabyboi/museRISC/issues/23)).
-  H is for hosting KVM/hypervisors; V is SIMD. Neither is
-  claimed on `main`.
+  V is SIMD and is not claimed yet.
 - **Crypto:** KATs pass and the standalone macro is
   place-and-route complete with GDS generated. Core attach
   (B4, [#4](https://github.com/bubblebabyboi/museRISC/issues/4))
@@ -105,8 +111,9 @@ RV64GCV, built in stages; unchecked items are not claims.
 - [x] **Privilege M/S/U** — CSRs, precise traps, delegation,
       interrupts, PMP
 - [x] **Sv39** — virtual memory, page faults, SFENCE.VMA
-- [ ] **H hypervisor** — VS/VU modes and two-stage Sv39x4;
-      in progress ([#22](https://github.com/bubblebabyboi/museRISC/issues/22))
+- [x] **H hypervisor** — HS/VS/VU modes, hypervisor CSRs,
+      HLV/HSV/HLVX, HFENCE, and two-stage Sv39x4 (GEILEN=0)
+      ([#22](https://github.com/bubblebabyboi/museRISC/issues/22))
 - [ ] **V vector** — RVV 1.0 SIMD unit
       ([#23](https://github.com/bubblebabyboi/museRISC/issues/23))
 
@@ -130,7 +137,10 @@ RV64GCV, built in stages; unchecked items are not claims.
 - [x] Verilator lint — `make lint`
 - [x] Standalone `muse_crypto` OpenROAD closure and GDS
       (GDS generated / place-and-route complete; not taped out)
-- [ ] H/KVM guest smoke ([#22](https://github.com/bubblebabyboi/museRISC/issues/22))
+- [x] H/KVM guest smoke — VM/vCPU creation and a tiny
+      guest's MMIO exit under Linux KVM
+      ([#22](https://github.com/bubblebabyboi/museRISC/issues/22));
+      no ACT H suite exists in the pinned ACT tree yet
 - [ ] ACT vector suite ([#23](https://github.com/bubblebabyboi/museRISC/issues/23))
 - [ ] Core-attached crypto end-to-end test (B4,
       [#4](https://github.com/bubblebabyboi/museRISC/issues/4))
@@ -142,10 +152,11 @@ RV64GCV, built in stages; unchecked items are not claims.
 | Gate | Result | Evidence |
 |---|---:|---|
 | `make core-test` | PASS | `tb/cpp/`, `sw/core-tests/` |
-| `riscv-tests` | 123/123 | [`riscv-tests-core-2026-10-14.csv`](docs/evidence/riscv-tests-core-2026-10-14.csv) |
-| ACT | 543/544, 1 waiver | [`act-core-impriv-2026-10-14.csv`](docs/evidence/act-core-impriv-2026-10-14.csv) |
+| `riscv-tests` | 123/123 | [`riscv-tests-core-stage7-2026-10-14.csv`](docs/evidence/riscv-tests-core-stage7-2026-10-14.csv) |
+| ACT | 543/544, 1 waiver | [`act-core-stage7-2026-10-14.csv`](docs/evidence/act-core-stage7-2026-10-14.csv) |
 | OpenSBI | PASS | [`core-stage6a-opensbi-2026-10-14.log`](docs/evidence/core-stage6a-opensbi-2026-10-14.log) |
 | Linux 6.6 | PASS to `/init` | [`core-stage6-linux-boot-2026-10-14.log`](docs/evidence/core-stage6-linux-boot-2026-10-14.log) |
+| Linux KVM smoke | PASS (MMIO exit) | [`core-stage7-kvm-smoke-2026-10-14.log`](docs/evidence/core-stage7-kvm-smoke-2026-10-14.log) |
 | Crypto KATs | PASS | `make test` |
 
 The ACT waiver is a harness/platform-model mismatch at
@@ -190,7 +201,7 @@ merged to `main` only with its gates and evidence.
 
 | Epic | Ordered work | Status |
 |---|---|---|
-| [#18 Core + software](https://github.com/bubblebabyboi/museRISC/issues/18) | [#21 Linux](https://github.com/bubblebabyboi/museRISC/issues/21) → [#22 H hypervisor](https://github.com/bubblebabyboi/museRISC/issues/22) → [#23 V vector](https://github.com/bubblebabyboi/museRISC/issues/23) | Linux done; H next |
+| [#18 Core + software](https://github.com/bubblebabyboi/museRISC/issues/18) | [#21 Linux](https://github.com/bubblebabyboi/museRISC/issues/21) → [#22 H hypervisor](https://github.com/bubblebabyboi/museRISC/issues/22) → [#23 V vector](https://github.com/bubblebabyboi/museRISC/issues/23) | Linux + H done; V next |
 | [#24 Verification + CI](https://github.com/bubblebabyboi/museRISC/issues/24) | [#20 ISA follow-ups](https://github.com/bubblebabyboi/museRISC/issues/20) · [#8 riscv-dv/CI](https://github.com/bubblebabyboi/museRISC/issues/8) · [#19 SV/cocotb](https://github.com/bubblebabyboi/museRISC/issues/19) | Supports #18 |
 | [#25 Crypto + security](https://github.com/bubblebabyboi/museRISC/issues/25) | [#6 streaming](https://github.com/bubblebabyboi/museRISC/issues/6) · [#5 scalar-mul](https://github.com/bubblebabyboi/museRISC/issues/5) · [#12 security review](https://github.com/bubblebabyboi/museRISC/issues/12) · [#10 benchmark](https://github.com/bubblebabyboi/museRISC/issues/10) | Security review gates key use |
 | [#26 SoC + physical](https://github.com/bubblebabyboi/museRISC/issues/26) | [#4 B4 SoC attach](https://github.com/bubblebabyboi/museRISC/issues/4) → [#11 OpenROAD](https://github.com/bubblebabyboi/museRISC/issues/11) → [#13 MPW](https://github.com/bubblebabyboi/museRISC/issues/13) | Deferred |
@@ -220,7 +231,9 @@ third_party/  Pinned external sources (fetched, not the product core)
 
 - “Linux boots” means the recorded single-hart Verilator run
   reaches the embedded initramfs `/init`. It is not a distro,
-  SMP, block/network, KVM, or hardware claim.
+  SMP, block/network, or hardware claim. The separate KVM
+  result is a one-vCPU entry/exit smoke with a
+  four-instruction guest, not a guest-OS boot.
 - “GDS generated / place-and-route complete” describes the
   standalone crypto macro flow. It does not mean taped out,
   fabricated, or silicon-verified.

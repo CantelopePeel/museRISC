@@ -24,7 +24,7 @@ description: museRISC in-house RV64IM core (5-stage, Sv39) in the C++ Verilator 
 implemented_extensions:
   # misa is a read mux constant (writes WARL-ignored):
   # rtl/core/muserisc_csr.sv "12'h301: csr_rdata =
-  # 64'h8000_0000_0014_112B"  (MXL=2, I, M, A, B, F, D, S, U).
+  # 64'h8000_0000_0014_11AF"  (MXL=2, I, M, A, F, D, C, B, H, S, U).
   - { name: I, version: "= 2.1" }
   - { name: M, version: "= 2.0" }
   # A via MEM-stage RMW on the combinational memory port
@@ -61,6 +61,13 @@ implemented_extensions:
   - { name: Zknh, version: "= 1.0.1" }
   - { name: Zicsr, version: "= 2.0" }
   - { name: Zifencei, version: "= 2.0.0" }
+  # H via muserisc_csr.sv (HS/VS CSR banks, two-level traps),
+  # muserisc_mmu.sv (Sv39 + Sv39x4 two-stage translation), and
+  # HLV/HSV/HLVX/HFENCE in the decoder/core. GEILEN=0. The
+  # pinned ACT tree ships no H suite yet, so H evidence comes
+  # from the first-party CSR/MMU TBs, hyp_directed.S, and the
+  # Linux KVM smoke (issue #22).
+  - { name: H, version: "= 1.0.0" }
 
   # cycle/time/instret all readable; time mirrors cycle
   # (muserisc_csr.sv read cases 0xC00/0xC01/0xC02), gated by
