@@ -182,6 +182,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] idex_pc_q;
   muserisc_pkg::ctrl_t idex_ctrl_q;
   logic [63:0] idex_imm_q;
+  logic [31:0] idex_instr_q;  // for illegal-instruction tval in EX
   logic [63:0] idex_rs1_q, idex_rs2_q;
   logic [4:0]  idex_rs1_addr_q, idex_rs2_addr_q, idex_rd_q;
   logic        idex_exc_q;
@@ -345,7 +346,16 @@ module muserisc_core import muserisc_pkg::*; (
     endcase
   end
 
+  // A taken control transfer to a 2-byte-aligned target raises
+  // instruction-address-misaligned on the jump/branch itself
+  // (epc = this instruction, tval = target) and does not redirect.
+  logic jump_misalign;
+  assign jump_misalign = idex_valid_q && !idex_exc_q && !ex_illegal &&
+      (idex_ctrl_q.jal || idex_ctrl_q.jalr ||
+       (idex_ctrl_q.branch && branch_taken)) && redirect_pc[1];
+
   assign flush = idex_valid_q && !idex_exc_q && !ex_illegal &&
+                 !jump_misalign &&
                  (idex_ctrl_q.jal || idex_ctrl_q.jalr ||
                   (idex_ctrl_q.branch && branch_taken) || ex_serialize);
   always_comb begin
@@ -375,7 +385,11 @@ module muserisc_core import muserisc_pkg::*; (
     end else if (ex_illegal) begin
       ex_exc = idex_valid_q;
       ex_cause = CAUSE_ILLEGAL_INSTR;
-      ex_tval = 64'd0;
+      ex_tval = {32'd0, idex_instr_q};
+    end else if (jump_misalign) begin
+      ex_exc = 1'b1;
+      ex_cause = 64'd0;  // instruction address misaligned
+      ex_tval = redirect_pc;
     end else if (ex_misalign) begin
       ex_exc = idex_valid_q;
       ex_cause = idex_ctrl_q.mem_write ? CAUSE_STORE_MISALIGN
@@ -583,6 +597,7 @@ module muserisc_core import muserisc_pkg::*; (
       idex_pc_q <= 64'd0;
       idex_ctrl_q <= '0;
       idex_imm_q <= 64'd0;
+      idex_instr_q <= 32'd0;
       idex_rs1_q <= 64'd0;
       idex_rs2_q <= 64'd0;
       idex_rs1_addr_q <= 5'd0;
@@ -649,6 +664,7 @@ module muserisc_core import muserisc_pkg::*; (
         idex_pc_q <= ifid_pc_q;
         idex_ctrl_q <= '0;
         idex_imm_q <= 64'd0;
+      idex_instr_q <= 32'd0;
         idex_rs1_q <= 64'd0;
         idex_rs2_q <= 64'd0;
         idex_rs1_addr_q <= 5'd0;
@@ -662,6 +678,7 @@ module muserisc_core import muserisc_pkg::*; (
         idex_pc_q <= ifid_pc_q;
         idex_ctrl_q <= ifid_exc_q ? '0 : id_ctrl;
         idex_imm_q <= id_imm;
+        idex_instr_q <= ifid_instr_q;
         idex_rs1_q <= id_rs1_val;
         idex_rs2_q <= id_rs2_val;
         idex_rs1_addr_q <= id_rs1;

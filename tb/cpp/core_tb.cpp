@@ -59,9 +59,10 @@ bool IsElf(const std::vector<uint8_t>& f) {
 // Loads PT_LOAD segments; returns entry PC and the `tohost`
 // address (0 if the symbol is absent).
 bool LoadElf(const std::vector<uint8_t>& f, PagedMem* mem, uint64_t* entry,
-             uint64_t* tohost) {
+             uint64_t* tohost, uint64_t* sig_begin, uint64_t* sig_end) {
   *entry = Rd64f(f, 24);
   *tohost = 0;
+  *sig_begin = *sig_end = 0;
   const uint64_t phoff = Rd64f(f, 32);
   const int phnum = Rd16(f, 56);
   const size_t phsize = Rd16(f, 54);
@@ -86,6 +87,12 @@ bool LoadElf(const std::vector<uint8_t>& f, PagedMem* mem, uint64_t* entry,
       const char* name =
           reinterpret_cast<const char*>(f.data() + stroff + Rd32(f, o));
       if (std::strcmp(name, "tohost") == 0) *tohost = Rd64f(f, o + 8);
+      if (std::strcmp(name, "begin_signature") == 0) {
+        *sig_begin = Rd64f(f, o + 8);
+      }
+      if (std::strcmp(name, "end_signature") == 0) {
+        *sig_end = Rd64f(f, o + 8);
+      }
     }
   }
   return *tohost != 0;
@@ -131,10 +138,10 @@ int main(int argc, char** argv) {
     return 2;
   }
   PagedMem mem;
-  uint64_t boot_pc = 0, tohost_addr = 0;
+  uint64_t boot_pc = 0, tohost_addr = 0, sig_begin = 0, sig_end = 0;
   const bool elf_mode = IsElf(prog);
   if (elf_mode) {
-    if (!LoadElf(prog, &mem, &boot_pc, &tohost_addr)) {
+    if (!LoadElf(prog, &mem, &boot_pc, &tohost_addr, &sig_begin, &sig_end)) {
       std::fprintf(stderr, "ELF %s has no tohost symbol\n", prog_path);
       return 2;
     }
@@ -148,6 +155,25 @@ int main(int argc, char** argv) {
   const char* cov_path = std::getenv("COV_FILE");
 
   auto finish = [&](int rc) {
+    // Debug aid for ACT triage: dump the signature area so it
+    // can be diffed against the Sail-generated .sig file.
+    if (std::getenv("CORE_TB_SIGDUMP") != nullptr && sig_end > sig_begin) {
+      for (uint64_t a = sig_begin; a < sig_end; a += 8) {
+        std::printf("SIG %016llx\n",
+                    static_cast<unsigned long long>(mem.R64(a)));
+      }
+    }
+    // ... or an arbitrary range: CORE_TB_DUMP=0xADDR:0xLEN
+    if (const char* dump = std::getenv("CORE_TB_DUMP")) {
+      char* sep = nullptr;
+      const uint64_t base = std::strtoull(dump, &sep, 0);
+      const uint64_t len = (sep && *sep == ':')
+                               ? std::strtoull(sep + 1, nullptr, 0) : 0;
+      for (uint64_t a = base; a < base + len; a += 8) {
+        std::printf("SIG %016llx\n",
+                    static_cast<unsigned long long>(mem.R64(a)));
+      }
+    }
     dut->final();
     if (cov_path != nullptr) context.coveragep()->write(cov_path);
     return rc;

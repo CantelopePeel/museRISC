@@ -343,13 +343,16 @@ m_main:
     // U page with SUM=0 faults to M (13), handler skips the load.
     li a1, VA_D
     ld a3, 0(a1)
+    // MPRV off before the check load: the handler's mret set
+    // MPP=U and MPRV survives trap entry, so a load here would
+    // otherwise translate as U and fault on the S page.
+    li a1, (1 << 17)
+    csrc mstatus, a1
     la a1, saved_cause
     ld a3, 0(a1)
     li a2, 13
     bne a3, a2, fail
-    // MPRV off: the store above must be visible at the PA.
-    li a1, (1 << 17)
-    csrc mstatus, a1
+    // The earlier translated store must be visible at the PA.
     li a1, 0x185000
     ld a3, 0(a1)
     li a2, 0xC003

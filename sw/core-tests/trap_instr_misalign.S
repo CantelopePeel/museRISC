@@ -1,6 +1,7 @@
 // Expect an instruction-address-misaligned trap (cause 0):
-// IALIGN is 32, so jumping to a 2-byte-aligned target faults
-// at fetch. Run with --expect-trap 0.
+// IALIGN is 32, so jumping to a 2-byte-aligned target raises
+// the exception on the jalr itself (epc = jalr, tval =
+// target). Run with --expect-trap 0.
     .option norvc
     .text
     .globl _start

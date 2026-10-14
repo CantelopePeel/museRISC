@@ -207,7 +207,10 @@ module muserisc_csr (
       end
     end
   end
+  // TVM: satp access from S-mode is illegal while TVM=1.
   assign illegal_o = !csr_exists || !csr_priv_ok || counter_blocked ||
+                     ((addr_i == 12'h180) && (priv_q == PRIV_S) &&
+                      mstatus_tvm_q) ||
                      (csr_write_attempt && (addr_i[11:10] == 2'b11));
   assign rdata_o = csr_rdata;
 
@@ -423,7 +426,8 @@ module muserisc_csr (
           mstatus_mie_q <= 1'b0;
           mstatus_mpp_q <= priv_q;
         end
-        mstatus_mprv_q <= 1'b0;
+        // MPRV is NOT cleared by trap entry (only by an xRET
+        // returning to a non-M mode, below).
       end else if (ret_en_i) begin
         // xRET (sys_op 1 = MRET, 2 = SRET)
         priv_q <= ret_priv;
@@ -493,10 +497,11 @@ module muserisc_csr (
           12'h3A0: begin
             for (int i = 0; i < 8; i++) begin
               if (!pmpcfg_q[i][7]) begin
-                // W without R is reserved: clear W and X (WARL,
-                // matching Sail's PMP_ClearPermissions).
+                // Bits 6:5 are reserved (read zero); W without R
+                // is reserved: clear W and X (WARL, matching
+                // Sail's PMP_ClearPermissions).
                 pmpcfg_q[i] <= wdata_i[i*8 +: 8] &
-                               ((wdata_i[i*8] == 1'b0) ? 8'hF9 : 8'hFF);
+                               ((wdata_i[i*8+1] && (wdata_i[i*8] == 1'b0)) ? 8'h99 : 8'h9F);
               end
             end
           end
@@ -504,7 +509,7 @@ module muserisc_csr (
             for (int i = 0; i < 8; i++) begin
               if (!pmpcfg_q[i+8][7]) begin
                 pmpcfg_q[i+8] <= wdata_i[i*8 +: 8] &
-                                 ((wdata_i[i*8] == 1'b0) ? 8'hF9 : 8'hFF);
+                                 ((wdata_i[i*8+1] && (wdata_i[i*8] == 1'b0)) ? 8'h99 : 8'h9F);
               end
             end
           end

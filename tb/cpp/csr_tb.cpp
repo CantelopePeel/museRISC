@@ -202,7 +202,7 @@ int main(int argc, char** argv) {
 
   // Trap entry to M: epc/cause/tval/status shuffle.
   wr(0x305, 0x2000);  // mtvec direct
-  wr(0x300, (1ull << 3));
+  wr(0x300, (1ull << 3) | (1ull << 17));  // MIE + MPRV
   d->trap_take_i = 1;
   d->trap_cause_i = 4;
   d->trap_pc_i = 0x800;
@@ -218,6 +218,7 @@ int main(int argc, char** argv) {
   CHECK(((rd(0x300) >> 7) & 1) == 1);   // MPIE = old MIE
   CHECK(((rd(0x300) >> 3) & 1) == 0);   // MIE cleared
   CHECK(((rd(0x300) >> 11) & 3) == 3);  // MPP = M
+  CHECK(((rd(0x300) >> 17) & 1) == 1);  // MPRV survives trap entry
 
   // Vectored target: base + 4*code for interrupts only.
   wr(0x305, 0x2001);
@@ -356,6 +357,12 @@ int main(int argc, char** argv) {
   CHECK(!pmp_a(0x80fff, 2, 1));       // X denied (region edge)
   CHECK(pmp_a(0x81000, 1, 1));        // outside -> catch-all
   CHECK(pmp_a(0x80000, 1, 3));        // M bypasses unlocked entry
+  // pmpcfg readback rules: reserved bits [6:5] read zero, an
+  // X-only (R0 W0 X1) encoding is kept, and R0W1 clears W+X.
+  wr(0x3A0, (rd(0x3A0) & ~(0xffull << 48)) | (0x64ull << 48));
+  CHECK(((rd(0x3A0) >> 48) & 0xffull) == 0x04ull);
+  wr(0x3A0, (rd(0x3A0) & ~(0xffull << 48)) | (0x06ull << 48));
+  CHECK(((rd(0x3A0) >> 48) & 0xffull) == 0x00ull);
   // Lock entry 0: M is now checked too; cfg writes are ignored.
   wr(0x3A0, (1 << 7) | (3 << 3) | 1);
   CHECK(!pmp_a(0x80000, 1, 3));
