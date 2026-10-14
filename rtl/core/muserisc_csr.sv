@@ -151,7 +151,7 @@ module muserisc_csr (
       12'h144: csr_rdata = mip_val & mideleg_q;                   // sip
       12'h180: csr_rdata = satp_q;                                // satp
       12'h300: csr_rdata = mstatus_o;                             // mstatus
-      12'h301: csr_rdata = 64'h8000_0000_0011_1101;               // misa: RV64 IM SU
+      12'h301: csr_rdata = 64'h8000_0000_0014_1100;               // misa: RV64 IM SU
       12'h302: csr_rdata = medeleg_q;                             // medeleg
       12'h303: csr_rdata = mideleg_q;                             // mideleg
       12'h304: csr_rdata = mie_q;                                 // mie
@@ -493,9 +493,10 @@ module muserisc_csr (
           12'h3A0: begin
             for (int i = 0; i < 8; i++) begin
               if (!pmpcfg_q[i][7]) begin
-                // W without R is reserved: clear W (WARL).
+                // W without R is reserved: clear W and X (WARL,
+                // matching Sail's PMP_ClearPermissions).
                 pmpcfg_q[i] <= wdata_i[i*8 +: 8] &
-                               ((wdata_i[i*8] == 1'b0) ? 8'hFD : 8'hFF);
+                               ((wdata_i[i*8] == 1'b0) ? 8'hF9 : 8'hFF);
               end
             end
           end
@@ -503,7 +504,7 @@ module muserisc_csr (
             for (int i = 0; i < 8; i++) begin
               if (!pmpcfg_q[i+8][7]) begin
                 pmpcfg_q[i+8] <= wdata_i[i*8 +: 8] &
-                                 ((wdata_i[i*8] == 1'b0) ? 8'hFD : 8'hFF);
+                                 ((wdata_i[i*8] == 1'b0) ? 8'hF9 : 8'hFF);
               end
             end
           end

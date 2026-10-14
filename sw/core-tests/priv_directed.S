@@ -73,7 +73,7 @@ _start:
     // 2: identity CSRs
     li t0, 2
     csrr a1, misa
-    li a2, 0x8000000000111101      // MXL=2, I M S U
+    li a2, 0x8000000000141100      // MXL=2, I M S U
     bne a1, a2, fail
     csrr a1, mhartid
     bne a1, x0, fail

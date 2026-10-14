@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
 
   // Reset state: M-mode, everything zero, misa constant.
   CHECK(d->priv_o == 3);
-  CHECK(rd(0x301) == 0x8000000000111101ULL);  // misa RV64 IM SU
+  CHECK(rd(0x301) == 0x8000000000141100ULL);  // misa RV64 IM SU
   CHECK(rd(0x300) == ((2ull << 34) | (2ull << 32)));  // mstatus: SXL/UXL only
   CHECK(rd(0xF14) == 0);                     // mhartid
   CHECK(illegal(0x7c0, false));              // nonexistent CSR
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
   CHECK(!illegal(0xF11, false));
   CHECK(!illegal(0x301, true));              // misa writes are WARL-ignored
   wr(0x301, 0);
-  CHECK(rd(0x301) == 0x8000000000111101ULL);
+  CHECK(rd(0x301) == 0x8000000000141100ULL);
   CHECK(!illegal(0x340, true));              // mscratch rw
 
   // Plain storage CSRs round-trip.
