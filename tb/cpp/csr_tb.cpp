@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
   wr(0x10A, 0xa5a5a5a5a5a5a5a5ULL);
   CHECK(rd(0x10A) == 0xa5a5a5a5a5a5a5a5ULL);
   wr(0x306, 0xffffffffULL);
-  CHECK(rd(0x306) == 0xffffffffULL);
+  CHECK(rd(0x306) == 0x7ULL);  // only CY|TM|IR exist
   wr(0x106, 0x7ULL);
   CHECK(rd(0x106) == 0x7ULL);
 
@@ -439,6 +439,55 @@ int main(int argc, char** argv) {
   wr(0x344, 0);
   wr(0x304, 0);
   wr(0x300, 0);
+
+  // Counter access gating: mcounteren gates S/U, scounteren U.
+  wr(0x306, 0);
+  wr(0x106, 0);
+  wr(0x341, 0x800);
+  wr(0x300, (1ull << 11) | (1ull << 7));
+  d->sys_op_i = 1;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1);
+  CHECK(illegal(0xC00, false));        // mcounteren.CY = 0
+  d->trap_take_i = 1;
+  d->trap_cause_i = 2;
+  d->trap_pc_i = 0x800;
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 3);
+  wr(0x306, 1);                        // CY only
+  wr(0x341, 0x800);
+  wr(0x300, (1ull << 11) | (1ull << 7));
+  d->sys_op_i = 1;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(!illegal(0xC00, false));
+  CHECK(illegal(0xC02, false));        // IR not enabled
+  wr(0x100, 0);                        // SPP=U for the sret
+  wr(0x141, 0x900);
+  d->sys_op_i = 2;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 0);
+  CHECK(illegal(0xC00, false));        // scounteren.CY = 0
+  d->trap_take_i = 1;
+  d->trap_cause_i = 2;
+  d->trap_pc_i = 0x900;
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 3);
 
   d->final();
   if (cov_path != nullptr) context.coveragep()->write(cov_path);

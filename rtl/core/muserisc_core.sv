@@ -101,11 +101,14 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] fetch_cause;
 
   assign imem_addr_o = mmu_if_pa;
-  // Translation faults outrank the PMP check on the PA.
-  assign fetch_fault = mmu_if_fault || (mmu_if_ok && !pmp_allow_fetch);
-  assign fetch_cause = mmu_if_fault
-      ? (mmu_if_fault_page ? 64'd12 : 64'd1) : 64'd1;
-  assign fetch_stall = !mmu_if_ok && !mmu_if_fault;
+  // IALIGN=32: a fetch target with pc[1] set raises the
+  // instruction-address-misaligned exception (highest priority),
+  // then translation faults, then the PMP check on the PA.
+  assign fetch_fault = pc_q[1] || mmu_if_fault ||
+                       (mmu_if_ok && !pmp_allow_fetch);
+  assign fetch_cause = pc_q[1] ? 64'd0
+      : mmu_if_fault ? (mmu_if_fault_page ? 64'd12 : 64'd1) : 64'd1;
+  assign fetch_stall = !pc_q[1] && !mmu_if_ok && !mmu_if_fault;
 
   // IF/ID register
   logic        ifid_valid_q;

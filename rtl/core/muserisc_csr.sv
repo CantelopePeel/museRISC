@@ -195,7 +195,19 @@ module muserisc_csr (
   // The core only asserts wr_en_i for actual writes; read-only
   // CSRs (addr[11:10]==2'b11) fault on any write attempt.
   assign csr_write_attempt = wr_en_i;
-  assign illegal_o = !csr_exists || !csr_priv_ok ||
+  // Counter access control: mcounteren gates S and U reads of
+  // the unprivileged counters (0xC00-0xC1F), scounteren gates U.
+  logic counter_blocked;
+  always_comb begin
+    counter_blocked = 1'b0;
+    if ((addr_i[11:5] == 7'h60) && (priv_q != PRIV_M)) begin
+      if (!mcounteren_q[{1'b0, addr_i[4:0]}]) counter_blocked = 1'b1;
+      if ((priv_q == PRIV_U) && !scounteren_q[{1'b0, addr_i[4:0]}]) begin
+        counter_blocked = 1'b1;
+      end
+    end
+  end
+  assign illegal_o = !csr_exists || !csr_priv_ok || counter_blocked ||
                      (csr_write_attempt && (addr_i[11:10] == 2'b11));
   assign rdata_o = csr_rdata;
 
@@ -436,7 +448,7 @@ module muserisc_csr (
           end
           12'h104: mie_q <= (mie_q & ~mideleg_q) | (wdata_i & mideleg_q);
           12'h105: stvec_q <= {wdata_i[63:2], (wdata_i[1:0] < 2'd2) ? wdata_i[1:0] : 2'd0};
-          12'h106: scounteren_q <= wdata_i;
+          12'h106: scounteren_q <= wdata_i & 64'h7;  // CY|TM|IR exist
           12'h10A: senvcfg_q <= wdata_i;
           12'h140: sscratch_q <= wdata_i;
           12'h141: sepc_q <= {wdata_i[63:2], 2'b00};
@@ -466,9 +478,9 @@ module muserisc_csr (
           12'h303: mideleg_q <= wdata_i & 64'h222;
           12'h304: mie_q <= wdata_i & 64'hAAA;
           12'h305: mtvec_q <= {wdata_i[63:2], (wdata_i[1:0] < 2'd2) ? wdata_i[1:0] : 2'd0};
-          12'h306: mcounteren_q <= wdata_i;
+          12'h306: mcounteren_q <= wdata_i & 64'h7;  // CY|TM|IR exist
           12'h30A: menvcfg_q <= wdata_i;
-          12'h320: mcountinhibit_q <= wdata_i;
+          12'h320: mcountinhibit_q <= wdata_i & 64'h5;  // CY|IR exist
           12'h340: mscratch_q <= wdata_i;
           12'h341: mepc_q <= {wdata_i[63:2], 2'b00};
           12'h342: mcause_q <= wdata_i;
