@@ -776,3 +776,49 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   vintage has no `ma_data`/misaligned or virtual-memory
   (`-v-`) variants in the `rv64ui` directory; the `-p-`
   set above is complete for that tree.
+
+## In-house core stage 3d — ACT I/M + privileged suites (2026-10-13, #18)
+
+- Artifact: [`act-core-impriv-2026-10-13.csv`](act-core-impriv-2026-10-13.csv);
+  DUT config in [`sw/act4-core/`](../../sw/act4-core/)
+  (README there records the generation commands and the
+  sail.json derivation), built by
+  [`scripts/build_act4_core.sh`](../../scripts/build_act4_core.sh)
+  and run by [`sim/run_act_core.sh`](../../sim/run_act_core.sh).
+- Result: **ACT I + M 64/64 PASS**, and the privileged
+  suites for the declared scope (ExceptionsSv/SvSm, PMP
+  S/Sm/U/F, Sv, SvPMP, SvSm, Svbare/Sm, SvaduPMP) bring
+  the total to **180/181 PASS**. Self-checking ELFs are
+  judged by their HTIF halt on the same C++ harness as
+  the directed tests.
+- Sole waiver: `PMPSm_cfg_A_tor_zero-00`, the same
+  platform divergence waived for the CVA6 host above —
+  its probes store/load/execute at PA 0, which Sail's
+  memory map access-faults (no region) while this
+  harness has RAM there, so the expected traps never
+  occur. Fixing it for real needs a bus-fault input on
+  the core (SoC-stage work), not a core change.
+- ACT earned its keep: triage of the first run (37 priv
+  failures) found and fixed five real RTL bugs —
+  `misa` had the wrong letter bits (A/Q instead of S),
+  pmpcfg reserved bits [6:5] read back instead of
+  reading zero, the R0W1→R0W0X0 WARL clearing also ate
+  legal X-only entries, `mstatus.TVM` did not trap
+  `satp` access from S, `MPRV` was incorrectly cleared
+  on trap entry, and instruction-address-misaligned was
+  attributed to the jump target's fetch instead of the
+  jump instruction (plus counter-enable CSR masks and
+  counter access gating added during config). The
+  directed CSR TB and `vm_directed.S` were wrong in two
+  places for the same old behaviors and were corrected
+  (one vm-test fix is itself a lesson: after `mret`,
+  MPP=U with MPRV retained makes M-mode loads translate
+  as U).
+- Coverage: every annotated `rtl/core/` source line executed
+  (1143/1143) after the fixes; `make core-test`,
+  `make riscv-tests` (64/64), `make test`, and
+  `make lint` also pass at this commit.
+- Still not a compliance claim: ACT coverage is bounded
+  by the declared configuration (RV64IM + priv/Sv39
+  scope) and this run is simulation only. A Linux boot
+  attempt is the remaining stage-3d item.
