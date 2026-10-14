@@ -486,32 +486,149 @@ module muserisc_core import muserisc_pkg::*; (
   logic [511:0]  vec_v0;
   logic [63:0]   vec_scalar;
   logic          vec_we, vec_illegal, vec_align_bad, vls_vrf_we;
-  logic [2:0]    vec_lmul_eff;
-  logic [63:0]   vset_avl, vset_vtype_raw;
-  logic          vset_en;
-  // Effective LMUL for alignment/write width: fractional
-  // LMUL writes one register; LMUL 1/2/4/8 map to codes 0..3.
-  assign vec_lmul_eff = (csr_vtype[2:0] <= 3'd3) ? csr_vtype[2:0] : 3'd0;
-  // vmv.s.x / vmv.x.s touch one register (element 0), so
-  // group-alignment rules do not apply to them. The vs1
-  // field is a vector register only in VV form (it holds a
-  // scalar register or immediate otherwise).
+  logic [2:0]    vec_wlmul;
+  logic [63:0]   vset_avl, vset_vtype_raw, vec_vlmax;
+  logic [1:0]    csr_vxrm;
+  logic          vset_en, vec_sat;
+  // VLMAX for the execution unit (same formula as the CSR
+  // vset logic): group bits / SEW.
+  always_comb begin
+    logic [63:0] group_bits;
+    unique case (csr_vtype[2:0])
+      3'd1: group_bits = 64'd1024;
+      3'd2: group_bits = 64'd2048;
+      3'd3: group_bits = 64'd4096;
+      3'd5: group_bits = 64'd64;
+      3'd6: group_bits = 64'd128;
+      3'd7: group_bits = 64'd256;
+      default: group_bits = 64'd512;
+    endcase
+    vec_vlmax = group_bits >> (csr_vtype[5:3] + 3'd3);
+  end
+  // Per-class group geometry for legality and write width.
+  // vmv.s.x / vmv.x.s / vcpop / vfirst touch one register or
+  // a scalar, so group rules do not apply; vmv<nr>r.v copies
+  // whole registers independent of vtype (legal even with
+  // vill set) and is handled by its own alignment rule.
+  logic ex_is_wide, ex_is_narrow, ex_is_mask_dest;
+  logic signed [3:0] ex_lmul_log2, ex_vd_log2, ex_vs2_log2, ex_vs1_log2;
+  assign ex_is_wide = (idex_ctrl_q.bext_op >= VOP_WADD) &&
+                      (idex_ctrl_q.bext_op <= VOP_WMACCUS);
+  assign ex_is_narrow = (idex_ctrl_q.bext_op >= VOP_NSRL) &&
+                        (idex_ctrl_q.bext_op <= VOP_NCLIPU);
+  assign ex_is_mask_dest = (idex_ctrl_q.bext_op == VOP_MADC) ||
+      (idex_ctrl_q.bext_op == VOP_MSBC) ||
+      ((idex_ctrl_q.bext_op >= VOP_CMPEQ) &&
+       (idex_ctrl_q.bext_op <= VOP_CMPGT)) ||
+      (idex_ctrl_q.bext_op == VOP_MLOG) ||
+      (idex_ctrl_q.bext_op == VOP_MSBIT);
+  always_comb begin
+    logic signed [3:0] mvr_log2;
+    unique case (csr_vtype[2:0])
+      3'd5: ex_lmul_log2 = -4'sd3;
+      3'd6: ex_lmul_log2 = -4'sd2;
+      3'd7: ex_lmul_log2 = -4'sd1;
+      default: ex_lmul_log2 = 4'(signed'({1'b0, csr_vtype[2:0]}));
+    endcase
+    mvr_log2 = (idex_instr_q[19:15] == 5'd1) ? 4'sd1 :
+               (idex_instr_q[19:15] == 5'd3) ? 4'sd2 :
+               (idex_instr_q[19:15] == 5'd7) ? 4'sd3 : 4'sd0;
+    if (idex_ctrl_q.bext_op == VOP_MVR) begin
+      ex_vd_log2 = mvr_log2;
+      ex_vs2_log2 = mvr_log2;
+    end else if (ex_is_wide) begin
+      ex_vd_log2 = ex_lmul_log2 + 4'sd1;
+      ex_vs2_log2 = ((idex_ctrl_q.bext_op == VOP_WADDW) ||
+                     (idex_ctrl_q.bext_op == VOP_WADDUW) ||
+                     (idex_ctrl_q.bext_op == VOP_WSUBW) ||
+                     (idex_ctrl_q.bext_op == VOP_WSUBUW))
+                    ? (ex_lmul_log2 + 4'sd1) : ex_lmul_log2;
+    end else if (ex_is_narrow) begin
+      ex_vd_log2 = ex_lmul_log2;
+      ex_vs2_log2 = ex_lmul_log2 + 4'sd1;
+    end else if (ex_is_mask_dest ||
+                 (idex_ctrl_q.bext_op == VOP_RED)) begin
+      ex_vd_log2 = -4'sd3;  // single register: no constraint
+      // Mask-register sources (logicals, vmsbf family) are
+      // single registers; data sources use the full group.
+      ex_vs2_log2 = ((idex_ctrl_q.bext_op == VOP_MLOG) ||
+                     (idex_ctrl_q.bext_op == VOP_MSBIT))
+                    ? -4'sd3 : ex_lmul_log2;
+    end else if (idex_ctrl_q.bext_op == VOP_EXT) begin
+      ex_vd_log2 = ex_lmul_log2;
+      // imm[2:1]: 01=/8, 10=/4, 11=/2
+      ex_vs2_log2 = ex_lmul_log2 -
+                    (4'sd4 - 4'(signed'({2'b00, idex_imm_q[2:1]})));
+    end else begin
+      ex_vd_log2 = ex_lmul_log2;
+      ex_vs2_log2 = ex_lmul_log2;
+    end
+    ex_vs1_log2 = (idex_ctrl_q.bext_op == VOP_GATHEREI16)
+        ? (ex_lmul_log2 + 4'sd1 -
+           4'(signed'({1'b0, csr_vtype[5:3]})))
+        : ex_lmul_log2;
+  end
+  function automatic logic align_bad(
+      input logic [4:0] regno, input logic signed [3:0] log2n);
+    logic [4:0] mask;
+    mask = (log2n == 4'sd1) ? 5'b00001 :
+           (log2n == 4'sd2) ? 5'b00011 :
+           (log2n >= 4'sd3) ? 5'b00111 : 5'b00000;
+    align_bad = |(regno & mask);
+  endfunction
   assign vec_align_bad =
       (idex_ctrl_q.bext_op != VOP_MVSX) &&
       (idex_ctrl_q.bext_op != VOP_MVXS) &&
+      (idex_ctrl_q.bext_op != VOP_CPOP) &&
+      (idex_ctrl_q.bext_op != VOP_FIRST) &&
       !(idex_ctrl_q.mem_read || idex_ctrl_q.mem_write) &&
-      (((vec_lmul_eff == 3'd1) &&
-       (idex_rd_q[0] || idex_instr_q[20] ||
-        ((idex_ctrl_q.fpu_aux == VFORM_VV) && idex_instr_q[15]))) ||
-      ((vec_lmul_eff == 3'd2) &&
-       (|idex_rd_q[1:0] || |idex_instr_q[21:20] ||
-        ((idex_ctrl_q.fpu_aux == VFORM_VV) && |idex_instr_q[16:15]))) ||
-      ((vec_lmul_eff == 3'd3) &&
-       (|idex_rd_q[2:0] || |idex_instr_q[22:20] ||
-        ((idex_ctrl_q.fpu_aux == VFORM_VV) && |idex_instr_q[17:15]))) ||
-      // Masked destination may not overlap the v0 mask register.
-      (idex_ctrl_q.vec_rd && !idex_instr_q[25] &&
-       (idex_rd_q < (5'd1 << vec_lmul_eff))));
+      (align_bad(idex_rd_q, ex_vd_log2) ||
+       // vs2/vs1 group fields (vs1 only in VV form; the vs2
+       // slot holds a stride/index group for LS, excluded)
+       align_bad(idex_instr_q[24:20], ex_vs2_log2) ||
+       ((idex_ctrl_q.fpu_aux == VFORM_VV) &&
+        (idex_ctrl_q.bext_op != VOP_RED) &&
+        (idex_ctrl_q.bext_op != VOP_EXT) &&
+        (idex_ctrl_q.bext_op != VOP_MSBIT) &&
+        (idex_ctrl_q.bext_op != VOP_MLOG) &&
+        (idex_ctrl_q.bext_op != VOP_COMPRESS) &&
+        (idex_ctrl_q.bext_op != VOP_IOTA) &&
+        (idex_ctrl_q.bext_op != VOP_ID) &&
+        (idex_ctrl_q.bext_op != VOP_MVR) &&
+        align_bad(idex_instr_q[19:15], ex_vs1_log2)) ||
+       // Masked destination may not overlap the v0 register.
+       (idex_ctrl_q.vec_rd && !idex_instr_q[25] &&
+        (idex_ctrl_q.bext_op != VOP_ADC) &&
+        (idex_ctrl_q.bext_op != VOP_SBC) &&
+        (idex_ctrl_q.bext_op != VOP_MERGE) &&
+        (idex_ctrl_q.bext_op != VOP_MADC) &&
+        (idex_ctrl_q.bext_op != VOP_MSBC) &&
+        (idex_rd_q < (5'd1 << ((ex_vd_log2 < 0) ? 3'd0
+                                                : ex_vd_log2[2:0])))));
+  // Widening needs SEW < ELEN and LMUL < 8; narrowing needs
+  // 2*LMUL <= 8; extends need SEW >= 8*ratio.
+  logic ex_vec_bad;
+  assign ex_vec_bad =
+      (ex_is_wide && ((csr_vtype[5:3] == 3'd3) ||
+                      (ex_lmul_log2 == 4'sd3))) ||
+      (ex_is_narrow && ((csr_vtype[5:3] == 3'd3) ||
+                        (ex_lmul_log2 == 4'sd3))) ||
+      ((idex_ctrl_q.bext_op == VOP_EXT) &&
+       (4'(signed'({1'b0, csr_vtype[5:3]})) <
+        (4'sd4 - 4'(signed'({2'b00, idex_imm_q[2:1]})))));
+  // VRF write group size for EX-executed vector ops.
+  always_comb begin
+    if (idex_ctrl_q.bext_op == VOP_MVR) begin
+      vec_wlmul = (idex_instr_q[19:15] == 5'd1) ? 3'd1 :
+                  (idex_instr_q[19:15] == 5'd3) ? 3'd2 :
+                  (idex_instr_q[19:15] == 5'd7) ? 3'd3 : 3'd0;
+    end else if (ex_is_mask_dest ||
+                 (idex_ctrl_q.bext_op == VOP_RED)) begin
+      vec_wlmul = 3'd0;
+    end else begin
+      vec_wlmul = (ex_vd_log2 < 0) ? 3'd0 : ex_vd_log2[2:0];
+    end
+  end
   // Unit-stride LS legality in EX: EMUL in [1/8, 8] and the
   // register group aligned to EMUL; masked loads may not
   // overwrite v0. EEW comes from funct3 like the MEM sequencer.
@@ -542,8 +659,11 @@ module muserisc_core import muserisc_pkg::*; (
                                                  : ex_emul_log2[2:0]))));
   assign vec_illegal = idex_ctrl_q.vec &&
       ((csr_vec_vs == 2'b00) ||
-       (!idex_ctrl_q.vset && csr_vtype[63]) ||
+       // vmv<nr>r.v is legal even with vill set.
+       (!idex_ctrl_q.vset && csr_vtype[63] &&
+        (idex_ctrl_q.bext_op != VOP_MVR)) ||
        (!idex_ctrl_q.vset && vec_align_bad) ||
+       (!idex_ctrl_q.vset && ex_vec_bad) ||
        ((idex_ctrl_q.mem_read || idex_ctrl_q.mem_write) && ex_vls_bad));
   assign vset_avl = (idex_ctrl_q.fpu_aux == 2'd1)
       ? {59'd0, idex_instr_q[19:15]} : ex_rs1;
@@ -569,7 +689,7 @@ module muserisc_core import muserisc_pkg::*; (
       .v0_o      (vec_v0),
       .we_i      (vec_we || memwb_vec_we_q),
       .waddr_i   (memwb_vec_we_q ? memwb_vec_rd_q : idex_rd_q),
-      .wlmul_i   (memwb_vec_we_q ? memwb_vec_lmul_q : vec_lmul_eff),
+      .wlmul_i   (memwb_vec_we_q ? memwb_vec_lmul_q : vec_wlmul),
       .wdata_i   (memwb_vec_we_q ? memwb_vec_data_q : vec_result)
   );
 
@@ -579,6 +699,9 @@ module muserisc_core import muserisc_pkg::*; (
       .sew_i     (csr_vtype[5:3]),
       .vl_i      (csr_vl),
       .vstart_i  (csr_vstart),
+      .vlmax_i   (vec_vlmax),
+      .vxrm_i    (csr_vxrm),
+      .sat_o     (vec_sat),
       .vta_i     (csr_vtype[6]),
       .vma_i     (csr_vtype[7]),
       .vm_i      (idex_instr_q[25]),
@@ -594,7 +717,7 @@ module muserisc_core import muserisc_pkg::*; (
 
   logic [63:0] bext_result;
   muserisc_bext u_bext (
-      .op_i      (idex_ctrl_q.bext_op),
+      .op_i      (idex_ctrl_q.bext_op[5:0]),
       .a_i       (ex_rs1),
       .b_i       (idex_ctrl_q.alu_src_imm ? idex_imm_q : ex_rs2),
       .result_o  (bext_result)
@@ -1135,6 +1258,10 @@ module muserisc_core import muserisc_pkg::*; (
       .vec_dirty_i   (vec_we || memwb_vec_we_q),
       .vstart_we_i   (vls_fault),
       .vstart_wdata_i(vls_cur),
+      .vxrm_o        (csr_vxrm),
+      .vxsat_set_i   (vec_sat && idex_valid_q && idex_ctrl_q.vec &&
+                      !idex_exc_q && !vec_illegal && !trap_fire &&
+                      !mem_exc && !mem_stall && !vec_wb_stall),
       .wdata_i       (csr_wdata),
       .sys_illegal_o (sys_illegal),
       .sys_op_i      (sys_op),

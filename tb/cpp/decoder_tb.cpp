@@ -343,10 +343,12 @@ Ctrl Golden(uint32_t insn) {
     case 0x0f:  // FENCE / FENCE.I
       c.valid = true;
       break;
-    case 0x57: {  // OP-V (stage 8a subset)
+    case 0x57: {  // OP-V (RVV 1.0 integer classes)
       c.imm = static_cast<uint64_t>(
           static_cast<int64_t>(static_cast<int32_t>(insn << 12) >> 27));
       const uint32_t f6 = insn >> 26;
+      const bool vm = (insn >> 25) & 1;
+      const uint32_t vs2f = (insn >> 20) & 31, vs1f = (insn >> 15) & 31;
       if (f3 == 7) {
         if ((insn >> 31) == 0) {
           c.valid = c.vec = c.vset = c.reg_write = true;
@@ -358,36 +360,135 @@ Ctrl Golden(uint32_t insn) {
           c.valid = c.vec = c.vset = c.reg_write = true;
           c.fpu_aux = 2;
         }
-      } else if (f3 == 0 || f3 == 4 || f3 == 3) {
-        const int form = f3 == 0 ? 0 : f3 == 4 ? 1 : 2;
-        int vop = -1;
+        break;
+      }
+      const bool opm = (f3 == 2 || f3 == 6);
+      const int form = (f3 == 0 || f3 == 2) ? 0 : (f3 == 4 || f3 == 6) ? 1 : 2;
+      int vop = -1;
+      bool ok = true;
+      if (!opm) {
         switch (f6) {
-          case 0x00: vop = 0; break;
-          case 0x02: vop = 1; break;
-          case 0x03: vop = 2; break;
-          case 0x09: vop = 3; break;
-          case 0x0a: vop = 4; break;
-          case 0x0b: vop = 5; break;
-          case 0x25: vop = 6; break;
-          case 0x28: vop = 7; break;
-          case 0x29: vop = 8; break;
-          case 0x17: vop = 9; break;
-          default: break;
+          case 0: vop = 0; break;
+          case 2: vop = 1; break;
+          case 3: vop = 2; ok = f3 != 0; break;
+          case 4: vop = 13; break;
+          case 5: vop = 12; break;
+          case 6: vop = 15; break;
+          case 7: vop = 14; break;
+          case 9: vop = 3; break;
+          case 10: vop = 4; break;
+          case 11: vop = 5; break;
+          case 12: vop = 78; break;
+          case 14: vop = f3 == 0 ? 79 : 74; break;
+          case 15: vop = 75; ok = f3 != 0; break;
+          case 16: vop = 28; ok = !vm; break;
+          case 17: vop = 29; break;
+          case 18: vop = 30; ok = !vm; break;
+          case 19: vop = 31; break;
+          case 23:
+            if (!vm) vop = 32;
+            else { vop = 9; ok = vs2f == 0; }
+            break;
+          case 24: vop = 33; break;
+          case 25: vop = 34; break;
+          case 26: vop = 35; break;
+          case 27: vop = 36; ok = f3 != 3; break;
+          case 28: vop = 37; break;
+          case 29: vop = 38; break;
+          case 30: vop = 39; ok = f3 != 0; break;
+          case 31: vop = 40; ok = f3 != 0; break;
+          case 32: vop = 45; break;
+          case 33: vop = 44; break;
+          case 34: vop = 47; ok = f3 != 3; break;
+          case 35: vop = 46; ok = f3 != 3; break;
+          case 37: vop = 6; break;
+          case 39:
+            if (f3 == 3) {
+              vop = 86;
+              ok = vs1f == 0 || vs1f == 1 || vs1f == 3 || vs1f == 7;
+            } else vop = 52;
+            break;
+          case 40: vop = 7; break;
+          case 41: vop = 8; break;
+          case 42: vop = 53; break;
+          case 43: vop = 54; break;
+          case 44: vop = 70; break;
+          case 45: vop = 71; break;
+          case 46: vop = 73; break;
+          case 47: vop = 72; break;
+          default: ok = false; break;
         }
-        if (vop >= 0 && !(vop == 2 && form == 0) &&
-            !(vop == 9 && ((insn >> 20) & 31) != 0)) {
-          c.valid = c.vec = c.vec_rd = true;
-          c.bext_op = vop;
-          c.fpu_aux = form;
+      } else {
+        switch (f6) {
+          case 0: case 1: case 2: case 3:
+          case 4: case 5: case 6: case 7:
+            vop = 42; ok = f3 == 2; c.imm = (insn >> 26) & 7; break;
+          case 8: vop = 49; break;
+          case 9: vop = 48; break;
+          case 10: vop = 51; break;
+          case 11: vop = 50; break;
+          case 14: vop = 76; ok = f3 == 6; break;
+          case 15: vop = 77; ok = f3 == 6; break;
+          case 16:
+            if (f3 == 6) { vop = 10; ok = vs2f == 0; }
+            else if (vs1f == 0) vop = 11;
+            else if (vs1f == 16) vop = 84;
+            else if (vs1f == 17) vop = 85;
+            else ok = false;
+            break;
+          case 18:
+            vop = 43;
+            ok = f3 == 2 && ((insn >> 18) & 3) == 0 && ((insn >> 15) & 7) >= 2;
+            c.imm = (insn >> 15) & 7;
+            break;
+          case 20:
+            ok = f3 == 2;
+            if (vs1f == 16) vop = 82;
+            else if (vs1f == 17 && vs2f == 0) vop = 83;
+            else if (vs1f >= 1 && vs1f <= 3) {
+              vop = 81; c.imm = (insn >> 15) & 3;
+            } else ok = false;
+            break;
+          case 23: vop = 80; ok = f3 == 2 && vm; break;
+          case 24: case 25: case 26: case 27:
+          case 28: case 29: case 30: case 31:
+            vop = 41; ok = f3 == 2 && vm; c.imm = (insn >> 26) & 7; break;
+          case 32: vop = 25; break;
+          case 33: vop = 24; break;
+          case 34: vop = 27; break;
+          case 35: vop = 26; break;
+          case 36: vop = 18; break;
+          case 37: vop = 16; break;
+          case 38: vop = 19; break;
+          case 39: vop = 17; break;
+          case 41: vop = 21; break;
+          case 43: vop = 23; break;
+          case 45: vop = 20; break;
+          case 47: vop = 22; break;
+          case 48: vop = 57; break;
+          case 49: vop = 55; break;
+          case 50: vop = 61; break;
+          case 51: vop = 59; break;
+          case 52: vop = 58; break;
+          case 53: vop = 56; break;
+          case 54: vop = 62; break;
+          case 55: vop = 60; break;
+          case 56: vop = 64; break;
+          case 58: vop = 65; break;
+          case 59: vop = 63; break;
+          case 60: vop = 67; break;
+          case 61: vop = 66; break;
+          case 62: vop = 69; ok = f3 == 6; break;
+          case 63: vop = 68; break;
+          default: ok = false; break;
         }
-      } else if (f3 == 6 && f6 == 0x10 && ((insn >> 20) & 31) == 0) {
-        c.valid = c.vec = c.vec_rd = true;
-        c.bext_op = 10;
-        c.fpu_aux = 1;
-      } else if (f3 == 2 && f6 == 0x10 && ((insn >> 15) & 31) == 0) {
-        c.valid = c.vec = c.reg_write = true;
-        c.bext_op = 11;
-        c.fpu_aux = 0;
+      }
+      if (ok && vop >= 0) {
+        c.valid = c.vec = true;
+        c.bext_op = vop;
+        c.fpu_aux = form;
+        if (vop == 11 || vop == 84 || vop == 85) c.reg_write = true;
+        else c.vec_rd = true;
       }
       break;
     }
@@ -468,7 +569,7 @@ int main(int argc, char** argv) {
               kFp = 38, kFpRs2 = 39, kFpRs1 = 40, kFpRd = 41,
               kFpRm = 42, kFpOp = 43, kFmtD = 44, kFpuAux = 45,
               kFpuOp = 47, kBext = 52, kBextOp = 53,
-              kVset = 59, kVecRd = 60, kVec = 61;
+              kVset = 60, kVecRd = 61, kVec = 62;
     const Field fields[] = {
         {"valid", bit(kValid), g.valid},
         {"reg_write", bit(kRegWrite), g.reg_write && g.valid},
@@ -522,9 +623,9 @@ int main(int argc, char** argv) {
                     g.word_op ? 1 : 0);
         return false;
       }
-      if (static_cast<int>((c >> kBextOp) & 0x3f) != g.bext_op) {
+      if (static_cast<int>((c >> kBextOp) & 0x7f) != g.bext_op) {
         std::printf("FAIL insn=0x%08x bext_op got=%d want=%d\n",
-                    insn, static_cast<int>((c >> kBextOp) & 0x3f),
+                    insn, static_cast<int>((c >> kBextOp) & 0x7f),
                     g.bext_op);
         return false;
       }

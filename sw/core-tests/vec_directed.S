@@ -203,10 +203,141 @@ _start:
     li a2, 0x2122232425262728
     bne a0, a2, fail
 
-    // 12: mid-instruction fault. PMP (locked, so last test):
+    // 13: multiply + divide-by-zero (stage 8c classes).
+    li t0, 13
+    li a1, 4
+    vsetvli a0, a1, e32, m1, ta, ma
+    la a1, vec_buf
+    vle32.v v2, (a1)               // els: 05060708 01020304 ...
+    li a1, 3
+    vmul.vx v2, v2, a1
+    la a1, vec_out
+    vse32.v v2, (a1)
+    la a1, vec_out
+    lw a0, 4(a1)
+    li a2, 0x0306090c
+    bne a0, a2, fail
+    vdivu.vx v4, v2, x0            // divide by zero -> all ones
+    vmv.x.s a0, v4
+    li a2, -1
+    bne a0, a2, fail
+
+    // 14: compare-generated mask drives a masked add.
+    li t0, 14
+    li a1, 4
+    vsetvli a0, a1, e32, m1, tu, mu
+    la a1, vec_buf
+    vle32.v v2, (a1)
+    li a1, 0x10000000
+    vmsltu.vx v0, v2, a1           // bits: el0,el1 set
+    vadd.vi v2, v2, 1, v0.t
+    la a1, vec_out
+    vse32.v v2, (a1)
+    la a1, vec_out
+    lw a0, 0(a1)
+    li a2, 0x05060709
+    bne a0, a2, fail
+    lw a0, 8(a1)                   // masked-off el2 unchanged
+    li a2, 0x15161718
+    bne a0, a2, fail
+
+    // 15: widening add e16 -> e32, stored via EEW=32.
+    li t0, 15
+    li a1, 4
+    vsetvli a0, a1, e16, m1, ta, ma
+    la a1, vec_buf
+    vle16.v v2, (a1)               // el0 = 0x0708
+    li a1, -1
+    vwadd.vx v4, v2, a1            // el0 = 0x707
+    la a1, vec_out
+    vse32.v v4, (a1)
+    la a1, vec_out
+    lw a0, 0(a1)
+    li a2, 0x707
+    bne a0, a2, fail
+
+    // 16: reduction sum.
+    li t0, 16
+    li a1, 4
+    vsetvli a0, a1, e32, m1, ta, ma
+    la a1, vec_buf
+    vle32.v v2, (a1)
+    vmv.v.i v4, 0
+    vredsum.vs v6, v2, v4
+    vmv.x.s a0, v6
+    li a2, 0x2c303438
+    bne a0, a2, fail
+
+    // 17: vid + slide1up + gather-immediate.
+    li t0, 17
+    vid.v v2
+    li a1, 99
+    vslide1up.vx v2, v2, a1        // 99, 0, 1, 2
+    vmv.x.s a0, v2
+    li a2, 99
+    bne a0, a2, fail
+    vrgather.vi v4, v2, 2          // every element = v2[2] = 1
+    vmv.x.s a0, v4
+    li a2, 1
+    bne a0, a2, fail
+
+    // 18: saturating add sets vxsat.
+    li t0, 18
+    li a1, 4
+    vsetvli a0, a1, e8, m1, ta, ma
+    csrw vxsat, x0
+    li a1, 100
+    vmv.v.x v2, a1
+    vsadd.vx v2, v2, a1            // 200 -> 127, saturates
+    csrr a0, vxsat
+    li a2, 1
+    bne a0, a2, fail
+    vmv.x.s a0, v2
+    li a2, 127
+    bne a0, a2, fail
+
+    // 19: narrowing clip e64 -> e32 saturates.
+    li t0, 19
+    la a1, vec_out
+    li a2, 0x100000005
+    sd a2, 0(a1)
+    li a2, -5
+    sd a2, 8(a1)
+    csrw vxsat, x0
+    li a1, 2
+    vsetvli a0, a1, e32, m1, ta, ma
+    la a1, vec_out
+    vle64.v v4, (a1)               // EMUL=2 group v4-v5
+    vnclip.wi v2, v4, 0
+    vmv.x.s a0, v2
+    li a2, 0x7fffffff
+    bne a0, a2, fail
+    csrr a0, vxsat
+    li a2, 1
+    bne a0, a2, fail
+
+    // 20: whole-register move ignores vtype (vill set).
+    li t0, 20
+    li a1, 4
+    vsetvli a0, a1, e32, m1, ta, ma
+    li a1, 77
+    vmv.v.x v4, a1
+    li a2, 0x100                   // reserved vtype bit -> vill
+    li a1, 4
+    vsetvl a0, a1, a2
+    csrr a0, vtype
+    bgez a0, fail                  // vill must read back set
+    vmv1r.v v6, v4
+    li a1, 1
+    vsetvli a0, a1, e32, m1, ta, ma
+    vmv.x.s a0, v6
+    li a2, 77
+    bne a0, a2, fail
+
+    // 99: mid-instruction fault. PMP (locked, so last test):
     // allow [0, buf+16), deny [buf+16, buf+64). The e64 load
     // commits elements 0-1, faults at element 2, vstart=2.
-    li t0, 12
+    li t0, 99
     la a1, vec_buf
     addi a2, a1, 16
     srli a2, a2, 2

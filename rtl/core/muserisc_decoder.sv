@@ -114,14 +114,14 @@ module muserisc_decoder import muserisc_pkg::*; (
         if ((funct3 == 3'b001) && (instr_i[31:25] == 7'b0110000)) begin
           // clz/ctz/cpop/sext.b/sext.h by imm[24:20]
           unique case (instr_i[24:20])
-            5'b00000: ctrl_o.bext_op = 6'd11;
-            5'b00001: ctrl_o.bext_op = 6'd13;
-            5'b00010: ctrl_o.bext_op = 6'd15;
-            5'b00100: ctrl_o.bext_op = 6'd21;
-            5'b00101: ctrl_o.bext_op = 6'd22;
-            default:  ctrl_o.bext_op = 6'd63;
+            5'b00000: ctrl_o.bext_op = 7'd11;
+            5'b00001: ctrl_o.bext_op = 7'd13;
+            5'b00010: ctrl_o.bext_op = 7'd15;
+            5'b00100: ctrl_o.bext_op = 7'd21;
+            5'b00101: ctrl_o.bext_op = 7'd22;
+            default:  ctrl_o.bext_op = 7'd63;
           endcase
-          if (ctrl_o.bext_op != 6'd63) begin
+          if (ctrl_o.bext_op != 7'd63) begin
             ctrl_o.valid = 1'b1;
             ctrl_o.reg_write = 1'b1;
             ctrl_o.bext = 1'b1;
@@ -133,29 +133,29 @@ module muserisc_decoder import muserisc_pkg::*; (
             ctrl_o.valid = 1'b1;
             ctrl_o.reg_write = 1'b1;
             ctrl_o.bext = 1'b1;
-            ctrl_o.bext_op = 6'd48;
+            ctrl_o.bext_op = 7'd48;
           end else if (instr_i[24] && (instr_i[23:20] <= 4'hA)) begin
             ctrl_o.valid = 1'b1;
             ctrl_o.reg_write = 1'b1;
             ctrl_o.bext = 1'b1;
-            ctrl_o.bext_op = 6'd49;
+            ctrl_o.bext_op = 7'd49;
             ctrl_o.alu_src_imm = 1'b1;
           end
         end else if (funct3 == 3'b001 &&
                      instr_i[31:25] == 7'b0001000) begin
           // SHA256/SHA512 unary ops by imm[24:20]
           unique case (instr_i[24:20])
-            5'b00000: ctrl_o.bext_op = 6'd53;  // sha256sum0
-            5'b00001: ctrl_o.bext_op = 6'd54;  // sha256sum1
-            5'b00010: ctrl_o.bext_op = 6'd51;  // sha256sig0
-            5'b00011: ctrl_o.bext_op = 6'd52;  // sha256sig1
-            5'b00100: ctrl_o.bext_op = 6'd57;  // sha512sum0
-            5'b00101: ctrl_o.bext_op = 6'd58;  // sha512sum1
-            5'b00110: ctrl_o.bext_op = 6'd55;  // sha512sig0
-            5'b00111: ctrl_o.bext_op = 6'd56;  // sha512sig1
-            default:  ctrl_o.bext_op = 6'd63;
+            5'b00000: ctrl_o.bext_op = 7'd53;  // sha256sum0
+            5'b00001: ctrl_o.bext_op = 7'd54;  // sha256sum1
+            5'b00010: ctrl_o.bext_op = 7'd51;  // sha256sig0
+            5'b00011: ctrl_o.bext_op = 7'd52;  // sha256sig1
+            5'b00100: ctrl_o.bext_op = 7'd57;  // sha512sum0
+            5'b00101: ctrl_o.bext_op = 7'd58;  // sha512sum1
+            5'b00110: ctrl_o.bext_op = 7'd55;  // sha512sig0
+            5'b00111: ctrl_o.bext_op = 7'd56;  // sha512sig1
+            default:  ctrl_o.bext_op = 7'd63;
           endcase
-          if (ctrl_o.bext_op != 6'd63) begin
+          if (ctrl_o.bext_op != 7'd63) begin
             ctrl_o.valid = 1'b1;
             ctrl_o.reg_write = 1'b1;
             ctrl_o.bext = 1'b1;
@@ -168,22 +168,22 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.reg_write = 1'b1;
           ctrl_o.bext = 1'b1;
           ctrl_o.alu_src_imm = 1'b1;
-          ctrl_o.bext_op = (instr_i[31:26] == 6'b010010) ? 6'd32 :
-                           (instr_i[31:26] == 6'b011010) ? 6'd34 : 6'd35;
+          ctrl_o.bext_op = (instr_i[31:26] == 6'b010010) ? 7'd32 :
+                           (instr_i[31:26] == 6'b011010) ? 7'd34 : 7'd35;
         end else if (funct3 == 3'b101 &&
                      instr_i[31:26] == 6'b011000) begin
           ctrl_o.valid = 1'b1;                 // rori
           ctrl_o.reg_write = 1'b1;
           ctrl_o.bext = 1'b1;
           ctrl_o.alu_src_imm = 1'b1;
-          ctrl_o.bext_op = 6'd25;
+          ctrl_o.bext_op = 7'd25;
         end else if (funct3 == 3'b101 &&
                      instr_i[31:26] == 6'b010010) begin
           ctrl_o.valid = 1'b1;                 // bexti
           ctrl_o.reg_write = 1'b1;
           ctrl_o.bext = 1'b1;
           ctrl_o.alu_src_imm = 1'b1;
-          ctrl_o.bext_op = 6'd33;
+          ctrl_o.bext_op = 7'd33;
         end else if (funct3 == 3'b101 &&
                      (instr_i[31:20] == 12'h287 ||
                       instr_i[31:20] == 12'h687 ||
@@ -191,8 +191,8 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.valid = 1'b1;                 // orc.b/brev8/rev8
           ctrl_o.reg_write = 1'b1;
           ctrl_o.bext = 1'b1;
-          ctrl_o.bext_op = (instr_i[31:20] == 12'h287) ? 6'd27 :
-                           (instr_i[31:20] == 12'h687) ? 6'd41 : 6'd28;
+          ctrl_o.bext_op = (instr_i[31:20] == 12'h287) ? 7'd27 :
+                           (instr_i[31:20] == 12'h687) ? 7'd41 : 7'd28;
         end else begin
         ctrl_o.valid = 1'b1;
         ctrl_o.reg_write = 1'b1;
@@ -226,62 +226,62 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.muldiv = 1'b1;
         end else begin
           // B / Zicond / scalar-crypto OP space.
-          ctrl_o.bext_op = 6'd63;
+          ctrl_o.bext_op = 7'd63;
           unique case (funct7)
             7'b0000100: begin
-              if (funct3 == 3'b100) ctrl_o.bext_op = 6'd38; // pack
-              if (funct3 == 3'b111) ctrl_o.bext_op = 6'd39; // packh
+              if (funct3 == 3'b100) ctrl_o.bext_op = 7'd38; // pack
+              if (funct3 == 3'b111) ctrl_o.bext_op = 7'd39; // packh
             end
             7'b0000101: begin
               unique case (funct3)
-                3'b001: ctrl_o.bext_op = 6'd29;  // clmul
-                3'b010: ctrl_o.bext_op = 6'd31;  // clmulr
-                3'b011: ctrl_o.bext_op = 6'd30;  // clmulh
-                3'b100: ctrl_o.bext_op = 6'd19;  // min
-                3'b101: ctrl_o.bext_op = 6'd20;  // minu
-                3'b110: ctrl_o.bext_op = 6'd17;  // max
-                3'b111: ctrl_o.bext_op = 6'd18;  // maxu
-                default: ctrl_o.bext_op = 6'd63;
+                3'b001: ctrl_o.bext_op = 7'd29;  // clmul
+                3'b010: ctrl_o.bext_op = 7'd31;  // clmulr
+                3'b011: ctrl_o.bext_op = 7'd30;  // clmulh
+                3'b100: ctrl_o.bext_op = 7'd19;  // min
+                3'b101: ctrl_o.bext_op = 7'd20;  // minu
+                3'b110: ctrl_o.bext_op = 7'd17;  // max
+                3'b111: ctrl_o.bext_op = 7'd18;  // maxu
+                default: ctrl_o.bext_op = 7'd63;
               endcase
             end
             7'b0000111: begin
-              if (funct3 == 3'b101) ctrl_o.bext_op = 6'd36;
-              if (funct3 == 3'b111) ctrl_o.bext_op = 6'd37;
+              if (funct3 == 3'b101) ctrl_o.bext_op = 7'd36;
+              if (funct3 == 3'b111) ctrl_o.bext_op = 7'd37;
             end
             7'b0010000: begin
-              if (funct3 == 3'b010) ctrl_o.bext_op = 6'd1;
-              if (funct3 == 3'b100) ctrl_o.bext_op = 6'd2;
-              if (funct3 == 3'b110) ctrl_o.bext_op = 6'd3;
+              if (funct3 == 3'b010) ctrl_o.bext_op = 7'd1;
+              if (funct3 == 3'b100) ctrl_o.bext_op = 7'd2;
+              if (funct3 == 3'b110) ctrl_o.bext_op = 7'd3;
             end
             7'b0010100: begin
-              if (funct3 == 3'b001) ctrl_o.bext_op = 6'd35; // bset
-              if (funct3 == 3'b010) ctrl_o.bext_op = 6'd42; // xperm4
-              if (funct3 == 3'b100) ctrl_o.bext_op = 6'd43; // xperm8
+              if (funct3 == 3'b001) ctrl_o.bext_op = 7'd35; // bset
+              if (funct3 == 3'b010) ctrl_o.bext_op = 7'd42; // xperm4
+              if (funct3 == 3'b100) ctrl_o.bext_op = 7'd43; // xperm8
             end
             7'b0100000: begin
-              if (funct3 == 3'b100) ctrl_o.bext_op = 6'd10; // xnor
-              if (funct3 == 3'b110) ctrl_o.bext_op = 6'd9;  // orn
-              if (funct3 == 3'b111) ctrl_o.bext_op = 6'd8;  // andn
+              if (funct3 == 3'b100) ctrl_o.bext_op = 7'd10; // xnor
+              if (funct3 == 3'b110) ctrl_o.bext_op = 7'd9;  // orn
+              if (funct3 == 3'b111) ctrl_o.bext_op = 7'd8;  // andn
             end
             7'b0100100: begin
-              if (funct3 == 3'b001) ctrl_o.bext_op = 6'd32; // bclr
-              if (funct3 == 3'b101) ctrl_o.bext_op = 6'd33; // bext
+              if (funct3 == 3'b001) ctrl_o.bext_op = 7'd32; // bclr
+              if (funct3 == 3'b101) ctrl_o.bext_op = 7'd33; // bext
             end
             7'b0110000: begin
-              if (funct3 == 3'b001) ctrl_o.bext_op = 6'd23; // rol
-              if (funct3 == 3'b101) ctrl_o.bext_op = 6'd25; // ror
+              if (funct3 == 3'b001) ctrl_o.bext_op = 7'd23; // rol
+              if (funct3 == 3'b101) ctrl_o.bext_op = 7'd25; // ror
             end
             7'b0110100: begin
-              if (funct3 == 3'b001) ctrl_o.bext_op = 6'd34; // binv
+              if (funct3 == 3'b001) ctrl_o.bext_op = 7'd34; // binv
             end
-            7'b0011001: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd44;
-            7'b0011011: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd45;
-            7'b0011101: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd46;
-            7'b0011111: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd47;
-            7'b0111111: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd50;
-            default: ctrl_o.bext_op = 6'd63;
+            7'b0011001: if (funct3 == 3'b000) ctrl_o.bext_op = 7'd44;
+            7'b0011011: if (funct3 == 3'b000) ctrl_o.bext_op = 7'd45;
+            7'b0011101: if (funct3 == 3'b000) ctrl_o.bext_op = 7'd46;
+            7'b0011111: if (funct3 == 3'b000) ctrl_o.bext_op = 7'd47;
+            7'b0111111: if (funct3 == 3'b000) ctrl_o.bext_op = 7'd50;
+            default: ctrl_o.bext_op = 7'd63;
           endcase
-          if (ctrl_o.bext_op != 6'd63) begin
+          if (ctrl_o.bext_op != 7'd63) begin
             ctrl_o.valid = 1'b1;
             ctrl_o.reg_write = 1'b1;
             ctrl_o.bext = 1'b1;
@@ -291,12 +291,12 @@ module muserisc_decoder import muserisc_pkg::*; (
       7'b0011011: begin  // OP-IMM-32 (+ W-form B ops)
         if ((funct3 == 3'b001) && (instr_i[31:25] == 7'b0110000)) begin
           unique case (instr_i[24:20])
-            5'b00000: ctrl_o.bext_op = 6'd12;  // clzw
-            5'b00001: ctrl_o.bext_op = 6'd14;  // ctzw
-            5'b00010: ctrl_o.bext_op = 6'd16;  // cpopw
-            default:  ctrl_o.bext_op = 6'd63;
+            5'b00000: ctrl_o.bext_op = 7'd12;  // clzw
+            5'b00001: ctrl_o.bext_op = 7'd14;  // ctzw
+            5'b00010: ctrl_o.bext_op = 7'd16;  // cpopw
+            default:  ctrl_o.bext_op = 7'd63;
           endcase
-          if (ctrl_o.bext_op != 6'd63) begin
+          if (ctrl_o.bext_op != 7'd63) begin
             ctrl_o.valid = 1'b1;
             ctrl_o.reg_write = 1'b1;
             ctrl_o.bext = 1'b1;
@@ -307,7 +307,7 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.reg_write = 1'b1;
           ctrl_o.bext = 1'b1;
           ctrl_o.alu_src_imm = 1'b1;
-          ctrl_o.bext_op = 6'd7;
+          ctrl_o.bext_op = 7'd7;
           imm_o = imm_i;
         end else if ((funct3 == 3'b101) &&
                      (instr_i[31:25] == 7'b0110000)) begin
@@ -315,7 +315,7 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.reg_write = 1'b1;
           ctrl_o.bext = 1'b1;
           ctrl_o.alu_src_imm = 1'b1;
-          ctrl_o.bext_op = 6'd26;
+          ctrl_o.bext_op = 7'd26;
           imm_o = imm_i;
         end else begin
         ctrl_o.valid = 1'b1;
@@ -360,22 +360,22 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.muldiv = 1'b1;
         end else begin
           // W-form B ops in OP-32 space.
-          ctrl_o.bext_op = 6'd63;
+          ctrl_o.bext_op = 7'd63;
           if (funct7 == 7'b0000100 && funct3 == 3'b000)
-            ctrl_o.bext_op = 6'd0;               // add.uw
+            ctrl_o.bext_op = 7'd0;               // add.uw
           if (funct7 == 7'b0000100 && funct3 == 3'b100)
-            ctrl_o.bext_op = 6'd40;              // packw (zext.h)
+            ctrl_o.bext_op = 7'd40;              // packw (zext.h)
           if (funct7 == 7'b0010000 && funct3 == 3'b010)
-            ctrl_o.bext_op = 6'd4;               // sh1add.uw
+            ctrl_o.bext_op = 7'd4;               // sh1add.uw
           if (funct7 == 7'b0010000 && funct3 == 3'b100)
-            ctrl_o.bext_op = 6'd5;               // sh2add.uw
+            ctrl_o.bext_op = 7'd5;               // sh2add.uw
           if (funct7 == 7'b0010000 && funct3 == 3'b110)
-            ctrl_o.bext_op = 6'd6;               // sh3add.uw
+            ctrl_o.bext_op = 7'd6;               // sh3add.uw
           if (funct7 == 7'b0110000 && funct3 == 3'b001)
-            ctrl_o.bext_op = 6'd24;              // rolw
+            ctrl_o.bext_op = 7'd24;              // rolw
           if (funct7 == 7'b0110000 && funct3 == 3'b101)
-            ctrl_o.bext_op = 6'd26;              // rorw
-          if (ctrl_o.bext_op != 6'd63) begin
+            ctrl_o.bext_op = 7'd26;              // rorw
+          if (ctrl_o.bext_op != 7'd63) begin
             ctrl_o.valid = 1'b1;
             ctrl_o.reg_write = 1'b1;
             ctrl_o.bext = 1'b1;
@@ -592,9 +592,12 @@ module muserisc_decoder import muserisc_pkg::*; (
           end
         end
       end
-      7'b1010111: begin  // OP-V (stage 8a subset)
+      7'b1010111: begin  // OP-V (RVV 1.0 integer classes)
         // funct6 = instr[31:26], vm = instr[25]. Vector op is
-        // carried in bext_op (VOP_*), operand form in fpu_aux.
+        // carried in bext_op (VOP_*), operand form in fpu_aux
+        // (VV for funct3 000/010, VX for 100/110, VI for 011).
+        // Sub-operations for VOP_MLOG/VOP_RED/VOP_EXT/VOP_MSBIT
+        // ride in the low immediate bits.
         imm_o = {{59{instr_i[19]}}, instr_i[19:15]};  // imm5
         if (funct3 == 3'b111) begin
           // vsetvli (bit31=0), vsetivli (31:30=11), vsetvl
@@ -608,50 +611,216 @@ module muserisc_decoder import muserisc_pkg::*; (
             ctrl_o.fpu_aux = !instr_i[31] ? 2'd0 :
                              (instr_i[30] ? 2'd1 : 2'd2);
           end
-        end else if ((funct3 == 3'b000) || (funct3 == 3'b100) ||
-                     (funct3 == 3'b011)) begin
-          ctrl_o.fpu_aux = (funct3 == 3'b000) ? VFORM_VV :
-                           (funct3 == 3'b100) ? VFORM_VX : VFORM_VI;
-          unique case (instr_i[31:26])
-            6'b000000: ctrl_o.bext_op = VOP_ADD;
-            6'b000010: ctrl_o.bext_op = VOP_SUB;
-            6'b000011: ctrl_o.bext_op = VOP_RSUB;
-            6'b001001: ctrl_o.bext_op = VOP_AND;
-            6'b001010: ctrl_o.bext_op = VOP_OR;
-            6'b001011: ctrl_o.bext_op = VOP_XOR;
-            6'b100101: ctrl_o.bext_op = VOP_SLL;
-            6'b101000: ctrl_o.bext_op = VOP_SRL;
-            6'b101001: ctrl_o.bext_op = VOP_SRA;
-            6'b010111: ctrl_o.bext_op = VOP_MV;
-            default:   ctrl_o.bext_op = 6'd63;
-          endcase
-          // vrsub has no VV form; vmv needs instr[24:20]==0
-          // unless it is the vs2 operand of an ALU op.
-          if ((ctrl_o.bext_op != 6'd63) &&
-              !((ctrl_o.bext_op == VOP_RSUB) &&
-                (ctrl_o.fpu_aux == VFORM_VV)) &&
-              !((ctrl_o.bext_op == VOP_MV) &&
-                (instr_i[24:20] != 5'd0))) begin
+        end else begin
+          logic opm, ok;
+          logic [6:0] vop;
+          opm = (funct3 == 3'b010) || (funct3 == 3'b110);
+          ctrl_o.fpu_aux = ((funct3 == 3'b000) ||
+                            (funct3 == 3'b010)) ? VFORM_VV :
+                           ((funct3 == 3'b100) ||
+                            (funct3 == 3'b110)) ? VFORM_VX : VFORM_VI;
+          vop = 7'd127;
+          ok = 1'b1;
+          if (!opm) begin
+            // OPIVV / OPIVX / OPIVI
+            unique case (instr_i[31:26])
+              6'd0: vop = VOP_ADD;
+              6'd2: vop = VOP_SUB;
+              6'd3: begin
+                vop = VOP_RSUB;
+                ok = funct3 != 3'b000;  // no vrsub.vv
+              end
+              6'd4: vop = VOP_MINU;
+              6'd5: vop = VOP_MIN;
+              6'd6: vop = VOP_MAXU;
+              6'd7: vop = VOP_MAX;
+              6'd9: vop = VOP_AND;
+              6'd10: vop = VOP_OR;
+              6'd11: vop = VOP_XOR;
+              6'd12: vop = VOP_GATHER;
+              6'd14: vop = (funct3 == 3'b000) ? VOP_GATHEREI16
+                                              : VOP_SLIDEUP;
+              6'd15: begin
+                vop = VOP_SLIDEDOWN;
+                ok = funct3 != 3'b000;  // no vslidedown.vv
+              end
+              6'd16: begin
+                vop = VOP_ADC;
+                ok = !instr_i[25];      // carry-in form needs vm=0
+              end
+              6'd17: vop = VOP_MADC;
+              6'd18: begin
+                vop = VOP_SBC;
+                ok = !instr_i[25];
+              end
+              6'd19: vop = VOP_MSBC;
+              6'd23: begin
+                if (!instr_i[25]) vop = VOP_MERGE;
+                else begin
+                  vop = VOP_MV;         // vmv.v.* (vmerge, vm=1)
+                  ok = instr_i[24:20] == 5'd0;
+                end
+              end
+              6'd24: vop = VOP_CMPEQ;
+              6'd25: vop = VOP_CMPNE;
+              6'd26: vop = VOP_CMPLTU;
+              6'd27: begin
+                vop = VOP_CMPLT;
+                ok = funct3 != 3'b011;  // vmslt.vi is a pseudo-op
+              end
+              6'd28: vop = VOP_CMPLEU;
+              6'd29: vop = VOP_CMPLE;
+              6'd30: begin
+                vop = VOP_CMPGTU;
+                ok = funct3 != 3'b000;  // no vmsgtu.vv
+              end
+              6'd31: begin
+                vop = VOP_CMPGT;
+                ok = funct3 != 3'b000;  // no vmsgt.vv
+              end
+              6'd32: vop = VOP_SADDU;
+              6'd33: vop = VOP_SADD;
+              6'd34: begin
+                vop = VOP_SSUBU;
+                ok = funct3 != 3'b011;  // no vssubu.vi
+              end
+              6'd35: begin
+                vop = VOP_SSUB;
+                ok = funct3 != 3'b011;  // no vssub.vi
+              end
+              6'd37: vop = VOP_SLL;
+              6'd39: begin
+                if (funct3 == 3'b011) begin
+                  vop = VOP_MVR;        // vmv<nr>r.v
+                  ok = (instr_i[19:15] == 5'd0) ||
+                       (instr_i[19:15] == 5'd1) ||
+                       (instr_i[19:15] == 5'd3) ||
+                       (instr_i[19:15] == 5'd7);
+                end else begin
+                  vop = VOP_SMUL;
+                end
+              end
+              6'd40: vop = VOP_SRL;
+              6'd41: vop = VOP_SRA;
+              6'd42: vop = VOP_SSRL;
+              6'd43: vop = VOP_SSRA;
+              6'd44: vop = VOP_NSRL;
+              6'd45: vop = VOP_NSRA;
+              6'd46: vop = VOP_NCLIPU;
+              6'd47: vop = VOP_NCLIP;
+              default: ok = 1'b0;
+            endcase
+          end else begin
+            // OPMVV / OPMVX
+            unique case (instr_i[31:26])
+              6'd0, 6'd1, 6'd2, 6'd3,
+              6'd4, 6'd5, 6'd6, 6'd7: begin
+                vop = VOP_RED;
+                ok = funct3 == 3'b010;
+                imm_o = {61'd0, instr_i[28:26]};
+              end
+              6'd8: vop = VOP_AADDU;
+              6'd9: vop = VOP_AADD;
+              6'd10: vop = VOP_ASUBU;
+              6'd11: vop = VOP_ASUB;
+              6'd14: begin
+                vop = VOP_SLIDE1UP;
+                ok = funct3 == 3'b110;
+              end
+              6'd15: begin
+                vop = VOP_SLIDE1DOWN;
+                ok = funct3 == 3'b110;
+              end
+              6'd16: begin
+                if (funct3 == 3'b110) begin
+                  vop = VOP_MVSX;       // vmv.s.x
+                  ok = instr_i[24:20] == 5'd0;
+                end else if (instr_i[19:15] == 5'd0) begin
+                  vop = VOP_MVXS;       // vmv.x.s
+                end else if (instr_i[19:15] == 5'd16) begin
+                  vop = VOP_CPOP;
+                end else if (instr_i[19:15] == 5'd17) begin
+                  vop = VOP_FIRST;
+                end else begin
+                  ok = 1'b0;
+                end
+              end
+              6'd18: begin
+                vop = VOP_EXT;          // vzext/vsext.vf2/4/8
+                ok = (funct3 == 3'b010) &&
+                     (instr_i[19:18] == 2'b00) &&
+                     (instr_i[17:15] >= 3'd2);
+                imm_o = {61'd0, instr_i[17:15]};
+              end
+              6'd20: begin
+                ok = funct3 == 3'b010;
+                if (instr_i[19:15] == 5'd16) begin
+                  vop = VOP_IOTA;
+                end else if ((instr_i[19:15] == 5'd17) &&
+                             (instr_i[24:20] == 5'd0)) begin
+                  vop = VOP_ID;
+                end else if ((instr_i[19:15] >= 5'd1) &&
+                             (instr_i[19:15] <= 5'd3)) begin
+                  vop = VOP_MSBIT;      // vmsbf/vmsof/vmsif
+                  imm_o = {62'd0, instr_i[16:15]};
+                end else begin
+                  ok = 1'b0;
+                end
+              end
+              6'd23: begin
+                vop = VOP_COMPRESS;
+                ok = (funct3 == 3'b010) && instr_i[25];
+              end
+              6'd24, 6'd25, 6'd26, 6'd27,
+              6'd28, 6'd29, 6'd30, 6'd31: begin
+                vop = VOP_MLOG;         // mask logicals (unmasked)
+                ok = (funct3 == 3'b010) && instr_i[25];
+                imm_o = {61'd0, instr_i[28:26]};
+              end
+              6'd32: vop = VOP_DIVU;
+              6'd33: vop = VOP_DIV;
+              6'd34: vop = VOP_REMU;
+              6'd35: vop = VOP_REM;
+              6'd36: vop = VOP_MULHU;
+              6'd37: vop = VOP_MUL;
+              6'd38: vop = VOP_MULHSU;
+              6'd39: vop = VOP_MULH;
+              6'd41: vop = VOP_MADD;
+              6'd43: vop = VOP_NMSUB;
+              6'd45: vop = VOP_MACC;
+              6'd47: vop = VOP_NMSAC;
+              6'd48: vop = VOP_WADDU;
+              6'd49: vop = VOP_WADD;
+              6'd50: vop = VOP_WSUBU;
+              6'd51: vop = VOP_WSUB;
+              6'd52: vop = VOP_WADDUW;
+              6'd53: vop = VOP_WADDW;
+              6'd54: vop = VOP_WSUBUW;
+              6'd55: vop = VOP_WSUBW;
+              6'd56: vop = VOP_WMULU;
+              6'd58: vop = VOP_WMULSU;
+              6'd59: vop = VOP_WMUL;
+              6'd60: vop = VOP_WMACCU;
+              6'd61: vop = VOP_WMACC;
+              6'd62: begin
+                vop = VOP_WMACCUS;
+                ok = funct3 == 3'b110;  // .vx only
+              end
+              6'd63: vop = VOP_WMACCSU;
+              default: ok = 1'b0;
+            endcase
+          end
+          if (ok && (vop != 7'd127)) begin
             ctrl_o.valid = 1'b1;
             ctrl_o.vec = 1'b1;
-            ctrl_o.vec_rd = 1'b1;
+            ctrl_o.bext_op = vop;
+            if ((vop == VOP_MVXS) || (vop == VOP_CPOP) ||
+                (vop == VOP_FIRST)) begin
+              ctrl_o.reg_write = 1'b1;
+            end else begin
+              ctrl_o.vec_rd = 1'b1;
+            end
           end
-        end else if ((funct3 == 3'b110) &&
-                     (instr_i[31:26] == 6'b010000) &&
-                     (instr_i[24:20] == 5'd0)) begin
-          ctrl_o.valid = 1'b1;             // vmv.s.x
-          ctrl_o.vec = 1'b1;
-          ctrl_o.vec_rd = 1'b1;
-          ctrl_o.bext_op = VOP_MVSX;
-          ctrl_o.fpu_aux = VFORM_VX;
-        end else if ((funct3 == 3'b010) &&
-                     (instr_i[31:26] == 6'b010000) &&
-                     (instr_i[19:15] == 5'd0)) begin
-          ctrl_o.valid = 1'b1;             // vmv.x.s
-          ctrl_o.vec = 1'b1;
-          ctrl_o.reg_write = 1'b1;
-          ctrl_o.bext_op = VOP_MVXS;
-          ctrl_o.fpu_aux = VFORM_VV;
         end
       end
       7'b1110011: begin  // SYSTEM

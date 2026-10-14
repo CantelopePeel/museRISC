@@ -82,6 +82,8 @@ module muserisc_csr (
     input  wire        vec_dirty_i,   // a vector reg write commits
     input  wire        vstart_we_i,   // faulting vector LS sets vstart
     input  wire [63:0] vstart_wdata_i,
+    output logic [1:0] vxrm_o,        // fixed-point rounding mode
+    input  wire        vxsat_set_i,   // a fixed-point op saturated
     // PMP checks (physical addresses, combinational)
     input  wire [63:0] pmp_addr_a_i,
     input  wire [1:0]  pmp_acc_a_i,   // 0 read 1 write 2 exec
@@ -223,6 +225,7 @@ module muserisc_csr (
                     vtype_vsew_q, vtype_vlmul_q};
   assign vl_o = vl_q;
   assign vstart_o = vstart_q;
+  assign vxrm_o = vxrm_q;
 
   // vsetvl* next-state computation (combinational; committed
   // in EX like other CSR writes). VLEN=512, ELEN=64.
@@ -842,6 +845,7 @@ module muserisc_csr (
         mstatus_vs_q <= 2'b11;
         if (virt_q) vs_vs_q <= 2'b11;  // both VS fields go Dirty
       end
+      if (vxsat_set_i) vxsat_q <= 1'b1;
       if (vstart_we_i) vstart_q <= vstart_wdata_i;
       // vsetvl* commit (EX). Setting vill zeroes vl and the
       // remaining vtype fields; vstart always clears.
