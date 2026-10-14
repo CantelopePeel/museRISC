@@ -24,7 +24,7 @@ description: museRISC in-house RV64IM core (5-stage, Sv39) in the C++ Verilator 
 implemented_extensions:
   # misa is a read mux constant (writes WARL-ignored):
   # rtl/core/muserisc_csr.sv "12'h301: csr_rdata =
-  # 64'h8000_0000_0014_1129"  (MXL=2, I, M, A, F, D, S, U).
+  # 64'h8000_0000_0014_112B"  (MXL=2, I, M, A, B, F, D, S, U).
   - { name: I, version: "= 2.1" }
   - { name: M, version: "= 2.0" }
   # A via MEM-stage RMW on the combinational memory port
@@ -38,6 +38,21 @@ implemented_extensions:
   # in muserisc_csr.sv, mstatus.FS writable + dirty-tracked.
   - { name: F, version: "= 2.2.0" }
   - { name: D, version: "= 2.2.0" }
+  # B + Zicond + scalar crypto via rtl/core/muserisc_bext.sv
+  # (golden-checked in tb/cpp/bext_tb.cpp, AES-128 KAT in
+  # sw/core-tests/bext_directed.S). misa.B is set.
+  - { name: B, version: "= 1.0.0" }
+  - { name: Zba, version: "= 1.0.0" }
+  - { name: Zbb, version: "= 1.0.0" }
+  - { name: Zbc, version: "= 1.0.0" }
+  - { name: Zbs, version: "= 1.0.0" }
+  - { name: Zicond, version: "= 1.0.0" }
+  - { name: Zbkb, version: "= 1.0.0" }
+  - { name: Zbkc, version: "= 1.0.0" }
+  - { name: Zbkx, version: "= 1.0.0" }
+  - { name: Zkne, version: "= 1.0.1" }
+  - { name: Zknd, version: "= 1.0.1" }
+  - { name: Zknh, version: "= 1.0.1" }
   - { name: Zicsr, version: "= 2.0" }
   - { name: Zifencei, version: "= 2.0.0" }
 
@@ -103,6 +118,7 @@ params:
   MSTATUS_FS_LEGAL_VALUES: [0, 1, 2, 3]
   MUTABLE_MISA_F: false
   MUTABLE_MISA_D: false
+  MUTABLE_MISA_B: false
   # Hardware sets FS to Dirty whenever an FP register is
   # written (muserisc_core.sv fp_dirty).
   HW_MSTATUS_FS_DIRTY_UPDATE: precise

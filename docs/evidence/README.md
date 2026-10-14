@@ -895,6 +895,24 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   + rounding increment vs 2^emin), not simply "rounded
   result is subnormal".
 
+## In-house core stage 4c — B, Zicond, scalar crypto (2026-10-13, #18)
+
+- New `rtl/core/muserisc_bext.sv`: Zba/Zbb/Zbc/Zbs, Zicond,
+  Zbkb/Zbkc(clmul)/Zbkx, Zkne/Zknd (aes64es/esm/ds/dsm/im/
+  ks1i/ks2), Zknh (SHA-256/512 sigma/sum). AES S-boxes are
+  derived at elaboration from the GF(2^8) inverse; the C++
+  golden in [`tb/cpp/bext_tb.cpp`](../../tb/cpp/bext_tb.cpp)
+  uses the literal FIPS-197 tables — 54,980 independent
+  checks. `bext_directed.S` adds a full AES-128 encryption
+  KAT (FIPS-197 vector) built from the scalar instructions
+  inside the pipeline. `misa.B` set.
+- ACT:
+  [`act-core-impriv-2026-10-13.csv`](act-core-impriv-2026-10-13.csv)
+  now **494/495** — adds Zba(8) Zbb(24) Zbc(3) Zbs(8)
+  Zicond(2) Zbkb(14) Zbkc(2) Zbkx(2) Zkne(4) Zknd(5)
+  Zknh(8), all green; same `tor_zero` waiver. riscv-tests
+  unchanged at 122/122 (no B/K suites exist upstream there).
+
 ### Linux/OpenSBI boot attempt — blocked on A (stage 4)
 
 - Log: [`core-stage3d-linux-attempt-2026-10-13.log`](core-stage3d-linux-attempt-2026-10-13.log).

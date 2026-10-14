@@ -23,6 +23,8 @@ struct Ctrl {
   bool wfi = false, sfence = false;
   bool amo = false, lr = false, sc = false;
   int amo_op = 0;
+  bool bext = false;
+  int bext_op = 0;
   bool fp = false, fp_rs1 = false, fp_rs2 = false, fp_rd = false;
   bool fp_rm = false, fp_op = false, fmt_d = false;
   int fpu_op = 0, fpu_aux = 0;
@@ -194,6 +196,42 @@ Ctrl Golden(uint32_t insn) {
       break;
     }
     case 0x13: {  // OP-IMM; ADDI never becomes SUB
+      const uint32_t imm12 = insn >> 20;
+      const uint32_t rs2f = (insn >> 20) & 31u;
+      auto bext_imm = [&](int bop, bool src_imm) {
+        c.valid = c.reg_write = c.bext = true;
+        c.bext_op = bop;
+        c.alu_src_imm = src_imm;
+        c.imm = imm_i;
+      };
+      if (f3 == 1 && (imm12 >> 5) == 0x30) {
+        // clz/ctz/cpop/sext.b/sext.h
+        if (rs2f == 0) bext_imm(11, false);
+        else if (rs2f == 1) bext_imm(13, false);
+        else if (rs2f == 2) bext_imm(15, false);
+        else if (rs2f == 4) bext_imm(21, false);
+        else if (rs2f == 5) bext_imm(22, false);
+        break;
+      }
+      if (f3 == 1 && (imm12 >> 5) == 0x18) {
+        if (rs2f == 0) bext_imm(48, false);              // aes64im
+        else if ((rs2f & 16) && (rs2f & 15) <= 10)
+          bext_imm(49, true);                            // aes64ks1i
+        break;
+      }
+      if (f3 == 1 && (imm12 >> 5) == 0x08) {
+        static const int kSha[8] = {53, 54, 51, 52, 57, 58, 55, 56};
+        if (rs2f < 8) bext_imm(kSha[rs2f], false);
+        break;
+      }
+      if (f3 == 1 && (imm12 >> 6) == 0x12) { bext_imm(32, true); break; }
+      if (f3 == 1 && (imm12 >> 6) == 0x1A) { bext_imm(34, true); break; }
+      if (f3 == 1 && (imm12 >> 6) == 0x0A) { bext_imm(35, true); break; }
+      if (f3 == 5 && (imm12 >> 6) == 0x18) { bext_imm(25, true); break; }
+      if (f3 == 5 && (imm12 >> 6) == 0x12) { bext_imm(33, true); break; }
+      if (f3 == 5 && imm12 == 0x287) { bext_imm(27, false); break; }
+      if (f3 == 5 && imm12 == 0x687) { bext_imm(41, false); break; }
+      if (f3 == 5 && imm12 == 0x6B8) { bext_imm(28, false); break; }
       c.valid = c.reg_write = c.alu_src_imm = true;
       c.alu_op = AluFor(static_cast<int>(f3), f3 == 5 ? alt : false);
       c.imm = imm_i;
@@ -208,9 +246,55 @@ Ctrl Golden(uint32_t insn) {
         c.alu_op = AluFor(static_cast<int>(f3), alt);
       } else if (f7 == 1) {
         c.valid = c.reg_write = c.muldiv = true;
+      } else {
+        int bop = -1;
+        switch (f7) {
+          case 0x04: bop = f3 == 4 ? 38 : f3 == 7 ? 39 : -1; break;
+          case 0x05: bop = f3 == 1 ? 29 : f3 == 2 ? 31 : f3 == 3 ? 30 :
+                           f3 == 4 ? 19 : f3 == 5 ? 20 : f3 == 6 ? 17 :
+                           f3 == 7 ? 18 : -1; break;
+          case 0x07: bop = f3 == 5 ? 36 : f3 == 7 ? 37 : -1; break;
+          case 0x10: bop = f3 == 2 ? 1 : f3 == 4 ? 2 : f3 == 6 ? 3 : -1; break;
+          case 0x14: bop = f3 == 1 ? 35 : f3 == 2 ? 42 : f3 == 4 ? 43 : -1; break;
+          case 0x20: bop = f3 == 4 ? 10 : f3 == 6 ? 9 : f3 == 7 ? 8 : -1; break;
+          case 0x24: bop = f3 == 1 ? 32 : f3 == 5 ? 33 : -1; break;
+          case 0x30: bop = f3 == 1 ? 23 : f3 == 5 ? 25 : -1; break;
+          case 0x34: bop = f3 == 1 ? 34 : -1; break;
+          case 0x19: bop = f3 == 0 ? 44 : -1; break;
+          case 0x1B: bop = f3 == 0 ? 45 : -1; break;
+          case 0x1D: bop = f3 == 0 ? 46 : -1; break;
+          case 0x1F: bop = f3 == 0 ? 47 : -1; break;
+          case 0x3F: bop = f3 == 0 ? 50 : -1; break;
+          default: break;
+        }
+        if (bop >= 0) {
+          c.valid = c.reg_write = c.bext = true;
+          c.bext_op = bop;
+        }
       }
       break;
     case 0x1b: {  // OP-IMM-32: ADDIW (0), SLLIW (1), SRLIW/SRAIW (5)
+      const uint32_t imm12w = insn >> 20;
+      const uint32_t rs2fw = (insn >> 20) & 31u;
+      if (f3 == 1 && (imm12w >> 5) == 0x30 &&
+          (rs2fw == 0 || rs2fw == 1 || rs2fw == 2)) {
+        c.valid = c.reg_write = c.bext = true;
+        c.bext_op = rs2fw == 0 ? 12 : rs2fw == 1 ? 14 : 16;
+        c.imm = imm_i;
+        break;
+      }
+      if (f3 == 1 && (imm12w >> 6) == 0x02) {
+        c.valid = c.reg_write = c.bext = c.alu_src_imm = true;
+        c.bext_op = 7;
+        c.imm = imm_i;
+        break;
+      }
+      if (f3 == 5 && (imm12w >> 5) == 0x30) {
+        c.valid = c.reg_write = c.bext = c.alu_src_imm = true;
+        c.bext_op = 26;
+        c.imm = imm_i;
+        break;
+      }
       c.word_op = true;
       c.alu_op = AluFor(static_cast<int>(f3), f3 == 5 ? alt : false);
       c.imm = imm_i;
@@ -229,6 +313,19 @@ Ctrl Golden(uint32_t insn) {
         c.valid = c.reg_write = true;
       } else if (f7 == 1 && (f3 == 0 || f3 >= 4)) {
         c.valid = c.reg_write = c.muldiv = true;
+      } else {
+        int bop = -1;
+        if (f7 == 0x04 && f3 == 0) bop = 0;
+        if (f7 == 0x04 && f3 == 4) bop = 40;
+        if (f7 == 0x10 && f3 == 2) bop = 4;
+        if (f7 == 0x10 && f3 == 4) bop = 5;
+        if (f7 == 0x10 && f3 == 6) bop = 6;
+        if (f7 == 0x30 && f3 == 1) bop = 24;
+        if (f7 == 0x30 && f3 == 5) bop = 26;
+        if (bop >= 0) {
+          c.valid = c.reg_write = c.bext = true;
+          c.bext_op = bop;
+        }
       }
       break;
     case 0x0f:  // FENCE / FENCE.I
@@ -285,7 +382,7 @@ int main(int argc, char** argv) {
               kAmo = 26, kLr = 27, kSc = 28, kAmoOp = 29,
               kFp = 34, kFpRs2 = 35, kFpRs1 = 36, kFpRd = 37,
               kFpRm = 38, kFpOp = 39, kFmtD = 40, kFpuAux = 41,
-              kFpuOp = 43;
+              kFpuOp = 43, kBext = 48, kBextOp = 49;
     const Field fields[] = {
         {"valid", bit(kValid), g.valid},
         {"reg_write", bit(kRegWrite), g.reg_write && g.valid},
@@ -311,6 +408,7 @@ int main(int argc, char** argv) {
         {"fp_rm", bit(kFpRm), g.fp_rm && g.valid},
         {"fp_op", bit(kFpOp), g.fp_op && g.valid},
         {"fmt_d", bit(kFmtD), g.fmt_d && g.valid},
+        {"bext", bit(kBext), g.bext && g.valid},
         {"ecall", bit(kEcall), g.ecall && g.valid},
         {"ebreak", bit(kEbreak), g.ebreak && g.valid},
     };
@@ -329,6 +427,12 @@ int main(int argc, char** argv) {
         std::printf("FAIL insn=0x%08x alu fields ctrl=0x%llx want op=%d src_imm=%d a_pc=%d word=%d\n",
                     insn, static_cast<unsigned long long>(c), g.alu_op, g.alu_src_imm ? 1 : 0, g.alu_a_pc ? 1 : 0,
                     g.word_op ? 1 : 0);
+        return false;
+      }
+      if (static_cast<int>((c >> kBextOp) & 0x3f) != g.bext_op) {
+        std::printf("FAIL insn=0x%08x bext_op got=%d want=%d\n",
+                    insn, static_cast<int>((c >> kBextOp) & 0x3f),
+                    g.bext_op);
         return false;
       }
       if (static_cast<int>((c >> kFpuOp) & 0x1f) != g.fpu_op ||

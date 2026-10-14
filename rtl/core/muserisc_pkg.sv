@@ -26,6 +26,8 @@ package muserisc_pkg;
   // Decoder output consumed by the datapath. One struct so stage 2
   // can register it verbatim between decode and execute.
   typedef struct packed {
+    logic [5:0] bext_op;   // B/crypto unit op (muserisc_bext BOP_*)
+    logic    bext;         // result comes from the B/crypto unit
     logic [4:0] fpu_op;    // FPU operation (muserisc_fpu FPU_*)
     logic [1:0] fpu_aux;   // sgnj/min-max/cmp select, cvt size
     logic    fmt_d;        // FP format: 1=binary64, 0=binary32

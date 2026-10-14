@@ -305,7 +305,7 @@
     },
     "B": {
       "mutable_misa": false,
-      "supported": false
+      "supported": true
     },
     "S": {
       "mutable_misa": false,
@@ -421,7 +421,7 @@
       "supported": false
     },
     "Zicond": {
-      "supported": false
+      "supported": true
     },
     "Zicntr": {
       "supported": true
@@ -505,34 +505,34 @@
       "supported": false
     },
     "Zba": {
-      "supported": false
+      "supported": true
     },
     "Zbb": {
-      "supported": false
+      "supported": true
     },
     "Zbs": {
-      "supported": false
+      "supported": true
     },
     "Zbc": {
-      "supported": false
+      "supported": true
     },
     "Zbkb": {
-      "supported": false
+      "supported": true
     },
     "Zbkc": {
-      "supported": false
+      "supported": true
     },
     "Zbkx": {
-      "supported": false
+      "supported": true
     },
     "Zknd": {
-      "supported": false
+      "supported": true
     },
     "Zkne": {
-      "supported": false
+      "supported": true
     },
     "Zknh": {
-      "supported": false
+      "supported": true
     },
     "Zkr": {
       "supported": false,

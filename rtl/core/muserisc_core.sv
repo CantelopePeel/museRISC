@@ -396,6 +396,14 @@ module muserisc_core import muserisc_pkg::*; (
                         !mem_exc && !mem_stall;
   assign fp_dirty = fp_dirty_ex || fp_dirty_mem;
 
+  logic [63:0] bext_result;
+  muserisc_bext u_bext (
+      .op_i      (idex_ctrl_q.bext_op),
+      .a_i       (ex_rs1),
+      .b_i       (idex_ctrl_q.alu_src_imm ? idex_imm_q : ex_rs2),
+      .result_o  (bext_result)
+  );
+
   muserisc_muldiv u_muldiv (
       .funct3_i  (idex_ctrl_q.funct3),
       .word_op_i (idex_ctrl_q.word_op),
@@ -442,6 +450,7 @@ module muserisc_core import muserisc_pkg::*; (
     else if (idex_ctrl_q.csr)                ex_result = csr_rdata;
     else if (idex_ctrl_q.muldiv)             ex_result = muldiv_result;
     else if (idex_ctrl_q.fp_op)              ex_result = fpu_result;
+    else if (idex_ctrl_q.bext)               ex_result = bext_result;
     else                                     ex_result = alu_result;
   end
 

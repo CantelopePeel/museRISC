@@ -106,7 +106,94 @@ module muserisc_decoder import muserisc_pkg::*; (
           imm_o = imm_s;
         end
       end
-      7'b0010011: begin  // OP-IMM
+      7'b0010011: begin  // OP-IMM (+ B/K unary & bit-imm ops)
+        // B/K encodings live in OP-IMM space rejected by the
+        // shift-immediate legality checks below; take them
+        // first. bext operand B comes from imm_i[5:0] (or the
+        // rcon nibble in imm_i[3:0] for aes64ks1i).
+        if ((funct3 == 3'b001) && (instr_i[31:25] == 7'b0110000)) begin
+          // clz/ctz/cpop/sext.b/sext.h by imm[24:20]
+          unique case (instr_i[24:20])
+            5'b00000: ctrl_o.bext_op = 6'd11;
+            5'b00001: ctrl_o.bext_op = 6'd13;
+            5'b00010: ctrl_o.bext_op = 6'd15;
+            5'b00100: ctrl_o.bext_op = 6'd21;
+            5'b00101: ctrl_o.bext_op = 6'd22;
+            default:  ctrl_o.bext_op = 6'd63;
+          endcase
+          if (ctrl_o.bext_op != 6'd63) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.reg_write = 1'b1;
+            ctrl_o.bext = 1'b1;
+          end
+        end else if (funct3 == 3'b001 &&
+                     instr_i[31:25] == 7'b0011000) begin
+          // aes64im (rs2 field 0) / aes64ks1i (0x10+rcon<=0x1A)
+          if (instr_i[24:20] == 5'd0) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.reg_write = 1'b1;
+            ctrl_o.bext = 1'b1;
+            ctrl_o.bext_op = 6'd48;
+          end else if (instr_i[24] && (instr_i[23:20] <= 4'hA)) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.reg_write = 1'b1;
+            ctrl_o.bext = 1'b1;
+            ctrl_o.bext_op = 6'd49;
+            ctrl_o.alu_src_imm = 1'b1;
+          end
+        end else if (funct3 == 3'b001 &&
+                     instr_i[31:25] == 7'b0001000) begin
+          // SHA256/SHA512 unary ops by imm[24:20]
+          unique case (instr_i[24:20])
+            5'b00000: ctrl_o.bext_op = 6'd53;  // sha256sum0
+            5'b00001: ctrl_o.bext_op = 6'd54;  // sha256sum1
+            5'b00010: ctrl_o.bext_op = 6'd51;  // sha256sig0
+            5'b00011: ctrl_o.bext_op = 6'd52;  // sha256sig1
+            5'b00100: ctrl_o.bext_op = 6'd57;  // sha512sum0
+            5'b00101: ctrl_o.bext_op = 6'd58;  // sha512sum1
+            5'b00110: ctrl_o.bext_op = 6'd55;  // sha512sig0
+            5'b00111: ctrl_o.bext_op = 6'd56;  // sha512sig1
+            default:  ctrl_o.bext_op = 6'd63;
+          endcase
+          if (ctrl_o.bext_op != 6'd63) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.reg_write = 1'b1;
+            ctrl_o.bext = 1'b1;
+          end
+        end else if (funct3 == 3'b001 &&
+                     (instr_i[31:26] == 6'b010010 ||
+                      instr_i[31:26] == 6'b011010 ||
+                      instr_i[31:26] == 6'b001010)) begin
+          ctrl_o.valid = 1'b1;
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.bext = 1'b1;
+          ctrl_o.alu_src_imm = 1'b1;
+          ctrl_o.bext_op = (instr_i[31:26] == 6'b010010) ? 6'd32 :
+                           (instr_i[31:26] == 6'b011010) ? 6'd34 : 6'd35;
+        end else if (funct3 == 3'b101 &&
+                     instr_i[31:26] == 6'b011000) begin
+          ctrl_o.valid = 1'b1;                 // rori
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.bext = 1'b1;
+          ctrl_o.alu_src_imm = 1'b1;
+          ctrl_o.bext_op = 6'd25;
+        end else if (funct3 == 3'b101 &&
+                     instr_i[31:26] == 6'b010010) begin
+          ctrl_o.valid = 1'b1;                 // bexti
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.bext = 1'b1;
+          ctrl_o.alu_src_imm = 1'b1;
+          ctrl_o.bext_op = 6'd33;
+        end else if (funct3 == 3'b101 &&
+                     (instr_i[31:20] == 12'h287 ||
+                      instr_i[31:20] == 12'h687 ||
+                      instr_i[31:20] == 12'h6B8)) begin
+          ctrl_o.valid = 1'b1;                 // orc.b/brev8/rev8
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.bext = 1'b1;
+          ctrl_o.bext_op = (instr_i[31:20] == 12'h287) ? 6'd27 :
+                           (instr_i[31:20] == 12'h687) ? 6'd41 : 6'd28;
+        end else begin
         ctrl_o.valid = 1'b1;
         ctrl_o.reg_write = 1'b1;
         ctrl_o.alu_src_imm = 1'b1;
@@ -124,6 +211,7 @@ module muserisc_decoder import muserisc_pkg::*; (
             (instr_i[31:26] != 6'b010000)) begin
           ctrl_o.valid = 1'b0;
         end
+        end
       end
       7'b0110011: begin  // OP (register-register) and M (funct7=1)
         if ((funct7 == 7'b0000000) ||
@@ -136,9 +224,100 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.valid = 1'b1;
           ctrl_o.reg_write = 1'b1;
           ctrl_o.muldiv = 1'b1;
+        end else begin
+          // B / Zicond / scalar-crypto OP space.
+          ctrl_o.bext_op = 6'd63;
+          unique case (funct7)
+            7'b0000100: begin
+              if (funct3 == 3'b100) ctrl_o.bext_op = 6'd38; // pack
+              if (funct3 == 3'b111) ctrl_o.bext_op = 6'd39; // packh
+            end
+            7'b0000101: begin
+              unique case (funct3)
+                3'b001: ctrl_o.bext_op = 6'd29;  // clmul
+                3'b010: ctrl_o.bext_op = 6'd31;  // clmulr
+                3'b011: ctrl_o.bext_op = 6'd30;  // clmulh
+                3'b100: ctrl_o.bext_op = 6'd19;  // min
+                3'b101: ctrl_o.bext_op = 6'd20;  // minu
+                3'b110: ctrl_o.bext_op = 6'd17;  // max
+                3'b111: ctrl_o.bext_op = 6'd18;  // maxu
+                default: ctrl_o.bext_op = 6'd63;
+              endcase
+            end
+            7'b0000111: begin
+              if (funct3 == 3'b101) ctrl_o.bext_op = 6'd36;
+              if (funct3 == 3'b111) ctrl_o.bext_op = 6'd37;
+            end
+            7'b0010000: begin
+              if (funct3 == 3'b010) ctrl_o.bext_op = 6'd1;
+              if (funct3 == 3'b100) ctrl_o.bext_op = 6'd2;
+              if (funct3 == 3'b110) ctrl_o.bext_op = 6'd3;
+            end
+            7'b0010100: begin
+              if (funct3 == 3'b001) ctrl_o.bext_op = 6'd35; // bset
+              if (funct3 == 3'b010) ctrl_o.bext_op = 6'd42; // xperm4
+              if (funct3 == 3'b100) ctrl_o.bext_op = 6'd43; // xperm8
+            end
+            7'b0100000: begin
+              if (funct3 == 3'b100) ctrl_o.bext_op = 6'd10; // xnor
+              if (funct3 == 3'b110) ctrl_o.bext_op = 6'd9;  // orn
+              if (funct3 == 3'b111) ctrl_o.bext_op = 6'd8;  // andn
+            end
+            7'b0100100: begin
+              if (funct3 == 3'b001) ctrl_o.bext_op = 6'd32; // bclr
+              if (funct3 == 3'b101) ctrl_o.bext_op = 6'd33; // bext
+            end
+            7'b0110000: begin
+              if (funct3 == 3'b001) ctrl_o.bext_op = 6'd23; // rol
+              if (funct3 == 3'b101) ctrl_o.bext_op = 6'd25; // ror
+            end
+            7'b0110100: begin
+              if (funct3 == 3'b001) ctrl_o.bext_op = 6'd34; // binv
+            end
+            7'b0011001: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd44;
+            7'b0011011: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd45;
+            7'b0011101: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd46;
+            7'b0011111: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd47;
+            7'b0111111: if (funct3 == 3'b000) ctrl_o.bext_op = 6'd50;
+            default: ctrl_o.bext_op = 6'd63;
+          endcase
+          if (ctrl_o.bext_op != 6'd63) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.reg_write = 1'b1;
+            ctrl_o.bext = 1'b1;
+          end
         end
       end
-      7'b0011011: begin  // OP-IMM-32
+      7'b0011011: begin  // OP-IMM-32 (+ W-form B ops)
+        if ((funct3 == 3'b001) && (instr_i[31:25] == 7'b0110000)) begin
+          unique case (instr_i[24:20])
+            5'b00000: ctrl_o.bext_op = 6'd12;  // clzw
+            5'b00001: ctrl_o.bext_op = 6'd14;  // ctzw
+            5'b00010: ctrl_o.bext_op = 6'd16;  // cpopw
+            default:  ctrl_o.bext_op = 6'd63;
+          endcase
+          if (ctrl_o.bext_op != 6'd63) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.reg_write = 1'b1;
+            ctrl_o.bext = 1'b1;
+          end
+        end else if ((funct3 == 3'b001) &&
+                     (instr_i[31:26] == 6'b000010)) begin
+          ctrl_o.valid = 1'b1;                 // slli.uw
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.bext = 1'b1;
+          ctrl_o.alu_src_imm = 1'b1;
+          ctrl_o.bext_op = 6'd7;
+          imm_o = imm_i;
+        end else if ((funct3 == 3'b101) &&
+                     (instr_i[31:25] == 7'b0110000)) begin
+          ctrl_o.valid = 1'b1;                 // roriw
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.bext = 1'b1;
+          ctrl_o.alu_src_imm = 1'b1;
+          ctrl_o.bext_op = 6'd26;
+          imm_o = imm_i;
+        end else begin
         ctrl_o.valid = 1'b1;
         ctrl_o.reg_write = 1'b1;
         ctrl_o.alu_src_imm = 1'b1;
@@ -157,6 +336,7 @@ module muserisc_decoder import muserisc_pkg::*; (
         if ((funct3 == 3'b101) && (funct7 != 7'b0000000) &&
             (funct7 != 7'b0100000)) begin
           ctrl_o.valid = 1'b0;
+        end
         end
       end
       7'b0111011: begin  // OP-32 and M W-variants (funct7=1)
@@ -178,6 +358,28 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.valid = 1'b1;
           ctrl_o.reg_write = 1'b1;
           ctrl_o.muldiv = 1'b1;
+        end else begin
+          // W-form B ops in OP-32 space.
+          ctrl_o.bext_op = 6'd63;
+          if (funct7 == 7'b0000100 && funct3 == 3'b000)
+            ctrl_o.bext_op = 6'd0;               // add.uw
+          if (funct7 == 7'b0000100 && funct3 == 3'b100)
+            ctrl_o.bext_op = 6'd40;              // packw (zext.h)
+          if (funct7 == 7'b0010000 && funct3 == 3'b010)
+            ctrl_o.bext_op = 6'd4;               // sh1add.uw
+          if (funct7 == 7'b0010000 && funct3 == 3'b100)
+            ctrl_o.bext_op = 6'd5;               // sh2add.uw
+          if (funct7 == 7'b0010000 && funct3 == 3'b110)
+            ctrl_o.bext_op = 6'd6;               // sh3add.uw
+          if (funct7 == 7'b0110000 && funct3 == 3'b001)
+            ctrl_o.bext_op = 6'd24;              // rolw
+          if (funct7 == 7'b0110000 && funct3 == 3'b101)
+            ctrl_o.bext_op = 6'd26;              // rorw
+          if (ctrl_o.bext_op != 6'd63) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.reg_write = 1'b1;
+            ctrl_o.bext = 1'b1;
+          end
         end
       end
       7'b0001111: begin  // FENCE / FENCE.I: NOP in stage 1
