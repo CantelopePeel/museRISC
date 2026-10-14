@@ -145,6 +145,7 @@ module muserisc_fpu (
   logic [63:0] rp_result;
   logic [4:0]  rp_flags;
 
+  /* verilator lint_off UNUSEDSIGNAL */
   always_comb begin
     logic signed [15:0] e;
     logic [15:0] shift, total_shift;
@@ -164,10 +165,15 @@ module muserisc_fpu (
       shift = 16'd0;
       if (e < emin) shift = 16'(emin - e);
       total_shift = (16'd256 - {9'b0, p}) + shift;
-      if (total_shift >= 16'd256) begin
+      if (total_shift > 16'd256) begin
         kept = 64'b0;
         guard = 1'b0;
         sticky = (rp_sig != 0) | rp_sticky;
+      end else if (total_shift == 16'd256) begin
+        // everything drops; the MSB is the guard (half-ulp) bit
+        kept = 64'b0;
+        guard = rp_sig[255];
+        sticky = (rp_sig[254:0] != 0) | rp_sticky;
       end else begin
         kept_wide = rp_sig >> total_shift[7:0];
         kept = kept_wide[63:0];
@@ -287,7 +293,7 @@ module muserisc_fpu (
     logic [63:0] imag;
     logic abig, blt, beq;
     logic [9:0]  class_bits;
-    logic [15:0] shamt;
+    logic signed [15:0] shamt;
     logic [255:0] f2i_win;
     logic [127:0] f2i_ipart, f2i_lim_pos, f2i_lim_neg;
     logic f2i_guard, f2i_sticky, f2i_inexact, f2i_round, f2i_ovf;
@@ -394,7 +400,7 @@ module muserisc_fpu (
           rp_zero = 1'b1;
         end else begin
           prod = 106'(ua.sig) * 106'(ub.sig);
-          wprod = {150'b0, prod};   // prod bit105 -> bit255
+          wprod = {prod, 150'b0};   // prod bit105 -> bit255
           prod_e = ua.exp + ub.exp -
                    16'(2 * {9'b0, p}) + 16'sd2 + 16'sd105;
           lz = clz256(wprod);
@@ -454,7 +460,10 @@ module muserisc_fpu (
           wprod = 256'(sq_root) << 158;
           lz = clz256(wprod);
           rp_sig = wprod << lz[7:0];
-          rp_exp = (t - 16'(shamt)) / 16'sd2 + 16'sd97 - 16'(lz);
+          // (separate statement: keep the divide in a signed
+          // context — one unsigned operand would poison it)
+          frame_e = (t - shamt) / 16'sd2;
+          rp_exp = frame_e + 16'sd97 - 16'(lz);
         end
       end
 
@@ -481,7 +490,7 @@ module muserisc_fpu (
                                   : {32'hFFFF_FFFF, sc_sign, 8'hFF, 23'b0};
         end else begin
           prod = 106'(ua.sig) * 106'(ub.sig);
-          wprod = {150'b0, prod};
+          wprod = {prod, 150'b0};
           prod_e = ua.exp + ub.exp - 16'(2 * {9'b0, p}) +
                    16'sd2 + 16'sd105;
           wc = to_window(uc.sig, p);
@@ -618,7 +627,7 @@ module muserisc_fpu (
         if (ua.is_nan) begin
           op_flags[4] = 1'b1;
           unique case (aux_i)
-            2'd0: direct_result = 64'hFFFF_FFFF_7FFF_FFFF;
+            2'd0: direct_result = 64'h0000_0000_7FFF_FFFF;
             2'd1: direct_result = 64'hFFFF_FFFF_FFFF_FFFF;
             2'd2: direct_result = 64'h7FFF_FFFF_FFFF_FFFF;
             2'd3: direct_result = 64'hFFFF_FFFF_FFFF_FFFF;
@@ -627,9 +636,11 @@ module muserisc_fpu (
           f2i_win = to_window(ua.sig, p);
           if (ua.is_zero) begin
             f2i_ipart = 0; f2i_guard = 0; f2i_sticky = 0;
-          end else if (ua.exp >= 16'sd0 && ua.exp < 16'sd255) begin
+          end else if (ua.exp >= 16'sd64) begin
+            f2i_ipart = {128{1'b1}}; f2i_guard = 0; f2i_sticky = 0;
+          end else if (ua.exp >= 16'sd0) begin
             f2i_ipart = 128'(f2i_win >> (16'sd255 - ua.exp));
-            f2i_guard = f2i_win[(16'sd254 - ua.exp)];
+            f2i_guard = f2i_win[8'(16'sd254 - ua.exp)];
             f2i_sticky = (ua.exp < 16'sd254) &&
                 ((f2i_win & ((256'b1 << (16'sd254 - ua.exp)) - 1)) != 0);
           end else if (ua.exp < 16'sd0) begin
@@ -664,7 +675,7 @@ module muserisc_fpu (
             op_flags[4] = 1'b1;
             unique case (aux_i)
               2'd0: direct_result = ua.sign ? 64'hFFFF_FFFF_8000_0000
-                                            : 64'hFFFF_FFFF_7FFF_FFFF;
+                                            : 64'h0000_0000_7FFF_FFFF;
               2'd1: direct_result = ua.sign ? 64'b0
                                             : 64'hFFFF_FFFF_FFFF_FFFF;
               2'd2: direct_result = ua.sign ? 64'h8000_0000_0000_0000

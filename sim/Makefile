@@ -35,8 +35,8 @@ TESTS    := rv64i_directed rv64m_directed amo_directed pipeline_directed priv_di
             trap_store_misalign trap_younger_store trap_instr_misalign \
             trap_pa_fetch trap_pa_load
 
-.PHONY: all alu muldiv decoder regfile csr mmu core sw coverage clean riscv-tests
-all: alu muldiv decoder regfile csr mmu core coverage
+.PHONY: all alu muldiv decoder regfile csr mmu fpu core sw coverage clean riscv-tests
+all: alu muldiv decoder regfile csr mmu fpu core coverage
 
 ## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
 riscv-tests: $(BUILD)/core_tb
@@ -99,6 +99,24 @@ $(BUILD)/mmu_tb: $(ROOT)/tb/cpp/mmu_tb.cpp $(RTL)/muserisc_mmu.sv | $(BUILD) $(O
 mmu: $(BUILD)/mmu_tb
 	cd $(BUILD) && COV_FILE=cov_mmu.dat ./mmu_tb
 
+## ---- FPU unit test --------------------------------------------------------
+SOFTFLOAT := $(ROOT)/third_party/berkeley-softfloat-3
+SF_HOST   := $(ROOT)/build/softfloat-host
+$(SF_HOST)/softfloat.a:
+	mkdir -p $(SF_HOST)
+	cp $(SOFTFLOAT)/build/HostRISCV/Makefile $(SOFTFLOAT)/build/HostRISCV/platform.h $(SF_HOST)/
+	cd $(SF_HOST) && sed -i.bak 's|../../source|../../third_party/berkeley-softfloat-3/source|' Makefile && $(MAKE) -j8
+$(BUILD)/fpu_tb: $(ROOT)/tb/cpp/fpu_tb.cpp $(RTL)/muserisc_fpu.sv \
+                 $(SF_HOST)/softfloat.a | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/fpu --top-module muserisc_fpu \
+	  -CFLAGS "-I$(abspath $(SOFTFLOAT))/source/include -I$(abspath $(SF_HOST))" \
+	  -LDFLAGS "$(abspath $(SF_HOST))/softfloat.a" \
+	  -o $(abspath $(BUILD)/fpu_tb) $(RTL)/muserisc_fpu.sv \
+	  $(abspath $(ROOT)/tb/cpp/fpu_tb.cpp)
+
+fpu: $(BUILD)/fpu_tb
+	cd $(BUILD) && COV_FILE=cov_fpu.dat ./fpu_tb
+
 ## ---- Core harness + directed software ---------------------------------
 $(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(CORE_RTL) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/core --top-module muserisc_core \
@@ -134,6 +152,7 @@ COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
               $(BUILD)/cov_alu.dat $(BUILD)/cov_muldiv.dat \
               $(BUILD)/cov_decoder.dat $(BUILD)/cov_regfile.dat \
               $(BUILD)/cov_csr.dat $(BUILD)/cov_mmu.dat \
+              $(BUILD)/cov_fpu.dat \
               $(BUILD)/cov_rv64i.dat $(BUILD)/cov_rv64m.dat \
               $(BUILD)/cov_amo.dat \
               $(BUILD)/cov_pipeline.dat $(BUILD)/cov_priv.dat \
