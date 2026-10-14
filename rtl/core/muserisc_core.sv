@@ -61,7 +61,7 @@ module muserisc_core import muserisc_pkg::*; (
   // The core consumes mstatus.MPRV/MPP today; satp feeds the MMU.
   /* verilator lint_off UNUSEDSIGNAL */
   logic [63:0] csr_mstatus, csr_satp, csr_hgatp;
-  logic        virt, csr_virt_inst, csr_sum, csr_mxr;
+  logic        virt, dvirt, csr_virt_inst, csr_sum, csr_mxr, csr_hs_mxr;
   /* verilator lint_on UNUSEDSIGNAL */
   logic [1:0]  eff_priv_data;  // MPRV-adjusted privilege for data
   assign eff_priv_data = (priv == 2'b11 && csr_mstatus[17])
@@ -84,6 +84,8 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] mmu_if_pa, mmu_d_pa;
   logic        mmu_if_ok, mmu_if_fault, mmu_if_fault_page;
   logic        mmu_d_ok, mmu_d_fault, mmu_d_fault_page;
+  logic        mmu_if_fault_guest, mmu_d_fault_guest;
+  logic [63:0] mmu_if_fault_gpa, mmu_d_fault_gpa;
   logic        walk_req, walk_we, walk_grant;
   logic [63:0] walk_addr, walk_wdata;
   logic [1:0]  walk_acc;
@@ -126,7 +128,8 @@ module muserisc_core import muserisc_pkg::*; (
   assign fetch_fault = mmu_if_fault || fetch_pa_illegal ||
                        (mmu_if_ok && !pmp_allow_fetch);
   assign fetch_cause = mmu_if_fault ?
-      (mmu_if_fault_page ? 64'd12 : 64'd1) : 64'd1;
+      (mmu_if_fault_guest ? 64'd20 :
+       mmu_if_fault_page ? 64'd12 : 64'd1) : 64'd1;
   assign fetch_stall = !fetch_pa_illegal && !mmu_if_ok &&
                        !mmu_if_fault;
 
@@ -169,6 +172,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic        ifid_rvc_q;      // instruction was a 16-bit parcel
   logic [15:0] ifid_parcel_q;   // raw parcel (illegal tval)
   logic [63:0] ifid_tval_q;     // fetch-fault address
+  logic [63:0] ifid_gpa_q;      // faulting GPA (guest faults)
 
   // ------------------------------------------------------------
   // ID stage
@@ -179,7 +183,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] rf_rs1, rf_rs2;
   logic [63:0] id_rs1_val, id_rs2_val;
   logic        id_exc;
-  logic [63:0] id_cause, id_tval;
+  logic [63:0] id_cause, id_tval, id_gpa;
   logic        irq_inject;
 
   muserisc_decoder u_decoder (
@@ -192,10 +196,12 @@ module muserisc_core import muserisc_pkg::*; (
   );
 
   always_comb begin
+    id_gpa = 64'd0;
     if (ifid_exc_q) begin
       id_exc = ifid_valid_q;
-      id_cause = ifid_cause_q;                // 1 access / 12 page fault
+      id_cause = ifid_cause_q;          // 1 access / 12 page / 20 guest
       id_tval = ifid_tval_q;
+      id_gpa = ifid_gpa_q;
     end else if (id_ctrl.ecall) begin
       id_exc = ifid_valid_q;
       id_cause = (priv == 2'b11) ? 64'd11 :
@@ -245,7 +251,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [4:0]  idex_rs1_addr_q, idex_rs2_addr_q, idex_rd_q;
   logic [4:0]  idex_rs3_addr_q;
   logic        idex_exc_q;
-  logic [63:0] idex_cause_q, idex_tval_q;
+  logic [63:0] idex_cause_q, idex_tval_q, idex_gpa_q;
   logic        idex_rvc_q;
 
   // FP sources of the ID instruction (from the decoder ctrl).
@@ -272,7 +278,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic        branch_taken;
   logic        ex_misalign, ex_illegal;
   logic        ex_exc;
-  logic [63:0] ex_cause, ex_tval;
+  logic [63:0] ex_cause, ex_tval, ex_gpa;
   logic        ex_ret, ex_serialize;
 
   // EX/MEM register
@@ -286,7 +292,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] exmem_store_data_q;
   logic [4:0]  exmem_rd_q;
   logic        exmem_exc_q;
-  logic [63:0] exmem_cause_q, exmem_tval_q;
+  logic [63:0] exmem_cause_q, exmem_tval_q, exmem_gpa_q;
 
   // MEM/WB register
   logic        memwb_valid_q;
@@ -296,7 +302,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic        memwb_reg_write_q;
   logic        memwb_fp_write_q;
   logic        memwb_exc_q;
-  logic [63:0] memwb_cause_q, memwb_tval_q;
+  logic [63:0] memwb_cause_q, memwb_tval_q, memwb_gpa_q;
 
   logic        wb_write;
   assign wb_write = memwb_valid_q && memwb_reg_write_q && !memwb_exc_q;
@@ -552,11 +558,13 @@ module muserisc_core import muserisc_pkg::*; (
   end
 
   always_comb begin
+    ex_gpa = idex_gpa_q;
     if (idex_exc_q) begin
       ex_exc = idex_valid_q;
       ex_cause = idex_cause_q;
       ex_tval = idex_tval_q;
     end else if (ex_illegal) begin
+      ex_gpa = 64'd0;
       ex_exc = idex_valid_q;
       ex_cause = csr_virt_inst ? 64'd22 : CAUSE_ILLEGAL_INSTR;
       ex_tval = {32'd0, idex_instr_q};
@@ -584,7 +592,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic        data_access, mem_uses_port;
   logic        mem_pmp_fault, mem_trans_fault;
   logic        mem_exc;
-  logic [63:0] mem_cause, mem_tval;
+  logic [63:0] mem_cause, mem_tval, mem_gpa;
 
   // A translation miss parks the access in MEM (pipeline hold);
   // a translation fault or a PMP denial on the PA excepts it.
@@ -751,20 +759,26 @@ module muserisc_core import muserisc_pkg::*; (
       mem_exc = exmem_valid_q;
       mem_cause = exmem_cause_q;
       mem_tval = exmem_tval_q;
+      mem_gpa = exmem_gpa_q;
     end else if (mem_trans_fault) begin
       mem_exc = 1'b1;
       mem_cause = exmem_ctrl_q.mem_write
-          ? (mmu_d_fault_page ? 64'd15 : 64'd7)
-          : (mmu_d_fault_page ? 64'd13 : 64'd5);
+          ? (mmu_d_fault_guest ? 64'd23 :
+             mmu_d_fault_page ? 64'd15 : 64'd7)
+          : (mmu_d_fault_guest ? 64'd21 :
+             mmu_d_fault_page ? 64'd13 : 64'd5);
       mem_tval = exmem_addr_q;  // faulting VA
+      mem_gpa = mmu_d_fault_gpa;
     end else if (mem_pmp_fault) begin
       mem_exc = 1'b1;
       mem_cause = exmem_ctrl_q.mem_write ? 64'd7 : 64'd5;
       mem_tval = exmem_addr_q;
+      mem_gpa = 64'd0;
     end else begin
       mem_exc = 1'b0;
       mem_cause = 64'd0;
       mem_tval = 64'd0;
+      mem_gpa = 64'd0;
     end
   end
 
@@ -791,8 +805,8 @@ module muserisc_core import muserisc_pkg::*; (
       .trap_cause_i  (memwb_cause_q),
       .trap_pc_i     (memwb_pc_q),
       .trap_tval_i   (memwb_tval_q),
-      .trap_gpa_i    (64'd0),  // supplied by two-stage MMU in 7b
-      .trap_tinst_i  (64'd0),
+      .trap_gpa_i    (memwb_gpa_q),
+      .trap_tinst_i  (64'd0),  // zero is a legal htinst/mtinst value
       .trap_target_o (trap_target),
       .trap_priv_o   (trap_priv_unused),
       .irq_valid_o   (irq_valid),
@@ -804,9 +818,11 @@ module muserisc_core import muserisc_pkg::*; (
       .irq_s_ext_i   (irq_s_ext_i),
       .priv_o        (priv),
       .virt_o        (virt),
+      .dvirt_o       (dvirt),
       .virt_inst_o   (csr_virt_inst),
       .sum_o         (csr_sum),
       .mxr_o         (csr_mxr),
+      .hs_mxr_o      (csr_hs_mxr),
       .satp_o        (csr_satp),
       .hgatp_o       (csr_hgatp),
       .mstatus_o     (csr_mstatus),
@@ -833,24 +849,32 @@ module muserisc_core import muserisc_pkg::*; (
       .clk_i            (clk_i),
       .rst_ni           (rst_ni),
       .satp_i           (csr_satp),
+      .hgatp_i          (csr_hgatp),
       .sum_i            (csr_sum),
       .mxr_i            (csr_mxr),
+      .hs_mxr_i         (csr_hs_mxr),
       .flush_i          (sfence_fire),
       .abort_i          (trap_take),
       .if_va_i          (fetch_va),
       .if_priv_i        (priv),
+      .if_virt_i        (virt),
       .if_pa_o          (mmu_if_pa),
       .if_ok_o          (mmu_if_ok),
       .if_fault_o       (mmu_if_fault),
       .if_fault_page_o  (mmu_if_fault_page),
+      .if_fault_guest_o (mmu_if_fault_guest),
+      .if_fault_gpa_o   (mmu_if_fault_gpa),
       .d_va_i           (exmem_addr_q),
       .d_write_i        (exmem_ctrl_q.mem_write),
       .d_priv_i         (eff_priv_data),
+      .d_virt_i         (dvirt),
       .d_valid_i        (data_access),
       .d_pa_o           (mmu_d_pa),
       .d_ok_o           (mmu_d_ok),
       .d_fault_o        (mmu_d_fault),
       .d_fault_page_o   (mmu_d_fault_page),
+      .d_fault_guest_o  (mmu_d_fault_guest),
+      .d_fault_gpa_o    (mmu_d_fault_gpa),
       .walk_req_o       (walk_req),
       .walk_addr_o      (walk_addr),
       .walk_we_o        (walk_we),
@@ -888,6 +912,7 @@ module muserisc_core import muserisc_pkg::*; (
       ifid_rvc_q <= 1'b0;
       ifid_parcel_q <= 16'd0;
       ifid_tval_q <= 64'd0;
+      ifid_gpa_q <= 64'd0;
       straddle_q <= 1'b0;
       straddle_lo_q <= 16'd0;
       idex_rvc_q <= 1'b0;
@@ -903,6 +928,7 @@ module muserisc_core import muserisc_pkg::*; (
       idex_exc_q <= 1'b0;
       idex_cause_q <= 64'd0;
       idex_tval_q <= 64'd0;
+      idex_gpa_q <= 64'd0;
       exmem_pc_q <= 64'd0;
       exmem_ctrl_q <= '0;
       exmem_result_q <= 64'd0;
@@ -912,6 +938,7 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_exc_q <= 1'b0;
       exmem_cause_q <= 64'd0;
       exmem_tval_q <= 64'd0;
+      exmem_gpa_q <= 64'd0;
       memwb_pc_q <= 64'd0;
       memwb_result_q <= 64'd0;
       memwb_rd_q <= 5'd0;
@@ -919,6 +946,7 @@ module muserisc_core import muserisc_pkg::*; (
       memwb_exc_q <= 1'b0;
       memwb_cause_q <= 64'd0;
       memwb_tval_q <= 64'd0;
+      memwb_gpa_q <= 64'd0;
     end else if (trap_take) begin
       // Precise trap entry: redirect and empty the pipeline,
       // including any half-fetched straddled instruction.
@@ -943,6 +971,7 @@ module muserisc_core import muserisc_pkg::*; (
       memwb_exc_q <= mem_exc;
       memwb_cause_q <= mem_cause;
       memwb_tval_q <= mem_tval;
+      memwb_gpa_q <= mem_gpa;
 
       exmem_valid_q <= idex_valid_q;
       exmem_pc_q <= idex_pc_q;
@@ -954,6 +983,7 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_exc_q <= ex_exc;
       exmem_cause_q <= ex_cause;
       exmem_tval_q <= ex_tval;
+      exmem_gpa_q <= ex_gpa;
 
       if (stall || flush) begin
         idex_valid_q <= 1'b0;
@@ -974,6 +1004,7 @@ module muserisc_core import muserisc_pkg::*; (
         idex_exc_q <= 1'b1;
         idex_cause_q <= irq_cause;
         idex_tval_q <= 64'd0;
+        idex_gpa_q <= 64'd0;
       end else begin
         idex_valid_q <= ifid_valid_q;
         idex_pc_q <= ifid_pc_q;
@@ -994,6 +1025,7 @@ module muserisc_core import muserisc_pkg::*; (
         idex_exc_q <= id_exc;
         idex_cause_q <= id_cause;
         idex_tval_q <= id_tval;
+        idex_gpa_q <= id_gpa;
       end
 
       if (flush) begin
@@ -1016,6 +1048,7 @@ module muserisc_core import muserisc_pkg::*; (
           ifid_rvc_q <= fetch_rvc && !fetch_fault;
           ifid_parcel_q <= parcel16;
           ifid_tval_q <= fetch_tval;
+          ifid_gpa_q <= mmu_if_fault_guest ? mmu_if_fault_gpa : 64'd0;
           straddle_q <= 1'b0;
         end
       end else if (fetch_stall && !stall) begin

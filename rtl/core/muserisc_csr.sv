@@ -46,10 +46,12 @@ module muserisc_csr (
     // State outputs
     output logic [1:0] priv_o,       // nominal privilege (U/S/M)
     output logic       virt_o,       // virtualization mode V
+    output logic       dvirt_o,      // effective V for data (MPRV/MPV)
     output logic       virt_inst_o,  // current CSR op wants cause 22
-    output logic       sum_o,        // effective SUM (VS if V=1)
-    output logic       mxr_o,        // effective MXR (VS if V=1)
-    output logic [63:0] satp_o,      // vsatp while V=1
+    output logic       sum_o,        // effective data SUM (VS if V=1)
+    output logic       mxr_o,        // effective data MXR (VS if V=1)
+    output logic       hs_mxr_o,     // HS MXR (overrides G-stage X)
+    output logic [63:0] satp_o,      // effective data satp/vsatp
     output logic [63:0] hgatp_o,
     output logic [63:0] mstatus_o,
     output logic [63:0] xret_pc_o,    // mepc or sepc per sys_op_i
@@ -113,10 +115,15 @@ module muserisc_csr (
 
   assign priv_o = priv_q;
   assign virt_o = virt_q;
-  assign satp_o = virt_q ? vsatp_q : satp_q;
+  // Loads/stores in M-mode with MPRV=1, MPP!=M and MPV=1 execute
+  // with VS/VU translation context even though fetch stays in M.
+  assign dvirt_o = virt_q || ((priv_q == PRIV_M) && mstatus_mprv_q &&
+                               (mstatus_mpp_q != PRIV_M) && mstatus_mpv_q);
+  assign satp_o = dvirt_o ? vsatp_q : satp_q;
   assign hgatp_o = hgatp_q;
-  assign sum_o = virt_q ? vs_sum_q : mstatus_sum_q;
-  assign mxr_o = virt_q ? vs_mxr_q : mstatus_mxr_q;
+  assign sum_o = dvirt_o ? vs_sum_q : mstatus_sum_q;
+  assign mxr_o = dvirt_o ? vs_mxr_q : mstatus_mxr_q;
+  assign hs_mxr_o = mstatus_mxr_q;
 
   // hstatus / vsstatus compositions.
   logic [63:0] hstatus_val, vsstatus_val;

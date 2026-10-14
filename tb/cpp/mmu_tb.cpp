@@ -37,6 +37,9 @@ uint64_t Pte(uint64_t pa, uint64_t flags) { return (pa >> 2) | flags; }
 uint64_t Satp(uint16_t asid) {
   return (8ull << 60) | (uint64_t(asid) << 44) | (kRootPa >> 12);
 }
+uint64_t SatpRoot(uint64_t root_pa, uint16_t asid) {
+  return (8ull << 60) | (uint64_t(asid) << 44) | (root_pa >> 12);
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -87,16 +90,19 @@ int main(int argc, char** argv) {
     d->abort_i = 0;
     d->eval();
   };
+  uint64_t last_gpa = 0;
   // Translate on the fetch port. Returns 0 ok (*pa set), 1 page
-  // fault, 2 access fault, 3 timeout.
+  // fault, 2 access fault, 3 timeout, 4 guest-page fault.
   auto xlate_if = [&](uint64_t va, int priv, uint64_t* pa) {
     d->if_va_i = va;
     d->if_priv_i = uint8_t(priv);
-    for (int i = 0; i < 40; ++i) {
+    for (int i = 0; i < 120; ++i) {
       d->eval();
       if (d->if_ok_o) { *pa = d->if_pa_o; return 0; }
       if (d->if_fault_o) {
-        const int rc = d->if_fault_page_o ? 1 : 2;
+        last_gpa = d->if_fault_gpa_o;
+        const int rc = d->if_fault_guest_o ? 4 :
+                       d->if_fault_page_o ? 1 : 2;
         consume_fault();
         return rc;
       }
@@ -110,15 +116,19 @@ int main(int argc, char** argv) {
     d->d_priv_i = uint8_t(priv);
     d->d_valid_i = 1;
     int rc = 3;
-    for (int i = 0; i < 40; ++i) {
+    for (int i = 0; i < 120; ++i) {
       d->eval();
       if (d->d_ok_o) { *pa = d->d_pa_o; rc = 0; break; }
-      if (d->d_fault_o) { rc = d->d_fault_page_o ? 1 : 2; break; }
+      if (d->d_fault_o) {
+        last_gpa = d->d_fault_gpa_o;
+        rc = d->d_fault_guest_o ? 4 : d->d_fault_page_o ? 1 : 2;
+        break;
+      }
       tick();
     }
     d->d_valid_i = 0;
     d->eval();
-    if (rc == 1 || rc == 2) consume_fault();
+    if (rc == 1 || rc == 2 || rc == 4) consume_fault();
     return rc;
   };
   auto flush_tlb = [&]() {
@@ -129,10 +139,12 @@ int main(int argc, char** argv) {
   };
 
   // Init + reset.
-  d->clk_i = 0; d->rst_ni = 0; d->satp_i = 0; d->sum_i = 0; d->mxr_i = 0;
+  d->clk_i = 0; d->rst_ni = 0; d->satp_i = 0; d->hgatp_i = 0;
+  d->sum_i = 0; d->mxr_i = 0; d->hs_mxr_i = 0;
   d->flush_i = 0; d->abort_i = 0;
-  d->if_va_i = 0; d->if_priv_i = 3;
-  d->d_va_i = 0; d->d_write_i = 0; d->d_priv_i = 3; d->d_valid_i = 0;
+  d->if_va_i = 0; d->if_priv_i = 3; d->if_virt_i = 0;
+  d->d_va_i = 0; d->d_write_i = 0; d->d_priv_i = 3; d->d_virt_i = 0;
+  d->d_valid_i = 0;
   d->walk_grant_i = 1; d->walk_rdata_i = 0; d->walk_pmp_allow_i = 1;
   tick(); tick();
   d->rst_ni = 1;
@@ -302,6 +314,84 @@ int main(int argc, char** argv) {
   CHECK(d->d_ok_o && d->d_pa_o == 0x2a000ull);
   d->d_valid_i = 0;
   CHECK(xlate_if(0x408000ull, 1, &pa) == 0 && pa == 0x29000ull);
+
+  // ---- Stage 7b: two-stage VS + Sv39x4 G translation ----
+  // Host G tables at 0x40000/44000/45000. Guest VS tables live
+  // at GPA 0x80000.. and are backed at host 0x50000... The
+  // guest leaf maps VA 0x400000 -> GPA 0x90000 -> host 0x60000,
+  // so both stages and all implicit PTE accesses are exercised.
+  const uint64_t kGRoot = 0x40000, kGL1 = 0x44000, kGL0 = 0x45000;
+  const uint64_t kVsRootGpa = 0x80000, kVsL1Gpa = 0x81000;
+  const uint64_t kVsL0Gpa = 0x82000;
+  const uint64_t kVsRootHost = 0x50000, kVsL1Host = 0x51000;
+  const uint64_t kVsL0Host = 0x52000;
+  wr64(kGRoot + 0 * 8, Pte(kGL1, kV));
+  wr64(kGL1 + 0 * 8, Pte(kGL0, kV));
+  wr64(kGL0 + 0x80 * 8, Pte(kVsRootHost, kV | kR | kW | kX | kU | kA | kD));
+  wr64(kGL0 + 0x81 * 8, Pte(kVsL1Host, kV | kR | kW | kX | kU | kA | kD));
+  wr64(kGL0 + 0x82 * 8, Pte(kVsL0Host, kV | kR | kW | kX | kU | kA | kD));
+  wr64(kGL0 + 0x90 * 8, Pte(0x60000, kV | kR | kW | kX | kU | kA | kD));
+  wr64(kVsRootHost + 0 * 8, Pte(kVsL1Gpa, kV));
+  wr64(kVsL1Host + 2 * 8, Pte(kVsL0Gpa, kV));
+  wr64(kVsL0Host + 0 * 8, Pte(0x90000, kV | kR | kW | kA | kD));
+  d->satp_i = SatpRoot(kVsRootGpa, 3);
+  d->hgatp_i = SatpRoot(kGRoot, 9);  // MODE=Sv39x4, VMID=9
+  d->if_virt_i = 1;
+  d->d_virt_i = 1;
+  flush_tlb();
+  CHECK(xlate_d(0x400123ull, false, 1, &pa) == 0 && pa == 0x60123ull);
+  CHECK(xlate_d(0x400123ull, true, 1, &pa) == 0 && pa == 0x60123ull);
+  CHECK(xlate_if(0x400000ull, 1, &pa) == 1);  // VS leaf has no X
+  CHECK(xlate_d(0x400000ull, false, 0, &pa) == 1);  // VS U fault
+  // VMID tags the combined entry: remap under VMID 9, then a
+  // VMID-10 lookup must re-walk and see the new host page.
+  wr64(kGL0 + 0x90 * 8, Pte(0x61000, kV | kR | kW | kX | kU | kA | kD));
+  d->hgatp_i = SatpRoot(kGRoot, 10);
+  CHECK(xlate_d(0x400000ull, false, 1, &pa) == 0 && pa == 0x61000ull);
+  d->hgatp_i = SatpRoot(kGRoot, 9);
+  CHECK(xlate_d(0x400000ull, false, 1, &pa) == 0 && pa == 0x60000ull);
+  wr64(kGL0 + 0x90 * 8, Pte(0x60000, kV | kR | kW | kX | kU | kA | kD));
+  // A/D updates happen at both stages.
+  wr64(kVsL0Host + 0 * 8, Pte(0x90000, kV | kR | kW));
+  wr64(kGL0 + 0x90 * 8, Pte(0x60000, kV | kR | kW | kX | kU));
+  flush_tlb();
+  CHECK(xlate_d(0x400000ull, false, 1, &pa) == 0);
+  CHECK((rd64(kVsL0Host) & (kA | kD)) == kA);
+  CHECK((rd64(kGL0 + 0x90 * 8) & (kA | kD)) == kA);
+  CHECK(xlate_d(0x400000ull, true, 1, &pa) == 0);
+  CHECK((rd64(kVsL0Host) & (kA | kD)) == (kA | kD));
+  CHECK((rd64(kGL0 + 0x90 * 8) & (kA | kD)) == (kA | kD));
+  // Final G permission denial is a guest fault on the data GPA.
+  wr64(kGL0 + 0x90 * 8, Pte(0x60000, kV | kR | kX | kU | kA | kD));
+  flush_tlb();
+  CHECK(xlate_d(0x400000ull, false, 1, &pa) == 0);
+  CHECK(xlate_d(0x400000ull, true, 1, &pa) == 4 &&
+        last_gpa == 0x90000ull);
+  wr64(kGL0 + 0x90 * 8, Pte(0x60000, kV | kR | kW | kX | kU | kA | kD));
+  // A G denial for the implicit VS-PTE D update faults on the
+  // VS PTE's GPA, still reported as the original store access.
+  wr64(kVsL0Host + 0 * 8, Pte(0x90000, kV | kR | kW | kA));
+  wr64(kGL0 + 0x82 * 8, Pte(kVsL0Host, kV | kR | kX | kU | kA | kD));
+  flush_tlb();
+  CHECK(xlate_d(0x400000ull, true, 1, &pa) == 4 &&
+        last_gpa == kVsL0Gpa);
+  wr64(kGL0 + 0x82 * 8, Pte(kVsL0Host, kV | kR | kW | kX | kU | kA | kD));
+  wr64(kVsL0Host + 0 * 8, Pte(0x90000, kV | kR | kW | kA | kD));
+  // G-only (vsatp Bare): the address itself is the GPA.
+  d->satp_i = 0;
+  flush_tlb();
+  CHECK(xlate_d(0x90042ull, false, 1, &pa) == 0 && pa == 0x60042ull);
+  CHECK(xlate_d(0x91000ull, false, 1, &pa) == 4 &&
+        last_gpa == 0x91000ull);
+  CHECK(xlate_d(1ull << 41, false, 1, &pa) == 4 &&
+        last_gpa == (1ull << 41));
+  // VS-only (hgatp Bare) reuses the stage-3 tables above.
+  d->hgatp_i = 0;
+  d->satp_i = Satp(0);
+  flush_tlb();
+  CHECK(xlate_d(0x400000ull, false, 1, &pa) == 0 && pa == 0x20000ull);
+  d->if_virt_i = 0;
+  d->d_virt_i = 0;
 
   d->final();
   if (cov_path != nullptr) context.coveragep()->write(cov_path);
