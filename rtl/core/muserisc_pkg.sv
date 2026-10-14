@@ -26,6 +26,10 @@ package muserisc_pkg;
   // Decoder output consumed by the datapath. One struct so stage 2
   // can register it verbatim between decode and execute.
   typedef struct packed {
+    logic [4:0] amo_op;    // AMO funct5 (instr[31:27])
+    logic    sc;           // store-conditional (result = success flag)
+    logic    lr;           // load-reserved (sets the reservation)
+    logic    amo;          // atomic RMW (funct5 in amo_op)
     logic    sfence;       // SFENCE.VMA (serializing; flushes TLBs)
     logic    wfi;          // WFI (executes as NOP unless TW traps it)
     logic    sret;         // SRET

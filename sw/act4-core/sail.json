@@ -271,7 +271,7 @@
     },
     "A": {
       "mutable_misa": false,
-      "supported": false
+      "supported": true
     },
     "F": {
       "mutable_misa": false,
@@ -448,7 +448,7 @@
       "supported": true
     },
     "Zaamo": {
-      "supported": false
+      "supported": true
     },
     "Zabha": {
       "supported": false
@@ -457,7 +457,7 @@
       "supported": false
     },
     "Zalrsc": {
-      "supported": false
+      "supported": true
     },
     "Zama16b": {
       "supported": false

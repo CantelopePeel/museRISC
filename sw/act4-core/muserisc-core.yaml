@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/riscv/riscv-unified-db/main/spec/schemas/config_schema.json
 ---
 # UDB architecture configuration for the museRISC in-house RV64
-# core (issue #18), as of stage 3 (RV64IM, M/S/U, Sv39+Svnapot,
+# core (issue #18), as of stage 4a (RV64IMA, M/S/U, Sv39+Svnapot,
 # PMP16). DUT: rtl/core/muserisc_core.sv and friends running in
 # the C++ Verilator harness (tb/cpp/core_tb.cpp ELF/HTIF mode,
 # paged physical memory, boot_pc_i = ELF entry at 0x8000_0000).
@@ -24,9 +24,14 @@ description: museRISC in-house RV64IM core (5-stage, Sv39) in the C++ Verilator 
 implemented_extensions:
   # misa is a read mux constant (writes WARL-ignored):
   # rtl/core/muserisc_csr.sv "12'h301: csr_rdata =
-  # 64'h8000_0000_0014_1100"  (MXL=2, I, M, S, U).
+  # 64'h8000_0000_0014_1101"  (MXL=2, I, M, A, S, U).
   - { name: I, version: "= 2.1" }
   - { name: M, version: "= 2.0" }
+  # A via MEM-stage RMW on the combinational memory port
+  # (muserisc_core.sv amo_result + reservation registers).
+  - { name: A, version: "= 2.1.0" }
+  - { name: Zaamo, version: "= 1.0.0" }
+  - { name: Zalrsc, version: "= 1.0.0" }
   - { name: Zmmul, version: "= 1.0.0" }
   - { name: Zicsr, version: "= 2.0" }
   - { name: Zifencei, version: "= 2.0.0" }
@@ -66,15 +71,26 @@ implemented_extensions:
   # UXL is hardwired 2 (64-bit) in mstatus assembly.
   - { name: Ssu64xl, version: "= 1.0.0" }
 
-  # Not implemented and deliberately absent: A, F, D, C (this
+  # Not implemented and deliberately absent: F, D, C (this
   # core is IALIGN=32; compressed is stage 5), B, V, H, Zihpm
   # (mhpmcounter3..31 decode as zero in M, their unprivileged
   # shadows trap, so the Zihpm contract is not met),
   # Svinval, Svpbmt, Sstc, Sdtrig, Zicbo*.
 
 params:
+  # Reservation covers exactly the LR access (4 or 8 bytes);
+  # misaligned AMO/LR/SC trap like other accesses.
+  LRSC_RESERVATION_STRATEGY: "reserve exactly enough to cover the access"
+  MISALIGNED_AMO: false
+  LRSC_MISALIGNED_BEHAVIOR: "always raise misaligned exception"
+  # Reservation is tracked on physical addresses, so an SC
+  # through a synonym VA succeeds; an SC smaller than the LR
+  # but inside its range also succeeds (not exact-match only).
+  LRSC_FAIL_ON_VA_SYNONYM: false
+  LRSC_FAIL_ON_NON_EXACT_LRSC: false
   NON_STANDARD_EXTENSION_IMPLEMENTED: false
   # misa writes are ignored, so no misa bit is mutable.
+  MUTABLE_MISA_A: false
   MUTABLE_MISA_M: false
   MUTABLE_MISA_U: false
   MUTABLE_MISA_S: false

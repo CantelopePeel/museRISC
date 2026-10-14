@@ -41,7 +41,7 @@ done
 
 pass=0 fail=0 total=0
 [ $# -ge 1 ] && echo "test,result,cycles" > "$1"
-for suite in rv64ui rv64um rv64mi rv64si; do
+for suite in rv64ui rv64um rv64ua rv64mi rv64si; do
   case $suite in
     rv64mi|rv64si) SRCDIR=$BUILD/shim-src/$suite ;;
     *)             SRCDIR=$RT/isa/$suite ;;
@@ -73,5 +73,5 @@ for suite in rv64ui rv64um rv64mi rv64si; do
     [ $# -ge 1 ] && echo "$name,$res,$cycles" >> "$1"
   done
 done
-echo "riscv-tests rv64ui+um+mi+si: $pass/$total PASS, $fail FAIL"
+echo "riscv-tests rv64ui+um+ua+mi+si: $pass/$total PASS, $fail FAIL"
 [ "$fail" -eq 0 ]

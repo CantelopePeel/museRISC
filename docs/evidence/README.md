@@ -838,6 +838,30 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   the CSV above is refreshed in place) and ACT is back
   at 180/181 with the same single waiver.
 
+## In-house core stage 4a — A extension (2026-10-13, #18)
+
+- Same artifacts, refreshed in place:
+  [`riscv-tests-core-2026-10-13.csv`](riscv-tests-core-2026-10-13.csv)
+  is now **99/99** (adds `rv64ua-p-*`, 19 tests) and
+  [`act-core-impriv-2026-10-13.csv`](act-core-impriv-2026-10-13.csv)
+  is now **214/215** (adds Zaamo/Zalrsc +
+  ExceptionsSvZaamo/Zalrsc + PMPZaamo/PMPZalrsc; same
+  single `tor_zero` waiver).
+- Implementation: MEM-stage RMW against the loaded value
+  (combinational memory makes AMOs single-cycle), physical
+  LR/SC reservation with exact-access semantics (SC must
+  lie inside the LR's range; cleared by SC, overlapping
+  stores, and traps), `misa` gains A. Directed coverage:
+  `sw/core-tests/amo_directed.S` (all 9 AMO ops × W/D where
+  meaningful, LR/SC success and failure modes), decoder TB
+  12,317 checks.
+- One real bug found by ACT PMPZalrsc on first run: AMO/SC
+  did not declare their rs2 source to the load-use
+  interlock, so an SC immediately after its LR stored a
+  stale register value. Fixed in `id_uses_rs2`; a directed
+  back-to-back LR→SC regression is test 8 of
+  `amo_directed.S`.
+
 ### Linux/OpenSBI boot attempt — blocked on A (stage 4)
 
 - Log: [`core-stage3d-linux-attempt-2026-10-13.log`](core-stage3d-linux-attempt-2026-10-13.log).

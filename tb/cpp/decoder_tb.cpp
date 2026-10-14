@@ -21,6 +21,8 @@ struct Ctrl {
   bool alu_src_imm = false, alu_a_pc = false, word_op = false, muldiv = false;
   bool csr = false, csr_imm = false, mret = false, sret = false;
   bool wfi = false, sfence = false;
+  bool amo = false, lr = false, sc = false;
+  int amo_op = 0;
   int alu_op = ADD;
   bool branch = false, jal = false, jalr = false, ecall = false, ebreak = false;
   uint64_t imm = 0;
@@ -81,6 +83,25 @@ Ctrl Golden(uint32_t insn) {
     case 0x23:  // stores: funct3 0..3
       if (f3 <= 3) { c.valid = c.mem_write = c.alu_src_imm = true; c.imm = imm_s; }
       break;
+    case 0x2f: {  // AMO / LR / SC: funct3 2=.W 3=.D, funct5 selects
+      if (f3 == 2 || f3 == 3) {
+        const uint32_t f5 = insn >> 27;
+        const uint32_t rs2 = (insn >> 20) & 31u;
+        c.alu_src_imm = true;
+        c.imm = 0;
+        c.amo_op = static_cast<int>(f5);
+        if (f5 == 0x02) {
+          if (rs2 == 0) c.valid = c.reg_write = c.mem_read = c.lr = true;
+        } else if (f5 == 0x03) {
+          c.valid = c.reg_write = c.mem_read = c.mem_write = c.sc = true;
+        } else if (f5 == 0x00 || f5 == 0x01 || f5 == 0x04 || f5 == 0x08 ||
+                   f5 == 0x0c || f5 == 0x10 || f5 == 0x14 || f5 == 0x18 ||
+                   f5 == 0x1c) {
+          c.valid = c.reg_write = c.mem_read = c.mem_write = c.amo = true;
+        }
+      }
+      break;
+    }
     case 0x13: {  // OP-IMM; ADDI never becomes SUB
       c.valid = c.reg_write = c.alu_src_imm = true;
       c.alu_op = AluFor(static_cast<int>(f3), f3 == 5 ? alt : false);
@@ -157,7 +178,7 @@ int main(int argc, char** argv) {
     ++checks;
     const Ctrl g = Golden(insn);
     // ctrl_t bit layout must match muserisc_pkg.sv declaration order.
-    const uint32_t c = dut->ctrl_o;
+    const uint64_t c = dut->ctrl_o;
     auto bit = [&](int i) { return ((c >> i) & 1u) != 0; };
     // funct3 occupies the low 3 bits (last struct member), then the
     // flags in reverse declaration order; check them structurally.
@@ -169,7 +190,8 @@ int main(int argc, char** argv) {
               kBranch = 7, kAluOp = 8, kWordOp = 12, kAluAPc = 13,
               kAluSrcImm = 14, kMemWrite = 15, kMemRead = 16,
               kRegWrite = 17, kValid = 18, kMuldiv = 19, kCsr = 20,
-              kCsrImm = 21, kMret = 22, kSret = 23, kWfi = 24, kSfence = 25;
+              kCsrImm = 21, kMret = 22, kSret = 23, kWfi = 24, kSfence = 25,
+              kAmo = 26, kLr = 27, kSc = 28, kAmoOp = 29;
     const Field fields[] = {
         {"valid", bit(kValid), g.valid},
         {"reg_write", bit(kRegWrite), g.reg_write && g.valid},
@@ -185,13 +207,17 @@ int main(int argc, char** argv) {
         {"sret", bit(kSret), g.sret && g.valid},
         {"wfi", bit(kWfi), g.wfi && g.valid},
         {"sfence", bit(kSfence), g.sfence && g.valid},
+        {"amo", bit(kAmo), g.amo && g.valid},
+        {"lr", bit(kLr), g.lr && g.valid},
+        {"sc", bit(kSc), g.sc && g.valid},
         {"ecall", bit(kEcall), g.ecall && g.valid},
         {"ebreak", bit(kEbreak), g.ebreak && g.valid},
     };
     for (const Field& fd : fields) {
       if (fd.got != fd.want) {
-        std::printf("FAIL insn=0x%08x field %s got=%d want=%d ctrl=0x%x\n", insn,
-                    fd.name, fd.got ? 1 : 0, fd.want ? 1 : 0, c);
+        std::printf("FAIL insn=0x%08x field %s got=%d want=%d ctrl=0x%llx\n", insn,
+                    fd.name, fd.got ? 1 : 0, fd.want ? 1 : 0,
+                    static_cast<unsigned long long>(c));
         return false;
       }
     }
@@ -199,9 +225,14 @@ int main(int argc, char** argv) {
       if (bit(kAluSrcImm) != g.alu_src_imm || bit(kAluAPc) != g.alu_a_pc ||
           bit(kWordOp) != g.word_op ||
           static_cast<int>((c >> kAluOp) & 0xf) != g.alu_op) {
-        std::printf("FAIL insn=0x%08x alu fields ctrl=0x%x want op=%d src_imm=%d a_pc=%d word=%d\n",
-                    insn, c, g.alu_op, g.alu_src_imm ? 1 : 0, g.alu_a_pc ? 1 : 0,
+        std::printf("FAIL insn=0x%08x alu fields ctrl=0x%llx want op=%d src_imm=%d a_pc=%d word=%d\n",
+                    insn, static_cast<unsigned long long>(c), g.alu_op, g.alu_src_imm ? 1 : 0, g.alu_a_pc ? 1 : 0,
                     g.word_op ? 1 : 0);
+        return false;
+      }
+      if (static_cast<int>((c >> kAmoOp) & 0x1f) != g.amo_op) {
+        std::printf("FAIL insn=0x%08x amo_op got=%d want=%d\n", insn,
+                    static_cast<int>((c >> kAmoOp) & 0x1f), g.amo_op);
         return false;
       }
       if (dut->imm_o != g.imm) {
@@ -243,6 +274,14 @@ int main(int argc, char** argv) {
   if (!run_one(0x10500073u)) return 1;  // WFI
   if (!run_one(0x12000073u)) return 1;  // SFENCE.VMA x0, x0
   if (!run_one(0x300010f3u)) return 1;  // CSRRW x2, mstatus, x0-ish fields
+  // A extension: LR.W x13,(x9) / SC.W x13,x17,(x9) / AMOADD.D /
+  // AMOMAXU.W with aq+rl / illegal funct5 / LR with rs2 != x0.
+  if (!run_one((0x02u << 27) | (9u << 15) | (2u << 12) | (13u << 7) | 0x2fu)) return 1;
+  if (!run_one((0x03u << 27) | (17u << 20) | (9u << 15) | (2u << 12) | (13u << 7) | 0x2fu)) return 1;
+  if (!run_one((0x00u << 27) | (17u << 20) | (9u << 15) | (3u << 12) | (13u << 7) | 0x2fu)) return 1;
+  if (!run_one((0x1cu << 27) | (3u << 25) | (17u << 20) | (9u << 15) | (2u << 12) | (13u << 7) | 0x2fu)) return 1;
+  if (!run_one((0x05u << 27) | (17u << 20) | (9u << 15) | (2u << 12) | (13u << 7) | 0x2fu)) return 1;
+  if (!run_one((0x02u << 27) | (17u << 20) | (9u << 15) | (3u << 12) | (13u << 7) | 0x2fu)) return 1;
 
   dut->final();
   if (cov_path != nullptr) context.coveragep()->write(cov_path);

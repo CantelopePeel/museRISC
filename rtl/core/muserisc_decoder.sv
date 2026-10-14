@@ -183,6 +183,39 @@ module muserisc_decoder import muserisc_pkg::*; (
       7'b0001111: begin  // FENCE / FENCE.I: NOP in stage 1
         ctrl_o.valid = 1'b1;
       end
+      7'b0101111: begin  // AMO / LR / SC (funct3: 010=.W, 011=.D)
+        if ((funct3 == 3'b010) || (funct3 == 3'b011)) begin
+          ctrl_o.amo_op = instr_i[31:27];
+          ctrl_o.alu_src_imm = 1'b1;  // address = rs1 + 0
+          imm_o = 64'd0;
+          unique case (instr_i[31:27])
+            5'b00010: begin  // LR (rs2 field must be x0)
+              if (rs2_o == 5'd0) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.reg_write = 1'b1;
+                ctrl_o.mem_read = 1'b1;
+                ctrl_o.lr = 1'b1;
+              end
+            end
+            5'b00011: begin  // SC (mem_read set: result is MEM-stage)
+              ctrl_o.valid = 1'b1;
+              ctrl_o.reg_write = 1'b1;
+              ctrl_o.mem_read = 1'b1;
+              ctrl_o.mem_write = 1'b1;
+              ctrl_o.sc = 1'b1;
+            end
+            5'b00000, 5'b00001, 5'b00100, 5'b01000, 5'b01100,
+            5'b10000, 5'b10100, 5'b11000, 5'b11100: begin  // AMO*
+              ctrl_o.valid = 1'b1;
+              ctrl_o.reg_write = 1'b1;
+              ctrl_o.mem_read = 1'b1;
+              ctrl_o.mem_write = 1'b1;
+              ctrl_o.amo = 1'b1;
+            end
+            default: ;
+          endcase
+        end
+      end
       7'b1110011: begin  // SYSTEM
         if (funct3 == 3'b000) begin
           if (instr_i[31:20] == 12'd0) begin

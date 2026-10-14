@@ -183,7 +183,9 @@ module muserisc_core import muserisc_pkg::*; (
   assign id_uses_rs2 = (id_opcode == 7'b0110011) ||
                        (id_opcode == 7'b0111011) ||
                        (id_opcode == 7'b0100011) ||
-                       (id_opcode == 7'b1100011);
+                       (id_opcode == 7'b1100011) ||
+                       (id_opcode == 7'b0101111);  // AMO/SC source
+                       // (LR's rs2 field is x0; the rd!=0 guard covers it)
 
   // ID/EX register
   logic        idex_valid_q;
@@ -435,6 +437,72 @@ module muserisc_core import muserisc_pkg::*; (
   assign dmem_addr_o = walk_grant ? walk_addr : mmu_d_pa;
   assign dmem_re_o = mem_uses_port && exmem_ctrl_q.mem_read;
 
+  logic [63:0] load_shifted;
+  logic        res_valid_q;
+  logic [63:0] res_pa_q;
+  logic        res_is_d_q;  // reserved access size: 1 = 8B, 0 = 4B
+  assign load_shifted = dmem_rdata_i >> {exmem_addr_q[2:0], 3'b000};
+
+  // AMO read-modify-write, executed in MEM against the loaded
+  // value (combinational memory: read and write are one cycle).
+  logic [63:0] eff_store_data;
+  logic        sc_success;
+  always_comb begin
+    logic [31:0] a32, b32, r32;
+    logic [63:0] r64;
+    a32 = load_shifted[31:0];
+    b32 = exmem_store_data_q[31:0];
+    unique case (exmem_ctrl_q.amo_op)
+      5'b00000: begin  // AMOADD
+        r32 = a32 + b32;
+        r64 = load_shifted + exmem_store_data_q;
+      end
+      5'b00100: begin  // AMOXOR
+        r32 = a32 ^ b32;
+        r64 = load_shifted ^ exmem_store_data_q;
+      end
+      5'b01000: begin  // AMOOR
+        r32 = a32 | b32;
+        r64 = load_shifted | exmem_store_data_q;
+      end
+      5'b01100: begin  // AMOAND
+        r32 = a32 & b32;
+        r64 = load_shifted & exmem_store_data_q;
+      end
+      5'b10000: begin  // AMOMIN
+        r32 = ($signed(a32) < $signed(b32)) ? a32 : b32;
+        r64 = ($signed(load_shifted) < $signed(exmem_store_data_q))
+              ? load_shifted : exmem_store_data_q;
+      end
+      5'b10100: begin  // AMOMAX
+        r32 = ($signed(a32) > $signed(b32)) ? a32 : b32;
+        r64 = ($signed(load_shifted) > $signed(exmem_store_data_q))
+              ? load_shifted : exmem_store_data_q;
+      end
+      5'b11000: begin  // AMOMINU
+        r32 = (a32 < b32) ? a32 : b32;
+        r64 = (load_shifted < exmem_store_data_q)
+              ? load_shifted : exmem_store_data_q;
+      end
+      5'b11100: begin  // AMOMAXU
+        r32 = (a32 > b32) ? a32 : b32;
+        r64 = (load_shifted > exmem_store_data_q)
+              ? load_shifted : exmem_store_data_q;
+      end
+      default: begin  // AMOSWAP
+        r32 = b32;
+        r64 = exmem_store_data_q;
+      end
+    endcase
+    eff_store_data = exmem_ctrl_q.amo
+        ? ((exmem_ctrl_q.funct3 == 3'b010) ? {32'd0, r32} : r64)
+        : exmem_store_data_q;
+  end
+  // "Reserve exactly enough to cover the access": an SC
+  // succeeds iff its whole access lies within the LR's range.
+  assign sc_success = res_valid_q && (res_pa_q == mmu_d_pa) &&
+                      (res_is_d_q || (exmem_ctrl_q.funct3 == 3'b010));
+
   always_comb begin
     dmem_be_o = 8'd0;
     dmem_wdata_o = 64'd0;
@@ -443,30 +511,29 @@ module muserisc_core import muserisc_pkg::*; (
       // turns that into an access fault for the requester).
       dmem_be_o = pmp_allow_walk ? 8'hFF : 8'd0;
       dmem_wdata_o = walk_wdata;
-    end else if (mem_uses_port && exmem_ctrl_q.mem_write && !trap_fire) begin
+    end else if (mem_uses_port && exmem_ctrl_q.mem_write && !trap_fire &&
+                 (!exmem_ctrl_q.sc || sc_success)) begin
       unique case (exmem_ctrl_q.funct3[1:0])
         2'b00: begin
           dmem_be_o = 8'h01 << exmem_addr_q[2:0];
-          dmem_wdata_o = {8{exmem_store_data_q[7:0]}};
+          dmem_wdata_o = {8{eff_store_data[7:0]}};
         end
         2'b01: begin
           dmem_be_o = 8'h03 << {exmem_addr_q[2:1], 1'b0};
-          dmem_wdata_o = {4{exmem_store_data_q[15:0]}};
+          dmem_wdata_o = {4{eff_store_data[15:0]}};
         end
         2'b10: begin
           dmem_be_o = 8'h0F << {exmem_addr_q[2], 2'b00};
-          dmem_wdata_o = {2{exmem_store_data_q[31:0]}};
+          dmem_wdata_o = {2{eff_store_data[31:0]}};
         end
         default: begin
           dmem_be_o = 8'hFF;
-          dmem_wdata_o = exmem_store_data_q;
+          dmem_wdata_o = eff_store_data;
         end
       endcase
     end
   end
 
-  logic [63:0] load_shifted;
-  assign load_shifted = dmem_rdata_i >> {exmem_addr_q[2:0], 3'b000};
   always_comb begin
     unique case (exmem_ctrl_q.funct3)
       3'b000:  load_data = {{56{load_shifted[7]}}, load_shifted[7:0]};
@@ -480,7 +547,37 @@ module muserisc_core import muserisc_pkg::*; (
     endcase
   end
 
-  assign mem_result = exmem_ctrl_q.mem_read ? load_data : exmem_result_q;
+  assign mem_result = exmem_ctrl_q.sc ? (sc_success ? 64'd0 : 64'd1)
+                    : exmem_ctrl_q.mem_read ? load_data : exmem_result_q;
+
+  // LR/SC reservation (physical address + access size). Set
+  // by a completing LR; cleared by any SC attempt, by a
+  // store/AMO overlapping the reserved bytes, and on traps.
+  logic        mem_completes;
+  logic [63:0] store_end, res_end;
+  assign mem_completes = data_access && !mem_stall && !mem_exc && !freeze;
+  assign store_end = mmu_d_pa + (64'd1 << exmem_ctrl_q.funct3[1:0]);
+  assign res_end = res_pa_q + (res_is_d_q ? 64'd8 : 64'd4);
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      res_valid_q <= 1'b0;
+      res_pa_q <= 64'd0;
+      res_is_d_q <= 1'b0;
+    end else if (trap_take) begin
+      res_valid_q <= 1'b0;
+    end else if (mem_completes) begin
+      if (exmem_ctrl_q.lr) begin
+        res_valid_q <= 1'b1;
+        res_pa_q <= mmu_d_pa;
+        res_is_d_q <= (exmem_ctrl_q.funct3 == 3'b011);
+      end else if (exmem_ctrl_q.sc) begin
+        res_valid_q <= 1'b0;
+      end else if (exmem_ctrl_q.mem_write && res_valid_q &&
+                   (mmu_d_pa < res_end) && (res_pa_q < store_end)) begin
+        res_valid_q <= 1'b0;
+      end
+    end
+  end
   always_comb begin
     if (exmem_exc_q) begin
       mem_exc = exmem_valid_q;
