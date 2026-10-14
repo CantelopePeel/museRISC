@@ -16,12 +16,13 @@ arch tests with a fixed VLEN (default 512 via Ara, configurable).
 
 ## 3. Crypto accelerator (`muse_crypto`, original RTL)
 
-Memory-mapped AXI-Lite slave (base `0x2000_0000` in SoC map, docs in
-`rtl/crypto/muse_crypto_top.sv`). Register map (32-bit regs):
+Memory-mapped AXI-Lite slave (base `0x2000_0000` in SoC map, RTL in
+`rtl/crypto/muse_crypto_top.v`, integration KAT in
+`tb/tb_muse_crypto_top.v` via `make test`). Register map (32-bit regs):
 
 | Offset | Name | Meaning |
 |---|---|---|
-| 0x00 | CTRL | bit0=start, bits[5:4]=engine (0=SHA256,1=Keccak,2=Field) |
+| 0x00 | CTRL | bit0=start, bits[5:4]=engine (0=SHA256,1=Keccak reserved,2=Field), bits[7:6]=field op (0=add,1=sub,2=mul) |
 | 0x04 | STATUS | bit0=busy, bit1=done |
 | 0x08–0x47 | DIN0..15 / A,B | Input block / field operands |
 | 0x48–0x67 | DOUT0..7 | Digest / field result |

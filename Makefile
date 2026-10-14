@@ -29,6 +29,9 @@ test: ## Python golden self-check + iverilog KATs (needs python3, iverilog)
 	iverilog -g2012 -o $(BUILD)/tb_ec rtl/crypto/ec_field.v tb/tb_ec_field.v
 	vvp $(BUILD)/tb_ec | tee $(BUILD)/ec.log
 	grep -q "TB_EC_FIELD PASS" $(BUILD)/ec.log
+	iverilog -g2012 -o $(BUILD)/tb_crypto_top rtl/crypto/sha256_block.v rtl/crypto/ec_field.v rtl/crypto/muse_crypto_top.v tb/tb_muse_crypto_top.v
+	vvp $(BUILD)/tb_crypto_top | tee $(BUILD)/crypto_top.log
+	grep -q "TB_MUSE_CRYPTO_TOP PASS" $(BUILD)/crypto_top.log
 	@echo "ALL PHASE-0 KATs PASS"
 
 lint: ## Verilator lint on all synthesizable RTL

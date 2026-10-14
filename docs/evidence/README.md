@@ -959,6 +959,39 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   regeneration commands, including this caveat, are in
   [`sw/act4-core/README.md`](../../sw/act4-core/README.md).
 
+## Crypto accelerator integration check (2026-10-13, #18)
+
+Inventory of the repo's two distinct crypto layers after
+stages 4c/5:
+
+- **In-core scalar crypto** (Zbkb/Zbkc/Zbkx, Zkne/Zknd/Zknh
+  in `muserisc_bext.sv`): integrated in the pipeline and
+  covered by the ACT gate above plus `bext_directed.S`
+  (full AES-128 FIPS-197 KAT from scalar instructions,
+  SHA-256/512 sigma/sum ops).
+- **Standalone accelerators** (`rtl/crypto/`):
+  `sha256_block`, `sha512_block`, `keccak_f1600` and the
+  256-bit `ec_field` unit behind the AXI4-Lite slave
+  `muse_crypto_top` (SHA-256 block + EC field exposed;
+  Keccak engine select reserved pending a streaming
+  interface; SHA-512 verified standalone, not yet behind
+  the AXI top). `muserisc_soc_top` exposes the AXI-Lite
+  port at `0x2000_0000`, but no core/bus drives it yet —
+  attaching the in-house core (Harvard SRAM ports today)
+  needs a bus bridge + MMIO window + driver, which is B4
+  SoC integration (#4), explicitly deferred. No core-side
+  integration is claimed.
+- Gap found and closed by this check: the leaf engines had
+  KATs but the AXI4-Lite register layer had never been
+  simulated. New `tb/tb_muse_crypto_top.v` (wired into
+  `make test`) drives the documented register map end to
+  end reusing leaf-KAT vectors: SHA-256("abc") and
+  SHA-256("") digests, EC field mul/sub under secp256k1
+  and Curve25519 MODSEL, custom-modulus regs, STATUS
+  done-clearing on CTRL write, and reserved engine 1
+  leaving STATUS idle. `TB_MUSE_CRYPTO_TOP PASS`; full
+  `make test` remains `ALL PHASE-0 KATs PASS`.
+
 ### Linux/OpenSBI boot attempt — blocked on A (stage 4)
 
 - Log: [`core-stage3d-linux-attempt-2026-10-13.log`](core-stage3d-linux-attempt-2026-10-13.log).
