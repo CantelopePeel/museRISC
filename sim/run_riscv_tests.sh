@@ -1,6 +1,6 @@
 #!/bin/bash
 # Stage 3c gate (issue #18): build the upstream riscv-tests
-# rv64ui-p-* and rv64um-p-* suites from the in-tree sources and
+# rv64ui/um/mi/si -p-* suites from the in-tree sources and
 # run every ELF on the in-house core via the C++ harness
 # (HTIF tohost exit). Prints one line per test and a summary;
 # optionally writes a CSV (test,result,cycles) for evidence.
@@ -28,10 +28,25 @@ OPTS="-march=rv64g -mabi=lp64 -static -mcmodel=medany -fvisibility=hidden
       -nostdlib -nostartfiles -I$BUILD/shim -I$RT/env -I$RT/env/p
       -I$RT/isa/macros/scalar -T$RT/env/p/link.ld"
 
+# The privileged suites use pre-1.10 CSR names in their sources
+# (sptbr/mbadaddr/sbadaddr); compile sed-renamed copies so the
+# upstream tree stays untouched. Only spellings change.
+rm -rf "$BUILD/shim-src"
+mkdir -p "$BUILD/shim-src"
+cp -R "$RT/isa/rv64mi" "$RT/isa/rv64si" "$BUILD/shim-src/"
+for f in "$BUILD/shim-src"/rv64mi/*.S "$BUILD/shim-src"/rv64si/*.S; do
+  sed -e 's/sptbr/satp/g' -e 's/mbadaddr/mtval/g' \
+      -e 's/sbadaddr/stval/g' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+
 pass=0 fail=0 total=0
 [ $# -ge 1 ] && echo "test,result,cycles" > "$1"
-for suite in rv64ui rv64um; do
-  for src in "$RT/isa/$suite"/*.S; do
+for suite in rv64ui rv64um rv64mi rv64si; do
+  case $suite in
+    rv64mi|rv64si) SRCDIR=$BUILD/shim-src/$suite ;;
+    *)             SRCDIR=$RT/isa/$suite ;;
+  esac
+  for src in "$SRCDIR"/*.S; do
     name=$suite-p-$(basename "$src" .S)
     elf=$BUILD/$name
     if [ ! -x "$elf" ]; then
@@ -58,5 +73,5 @@ for suite in rv64ui rv64um; do
     [ $# -ge 1 ] && echo "$name,$res,$cycles" >> "$1"
   done
 done
-echo "riscv-tests rv64ui+rv64um: $pass/$total PASS, $fail FAIL"
+echo "riscv-tests rv64ui+um+mi+si: $pass/$total PASS, $fail FAIL"
 [ "$fail" -eq 0 ]

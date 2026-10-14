@@ -101,14 +101,22 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] fetch_cause;
 
   assign imem_addr_o = mmu_if_pa;
+  // Physical addresses are 56 bits: an untranslated (M-mode /
+  // Bare) address at or above 2^56 access-faults. Translated
+  // PAs from the MMU are 56-bit by construction. Gated on
+  // mmu_if_ok: while a walk is in flight if_pa_o still carries
+  // the raw VA, which may be a high canonical address.
+  logic fetch_pa_illegal;
+  assign fetch_pa_illegal = mmu_if_ok && |mmu_if_pa[63:56];
   // IALIGN=32: a fetch target with pc[1] set raises the
   // instruction-address-misaligned exception (highest priority),
   // then translation faults, then the PMP check on the PA.
-  assign fetch_fault = pc_q[1] || mmu_if_fault ||
+  assign fetch_fault = pc_q[1] || mmu_if_fault || fetch_pa_illegal ||
                        (mmu_if_ok && !pmp_allow_fetch);
   assign fetch_cause = pc_q[1] ? 64'd0
       : mmu_if_fault ? (mmu_if_fault_page ? 64'd12 : 64'd1) : 64'd1;
-  assign fetch_stall = !pc_q[1] && !mmu_if_ok && !mmu_if_fault;
+  assign fetch_stall = !pc_q[1] && !fetch_pa_illegal && !mmu_if_ok &&
+                       !mmu_if_fault;
 
   // IF/ID register
   logic        ifid_valid_q;
@@ -418,7 +426,9 @@ module muserisc_core import muserisc_pkg::*; (
                        (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write);
   assign mem_stall = data_access && !mmu_d_ok && !mmu_d_fault;
   assign mem_trans_fault = data_access && mmu_d_fault;
-  assign mem_pmp_fault = data_access && mmu_d_ok && !pmp_allow_data;
+  // PMP denial, or a physical address outside the 56-bit map.
+  assign mem_pmp_fault = data_access && mmu_d_ok &&
+                         (!pmp_allow_data || |mmu_d_pa[63:56]);
   assign mem_uses_port = data_access && mmu_d_ok && !mem_pmp_fault;
   // The walker borrows the port whenever MEM is not using it.
   assign walk_grant = walk_req && !mem_uses_port;

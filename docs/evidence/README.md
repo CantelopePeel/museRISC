@@ -749,12 +749,15 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   (per-test result and cycle count); reproduce with
   `make riscv-tests` (runner:
   [`sim/run_riscv_tests.sh`](../../sim/run_riscv_tests.sh)).
-- Result: **64/64 PASS** — every `rv64ui-p-*` (51) and
+- Result: **64/64 PASS** at stage 3c — every `rv64ui-p-*` (51) and
   `rv64um-p-*` (13) test from the in-tree riscv-tests
   sources, compiled with the upstream recipe and run on
   the in-house core through the C++ harness's new ELF/HTIF
   mode (PT_LOAD placement, `boot_pc_i` = ELF entry,
-  `tohost` exit). Cross-checks: three of the CVA6-built
+  `tohost` exit). The gate has since been extended to
+  the privileged `rv64mi-p-*`/`rv64si-p-*` suites
+  (80/80; see stage 4.0 note in the 3d section).
+  Cross-checks: three of the CVA6-built
   ELFs pass with identical cycle counts, and a hand-made
   HTIF failure probe is correctly reported as FAIL
   (the harness cannot pass vacuously).
@@ -822,6 +825,18 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   by the declared configuration (RV64IM + priv/Sv39
   scope) and this run is simulation only. A Linux boot
   attempt is the remaining stage-3d item.
+
+- Stage 4.0 follow-up (same branch as stage 4): the
+  `rv64mi`/`rv64si` probe failures are closed. `access`
+  needed the architectural 56-bit physical-address limit
+  enforced (fetch/load above 2^56 now access-fault; two
+  directed trap tests added), gated on translation
+  completion after ACT caught the first cut faulting
+  high-canonical VAs mid-walk; `breakpoint` needed
+  zero-trigger Sdtrig CSR stubs (read 0, writes ignored).
+  The riscv-tests gate now includes mi/si (**80/80**,
+  the CSV above is refreshed in place) and ACT is back
+  at 180/181 with the same single waiver.
 
 ### Linux/OpenSBI boot attempt — blocked on A (stage 4)
 

@@ -183,6 +183,13 @@ module muserisc_csr (
           csr_rdata = 64'd0;                                      // mhpmcounter3-31
         end else if ((addr_i >= 12'h323) && (addr_i <= 12'h33F)) begin
           csr_rdata = 64'd0;                                      // mhpmevent3-31
+        end else if (((addr_i >= 12'h7A0) && (addr_i <= 12'h7A5)) ||
+                     (addr_i == 12'h7A8) || (addr_i == 12'h7AA) ||
+                     (addr_i == 12'h5A8)) begin
+          // Sdtrig trigger CSRs, zero triggers implemented:
+          // tselect/tdata*/tinfo/tcontrol/context all read 0
+          // (tinfo.type = none), writes are ignored.
+          csr_rdata = 64'd0;
         end else begin
           csr_exists = 1'b0;
         end

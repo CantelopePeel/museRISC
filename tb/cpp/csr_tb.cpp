@@ -397,6 +397,13 @@ int main(int argc, char** argv) {
   CHECK(!pmp_a(0xB0000, 1, 1));  // TOR W denied
 
   // Remaining CSR storage + read-only identity registers.
+  // Sdtrig stub: zero triggers — CSRs exist, read 0, ignore writes.
+  CHECK(!illegal(0x7A0, true));
+  wr(0x7A0, 5);
+  CHECK(rd(0x7A0) == 0);              // tselect hardwired
+  wr(0x7A1, ~0ull);
+  CHECK(rd(0x7A1) == 0);              // tdata1 type = none
+  CHECK(rd(0x7A4) == 0);              // tinfo
   CHECK(rd(0xF12) == 0x4D555345ULL);  // marchid "MUSE"
   CHECK(rd(0xF13) == 0x30000ULL);     // mimpid
   CHECK(rd(0xF15) == 0);              // mconfigptr
