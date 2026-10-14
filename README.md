@@ -227,8 +227,8 @@ More detail: [`docs/ROADMAP.md`](docs/ROADMAP.md) ·
 
 ```text
 rtl/core/     In-house SystemVerilog RV64 core
-rtl/crypto/   SHA-256/512, Keccak, EC-field accelerator RTL
-rtl/soc/      Standalone crypto/SoC top and register interface
+rtl/crypto/   SystemVerilog SHA-256/512, Keccak, EC-field RTL
+rtl/soc/      SystemVerilog standalone crypto/SoC top
 tb/cpp/       C++ Verilator unit, core, and platform testbenches
 sw/core-tests/ Directed assembly suites for the in-house core
 sw/linux/     DT, boot stub, OpenSBI/Linux build inputs, init

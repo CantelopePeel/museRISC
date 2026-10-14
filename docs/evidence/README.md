@@ -1150,3 +1150,28 @@ stages 4c/5:
   (green at stages 6/7) and riscv-tests (123/123 at
   stage 7); scalar behavior is covered here by
   `make core-test` and the I/M ACT ELFs above.
+
+## Crypto/SoC RTL SystemVerilog port (2026-10-14, #19)
+
+- `rtl/crypto/*.v` and `rtl/soc/muserisc_soc_top.v`
+  ported to `.sv` (behavior-identical: `logic`,
+  `always_ff`/`always_comb`, typed `automatic`
+  functions). Function bodies keep assignment-to-name
+  style because the Yosys classic frontend rejects
+  `return` statements.
+- Gates after the port: `make test` → `TB_SHA256 PASS`,
+  `TB_KECCAK PASS`, `TB_SHA512 PASS`, `TB_EC_FIELD
+  PASS`, `TB_MUSE_CRYPTO_TOP PASS`,
+  `ALL PHASE-0 KATs PASS` (iverilog `-g2012` against
+  the unchanged `tb/*.v` benches); `make lint` and
+  `make core-test` green.
+- Synthesis: local Yosys `read_verilog -sv` clean, and
+  the ORFS synth stage re-ran on the `.sv` sources via
+  `scripts/openroad_docker.sh
+  results/nangate45/muse_crypto_top/base/1_2_yosys.v`
+  (exit 0, no synth-log errors). The full P&R flow was
+  **not** re-run for the `.sv` sources; the b3 GDS
+  evidence above remains the P&R record for this
+  (behavior-identical) design.
+- Remainder of #19: migrating the `tb/*.v` benches to
+  Verilator/cocotb is still open.
