@@ -6,7 +6,8 @@ BUILD := build
 
 CORE_RTL := rtl/core/muserisc_pkg.sv rtl/core/muserisc_regfile.sv \
             rtl/core/muserisc_alu.sv rtl/core/muserisc_muldiv.sv \
-            rtl/core/muserisc_decoder.sv rtl/core/muserisc_core.sv
+            rtl/core/muserisc_decoder.sv rtl/core/muserisc_csr.sv \
+            rtl/core/muserisc_core.sv
 
 .PHONY: test lint core-test openroad compliance clean
 test: ## Python golden self-check + iverilog KATs (needs python3, iverilog)

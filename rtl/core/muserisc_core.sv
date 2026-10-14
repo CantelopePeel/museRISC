@@ -1,19 +1,26 @@
 // In-house RV64 core (issue #18). Five-stage in-order pipeline
-// (IF/ID/EX/MEM/WB) over combinational-read Harvard memory ports;
+// (IF/ID/EX/MEM/WB) over combinational-read Harvard memory ports
+// with M/S/U privilege, precise traps, interrupts, and PMP;
 // see docs/CORE.md for the contract and staging plan.
 //
-// Pipeline policy (stage 2):
-// - Full forwarding to EX from EX/MEM and MEM/WB, plus a WB->ID
+// Pipeline policy:
+// - Full forwarding to EX (EX/MEM and MEM/WB) plus a WB->ID
 //   bypass so an instruction reading a register in the cycle its
 //   producer is in WB latches the new value.
 // - One bubble on load-use (consumer in ID against a load in EX).
 // - All control transfers resolve in EX (predict not-taken):
-//   taken branches and jumps flush IF/ID and ID/EX.
-// - Exceptions (illegal/ECALL/EBREAK from ID, misaligned
-//   load/store from EX) travel with their instruction; the
+//   taken branches, jumps, xRET, and SFENCE flush IF/ID + ID/EX.
+// - CSR writes commit on the EX->MEM edge; CSR reads in EX see
+//   all older writes. Privilege changes only via trap entry
+//   (WB) and xRET (EX), both of which flush, so priv_o always
+//   names the privilege of every instruction in flight.
+// - Exceptions travel with their instruction to WB; the
 //   trapping instruction and everything younger perform no
-//   register or memory write, and trap_o asserts as it reaches
-//   WB, freezing the machine. Full trap state arrives in stage 3.
+//   register, memory, or CSR write. At WB the trap is taken
+//   (redirect to the handler) unless trap_halt_i requests the
+//   stage-1/2 freeze-and-report behavior for directed TBs.
+// - Interrupts are injected in ID as an exception on the next
+//   unexecuted instruction, making epc precise by construction.
 `default_nettype none
 module muserisc_core import muserisc_pkg::*; (
     input  wire        clk_i,
@@ -27,27 +34,63 @@ module muserisc_core import muserisc_pkg::*; (
     output logic [7:0]  dmem_be_o,
     output wire        dmem_re_o,
     input  wire [63:0] dmem_rdata_i,
-    // Trap observability (halt on trap)
+    // Trap observability: pulses the cycle a trap is taken.
     output wire        trap_o,
     output wire [63:0] trap_cause_o,
-    output wire [63:0] trap_pc_o
+    output wire [63:0] trap_pc_o,
+    // 1 = freeze on first trap (directed-TB mode), 0 = take trap.
+    input  wire        trap_halt_i,
+    // Interrupt lines (CLINT/PLIC equivalents in a future SoC).
+    input  wire        irq_m_timer_i,
+    input  wire        irq_m_soft_i,
+    input  wire        irq_m_ext_i,
+    input  wire        irq_s_timer_i,
+    input  wire        irq_s_ext_i
 );
+
+  // ------------------------------------------------------------
+  // CSR / privileged state (declared first: ID/EX read it)
+  // ------------------------------------------------------------
+  logic [1:0]  priv;
+  // The core consumes mstatus.MPRV/MPP today; satp feeds the MMU.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [63:0] csr_mstatus, csr_satp;
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic [1:0]  eff_priv_data;  // MPRV-adjusted privilege for data
+  assign eff_priv_data = (priv == 2'b11 && csr_mstatus[17])
+                             ? csr_mstatus[12:11] : priv;
+
+  logic [11:0] csr_addr;
+  logic [63:0] csr_rdata, csr_wdata, csr_src;
+  logic        csr_illegal, csr_we;
+  logic        sys_illegal;
+  logic [2:0]  sys_op;
+  logic [63:0] xret_pc;
+  logic        irq_valid;
+  logic [63:0] irq_cause;
+  logic        trap_fire, trap_take;
+  logic [63:0] trap_target;
+  logic [1:0]  trap_priv_unused;
+  logic        pmp_allow_fetch, pmp_allow_data;
 
   // ------------------------------------------------------------
   // IF stage
   // ------------------------------------------------------------
   logic [63:0] pc_q, pc_d;
-  logic        stall;         // load-use: hold PC and IF/ID
-  logic        flush;         // control transfer taken in EX
+  logic        stall;
+  logic        flush;
   logic [63:0] redirect_pc;
-  logic        freeze;        // trapping instruction reached WB
+  logic        freeze;
+  logic        fetch_fault;
 
   assign imem_addr_o = pc_q;
+  assign fetch_fault = !pmp_allow_fetch;
 
   // IF/ID register
   logic        ifid_valid_q;
   logic [63:0] ifid_pc_q;
   logic [31:0] ifid_instr_q;
+  logic        ifid_exc_q;      // instruction access fault at fetch
 
   // ------------------------------------------------------------
   // ID stage
@@ -58,7 +101,8 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] rf_rs1, rf_rs2;
   logic [63:0] id_rs1_val, id_rs2_val;
   logic        id_exc;
-  logic [63:0] id_cause;
+  logic [63:0] id_cause, id_tval;
+  logic        irq_inject;
 
   muserisc_decoder u_decoder (
       .instr_i (ifid_instr_q),
@@ -69,27 +113,43 @@ module muserisc_core import muserisc_pkg::*; (
       .rd_o    (id_rd)
   );
 
-  assign id_exc = ifid_valid_q &&
-                  (!id_ctrl.valid || id_ctrl.ecall || id_ctrl.ebreak);
   always_comb begin
-    if (id_ctrl.ecall)       id_cause = CAUSE_ECALL_M;
-    else if (id_ctrl.ebreak) id_cause = CAUSE_BREAKPOINT;
-    else                     id_cause = CAUSE_ILLEGAL_INSTR;
+    if (ifid_exc_q) begin
+      id_exc = ifid_valid_q;
+      id_cause = 64'd1;                       // instruction access fault
+      id_tval = ifid_pc_q;
+    end else if (id_ctrl.ecall) begin
+      id_exc = ifid_valid_q;
+      id_cause = (priv == 2'b11) ? 64'd11 : (priv == 2'b01) ? 64'd9 : 64'd8;
+      id_tval = 64'd0;
+    end else if (id_ctrl.ebreak) begin
+      id_exc = ifid_valid_q;
+      id_cause = CAUSE_BREAKPOINT;
+      id_tval = ifid_pc_q;
+    end else if (!id_ctrl.valid) begin
+      id_exc = ifid_valid_q;
+      id_cause = CAUSE_ILLEGAL_INSTR;
+      id_tval = {32'd0, ifid_instr_q};
+    end else begin
+      id_exc = 1'b0;
+      id_cause = 64'd0;
+      id_tval = 64'd0;
+    end
   end
 
-  // Which source registers the ID instruction actually reads
-  // (for the load-use interlock). Derived from the opcode so the
-  // decoder contract stays as unit-tested.
+  assign irq_inject = irq_valid && ifid_valid_q && !stall && !flush && !freeze;
+
+  // Which sources the ID instruction reads (load-use interlock).
   logic [6:0] id_opcode;
   logic       id_uses_rs1, id_uses_rs2;
   assign id_opcode = ifid_instr_q[6:0];
-  assign id_uses_rs1 = (id_opcode != 7'b0110111) &&  // LUI
-                       (id_opcode != 7'b0010111) &&  // AUIPC
-                       (id_opcode != 7'b1101111);    // JAL
-  assign id_uses_rs2 = (id_opcode == 7'b0110011) ||  // OP
-                       (id_opcode == 7'b0111011) ||  // OP-32
-                       (id_opcode == 7'b0100011) ||  // STORE
-                       (id_opcode == 7'b1100011);    // BRANCH
+  assign id_uses_rs1 = (id_opcode != 7'b0110111) &&
+                       (id_opcode != 7'b0010111) &&
+                       (id_opcode != 7'b1101111);
+  assign id_uses_rs2 = (id_opcode == 7'b0110011) ||
+                       (id_opcode == 7'b0111011) ||
+                       (id_opcode == 7'b0100011) ||
+                       (id_opcode == 7'b1100011);
 
   // ID/EX register
   logic        idex_valid_q;
@@ -99,52 +159,56 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] idex_rs1_q, idex_rs2_q;
   logic [4:0]  idex_rs1_addr_q, idex_rs2_addr_q, idex_rd_q;
   logic        idex_exc_q;
-  logic [63:0] idex_cause_q;
+  logic [63:0] idex_cause_q, idex_tval_q;
 
-  // Load-use interlock: a load in EX whose rd is read in ID.
   assign stall = idex_valid_q && idex_ctrl_q.mem_read &&
                  !idex_exc_q && (idex_rd_q != 5'd0) && ifid_valid_q &&
+                 !ifid_exc_q &&
                  ((id_uses_rs1 && (idex_rd_q == id_rs1)) ||
                   (id_uses_rs2 && (idex_rd_q == id_rs2)));
 
   // ------------------------------------------------------------
   // EX stage
   // ------------------------------------------------------------
-  logic [63:0] ex_rs1, ex_rs2;          // after forwarding
+  logic [63:0] ex_rs1, ex_rs2;
   logic [63:0] alu_a, alu_b, alu_result, muldiv_result;
   logic [63:0] ex_result;
   logic        branch_taken;
-  logic        ex_misalign;
+  logic        ex_misalign, ex_illegal;
   logic        ex_exc;
-  logic [63:0] ex_cause;
+  logic [63:0] ex_cause, ex_tval;
+  logic        ex_ret, ex_serialize;
 
-  // EX/MEM register (declared here: forwarding reads it). The full
-  // control struct travels even though MEM consumes only part of
-  // it; later stages (traps, stage 3) need the rest in flight.
+  // EX/MEM register
   logic        exmem_valid_q;
   logic [63:0] exmem_pc_q;
   /* verilator lint_off UNUSEDSIGNAL */
   muserisc_pkg::ctrl_t exmem_ctrl_q;
   /* verilator lint_on UNUSEDSIGNAL */
-  logic [63:0] exmem_result_q;   // ALU/muldiv result or return addr
-  logic [63:0] exmem_addr_q;     // load/store address
+  logic [63:0] exmem_result_q;
+  logic [63:0] exmem_addr_q;
   logic [63:0] exmem_store_data_q;
   logic [4:0]  exmem_rd_q;
   logic        exmem_exc_q;
-  logic [63:0] exmem_cause_q;
+  logic [63:0] exmem_cause_q, exmem_tval_q;
 
-  // MEM/WB register (declared here: forwarding/bypass read it)
+  // MEM/WB register
   logic        memwb_valid_q;
   logic [63:0] memwb_pc_q;
   logic [63:0] memwb_result_q;
   logic [4:0]  memwb_rd_q;
   logic        memwb_reg_write_q;
   logic        memwb_exc_q;
-  logic [63:0] memwb_cause_q;
+  logic [63:0] memwb_cause_q, memwb_tval_q;
 
-  // Register file: WB write, ID reads with WB bypass at the latch.
   logic        wb_write;
   assign wb_write = memwb_valid_q && memwb_reg_write_q && !memwb_exc_q;
+  assign trap_fire = memwb_valid_q && memwb_exc_q;
+  assign trap_take = trap_fire && !trap_halt_i;
+  assign freeze = trap_fire && trap_halt_i;
+  assign trap_o = trap_fire;
+  assign trap_cause_o = memwb_cause_q;
+  assign trap_pc_o = memwb_pc_q;
 
   muserisc_regfile u_regfile (
       .clk_i     (clk_i),
@@ -162,9 +226,6 @@ module muserisc_core import muserisc_pkg::*; (
   assign id_rs2_val = (wb_write && (memwb_rd_q != 5'd0) &&
                        (memwb_rd_q == id_rs2)) ? memwb_result_q : rf_rs2;
 
-  // Forwarding into EX: EX/MEM (non-load results only; a load's
-  // data is not ready there) wins over MEM/WB, which wins over
-  // the value latched in ID.
   always_comb begin
     if (exmem_valid_q && exmem_ctrl_q.reg_write && !exmem_ctrl_q.mem_read &&
         !exmem_exc_q && (exmem_rd_q != 5'd0) &&
@@ -207,8 +268,37 @@ module muserisc_core import muserisc_pkg::*; (
       .result_o  (muldiv_result)
   );
 
+  // CSR execution in EX.
+  assign csr_addr = idex_imm_q[11:0];
+  assign csr_src = idex_ctrl_q.csr_imm ? {59'd0, idex_rs1_addr_q} : ex_rs1;
+  always_comb begin
+    unique case (idex_ctrl_q.funct3[1:0])
+      2'b01:   csr_wdata = csr_src;                       // CSRRW(I)
+      2'b10:   csr_wdata = csr_rdata | csr_src;           // CSRRS(I)
+      default: csr_wdata = csr_rdata & ~csr_src;          // CSRRC(I)
+    endcase
+  end
+  assign csr_we = idex_valid_q && idex_ctrl_q.csr && !idex_exc_q &&
+                  !trap_fire &&
+                  ((idex_ctrl_q.funct3[1:0] == 2'b01) ||
+                   (idex_rs1_addr_q != 5'd0));
+  assign sys_op = idex_ctrl_q.mret   ? 3'd1 :
+                  idex_ctrl_q.sret   ? 3'd2 :
+                  idex_ctrl_q.wfi    ? 3'd3 :
+                  idex_ctrl_q.sfence ? 3'd4 : 3'd0;
+  assign ex_ret = idex_valid_q && (idex_ctrl_q.mret || idex_ctrl_q.sret) &&
+                  !idex_exc_q && !sys_illegal;
+  // SFENCE and xRET serialize: redirect and flush like a jump.
+  assign ex_serialize = ex_ret ||
+                        (idex_valid_q && idex_ctrl_q.sfence &&
+                         !idex_exc_q && !sys_illegal);
+  assign ex_illegal = idex_ctrl_q.csr ? csr_illegal :
+                      ((idex_ctrl_q.mret || idex_ctrl_q.sret ||
+                        idex_ctrl_q.wfi || idex_ctrl_q.sfence) && sys_illegal);
+
   always_comb begin
     if (idex_ctrl_q.jal || idex_ctrl_q.jalr) ex_result = idex_pc_q + 64'd4;
+    else if (idex_ctrl_q.csr)                ex_result = csr_rdata;
     else if (idex_ctrl_q.muldiv)             ex_result = muldiv_result;
     else                                     ex_result = alu_result;
   end
@@ -225,14 +315,16 @@ module muserisc_core import muserisc_pkg::*; (
     endcase
   end
 
-  assign flush = idex_valid_q && !idex_exc_q &&
+  assign flush = idex_valid_q && !idex_exc_q && !ex_illegal &&
                  (idex_ctrl_q.jal || idex_ctrl_q.jalr ||
-                  (idex_ctrl_q.branch && branch_taken));
-  assign redirect_pc = idex_ctrl_q.jalr ? ((ex_rs1 + idex_imm_q) & ~64'd1)
-                                        : (idex_pc_q + idex_imm_q);
+                  (idex_ctrl_q.branch && branch_taken) || ex_serialize);
+  always_comb begin
+    if (ex_ret)                  redirect_pc = xret_pc;
+    else if (idex_ctrl_q.sfence) redirect_pc = idex_pc_q + 64'd4;
+    else if (idex_ctrl_q.jalr)   redirect_pc = (ex_rs1 + idex_imm_q) & ~64'd1;
+    else                         redirect_pc = idex_pc_q + idex_imm_q;
+  end
 
-  // Misalignment is known once the address is (EX). BYTE (funct3
-  // low bits 00) can never misalign.
   always_comb begin
     ex_misalign = 1'b0;
     if (idex_ctrl_q.mem_read || idex_ctrl_q.mem_write) begin
@@ -245,11 +337,25 @@ module muserisc_core import muserisc_pkg::*; (
     end
   end
 
-  assign ex_exc = idex_exc_q || (idex_valid_q && ex_misalign);
   always_comb begin
-    if (idex_exc_q)   ex_cause = idex_cause_q;
-    else if (idex_ctrl_q.mem_write) ex_cause = CAUSE_STORE_MISALIGN;
-    else              ex_cause = CAUSE_LOAD_MISALIGN;
+    if (idex_exc_q) begin
+      ex_exc = idex_valid_q;
+      ex_cause = idex_cause_q;
+      ex_tval = idex_tval_q;
+    end else if (ex_illegal) begin
+      ex_exc = idex_valid_q;
+      ex_cause = CAUSE_ILLEGAL_INSTR;
+      ex_tval = 64'd0;
+    end else if (ex_misalign) begin
+      ex_exc = idex_valid_q;
+      ex_cause = idex_ctrl_q.mem_write ? CAUSE_STORE_MISALIGN
+                                       : CAUSE_LOAD_MISALIGN;
+      ex_tval = alu_result;
+    end else begin
+      ex_exc = 1'b0;
+      ex_cause = 64'd0;
+      ex_tval = 64'd0;
+    end
   end
 
   // ------------------------------------------------------------
@@ -257,19 +363,23 @@ module muserisc_core import muserisc_pkg::*; (
   // ------------------------------------------------------------
   logic [63:0] load_data;
   logic [63:0] mem_result;
+  logic        mem_fault;
+  logic        mem_exc;
+  logic [63:0] mem_cause, mem_tval;
 
-  assign freeze = memwb_valid_q && memwb_exc_q;
-  assign trap_o = freeze;
-  assign trap_cause_o = memwb_cause_q;
-  assign trap_pc_o = memwb_pc_q;
+  assign mem_fault = exmem_valid_q && !exmem_exc_q &&
+                     (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write) &&
+                     !pmp_allow_data;
 
   assign dmem_addr_o = exmem_addr_q;
-  assign dmem_re_o = exmem_valid_q && exmem_ctrl_q.mem_read && !exmem_exc_q;
+  assign dmem_re_o = exmem_valid_q && exmem_ctrl_q.mem_read &&
+                     !exmem_exc_q && !mem_fault;
 
   always_comb begin
     dmem_be_o = 8'd0;
     dmem_wdata_o = 64'd0;
-    if (exmem_valid_q && exmem_ctrl_q.mem_write && !exmem_exc_q && !freeze) begin
+    if (exmem_valid_q && exmem_ctrl_q.mem_write && !exmem_exc_q &&
+        !mem_fault && !trap_fire) begin
       unique case (exmem_ctrl_q.funct3[1:0])
         2'b00: begin
           dmem_be_o = 8'h01 << dmem_addr_o[2:0];
@@ -307,6 +417,63 @@ module muserisc_core import muserisc_pkg::*; (
   end
 
   assign mem_result = exmem_ctrl_q.mem_read ? load_data : exmem_result_q;
+  always_comb begin
+    if (exmem_exc_q) begin
+      mem_exc = exmem_valid_q;
+      mem_cause = exmem_cause_q;
+      mem_tval = exmem_tval_q;
+    end else if (mem_fault) begin
+      mem_exc = 1'b1;
+      mem_cause = exmem_ctrl_q.mem_write ? 64'd7 : 64'd5;
+      mem_tval = exmem_addr_q;
+    end else begin
+      mem_exc = 1'b0;
+      mem_cause = 64'd0;
+      mem_tval = 64'd0;
+    end
+  end
+
+  // ------------------------------------------------------------
+  // CSR / privileged unit
+  // ------------------------------------------------------------
+  muserisc_csr u_csr (
+      .clk_i         (clk_i),
+      .rst_ni        (rst_ni),
+      .addr_i        (csr_addr),
+      .rdata_o       (csr_rdata),
+      .illegal_o     (csr_illegal),
+      .wr_en_i       (csr_we),  // module itself suppresses illegal writes
+      .wdata_i       (csr_wdata),
+      .sys_illegal_o (sys_illegal),
+      .sys_op_i      (sys_op),
+      .ret_en_i      (ex_ret && !trap_fire),
+      .trap_take_i   (trap_take),
+      .trap_cause_i  (memwb_cause_q),
+      .trap_pc_i     (memwb_pc_q),
+      .trap_tval_i   (memwb_tval_q),
+      .trap_target_o (trap_target),
+      .trap_priv_o   (trap_priv_unused),
+      .irq_valid_o   (irq_valid),
+      .irq_cause_o   (irq_cause),
+      .irq_m_timer_i (irq_m_timer_i),
+      .irq_m_soft_i  (irq_m_soft_i),
+      .irq_m_ext_i   (irq_m_ext_i),
+      .irq_s_timer_i (irq_s_timer_i),
+      .irq_s_ext_i   (irq_s_ext_i),
+      .priv_o        (priv),
+      .satp_o        (csr_satp),
+      .mstatus_o     (csr_mstatus),
+      .xret_pc_o     (xret_pc),
+      .retire_i      (memwb_valid_q && !memwb_exc_q),
+      .pmp_addr_a_i  (pc_q),
+      .pmp_acc_a_i   (2'd2),
+      .pmp_priv_a_i  (priv),
+      .pmp_allow_a_o (pmp_allow_fetch),
+      .pmp_addr_b_i  (exmem_addr_q),
+      .pmp_acc_b_i   (exmem_ctrl_q.mem_write ? 2'd1 : 2'd0),
+      .pmp_priv_b_i  (eff_priv_data),
+      .pmp_allow_b_o (pmp_allow_data)
+  );
 
   // ------------------------------------------------------------
   // PC and pipeline registers
@@ -326,6 +493,7 @@ module muserisc_core import muserisc_pkg::*; (
       memwb_valid_q <= 1'b0;
       ifid_pc_q <= 64'd0;
       ifid_instr_q <= 32'd0;
+      ifid_exc_q <= 1'b0;
       idex_pc_q <= 64'd0;
       idex_ctrl_q <= '0;
       idex_imm_q <= 64'd0;
@@ -336,6 +504,7 @@ module muserisc_core import muserisc_pkg::*; (
       idex_rd_q <= 5'd0;
       idex_exc_q <= 1'b0;
       idex_cause_q <= 64'd0;
+      idex_tval_q <= 64'd0;
       exmem_pc_q <= 64'd0;
       exmem_ctrl_q <= '0;
       exmem_result_q <= 64'd0;
@@ -344,25 +513,34 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_rd_q <= 5'd0;
       exmem_exc_q <= 1'b0;
       exmem_cause_q <= 64'd0;
+      exmem_tval_q <= 64'd0;
       memwb_pc_q <= 64'd0;
       memwb_result_q <= 64'd0;
       memwb_rd_q <= 5'd0;
       memwb_reg_write_q <= 1'b0;
       memwb_exc_q <= 1'b0;
       memwb_cause_q <= 64'd0;
+      memwb_tval_q <= 64'd0;
+    end else if (trap_take) begin
+      // Precise trap entry: redirect and empty the pipeline.
+      pc_q <= trap_target;
+      ifid_valid_q <= 1'b0;
+      idex_valid_q <= 1'b0;
+      exmem_valid_q <= 1'b0;
+      memwb_valid_q <= 1'b0;
+      ifid_exc_q <= 1'b0;
     end else if (!freeze) begin
       pc_q <= pc_d;
 
-      // MEM/WB always advances.
       memwb_valid_q <= exmem_valid_q;
       memwb_pc_q <= exmem_pc_q;
       memwb_result_q <= mem_result;
       memwb_rd_q <= exmem_rd_q;
       memwb_reg_write_q <= exmem_ctrl_q.reg_write;
-      memwb_exc_q <= exmem_exc_q;
-      memwb_cause_q <= exmem_cause_q;
+      memwb_exc_q <= mem_exc;
+      memwb_cause_q <= mem_cause;
+      memwb_tval_q <= mem_tval;
 
-      // EX/MEM always advances.
       exmem_valid_q <= idex_valid_q;
       exmem_pc_q <= idex_pc_q;
       exmem_ctrl_q <= idex_ctrl_q;
@@ -372,14 +550,29 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_rd_q <= idex_rd_q;
       exmem_exc_q <= ex_exc;
       exmem_cause_q <= ex_cause;
+      exmem_tval_q <= ex_tval;
 
-      // ID/EX: bubble on stall or flush.
       if (stall || flush) begin
         idex_valid_q <= 1'b0;
+      end else if (irq_inject) begin
+        // The fetched instruction has not executed; epc will
+        // point at it so it re-executes after the handler.
+        idex_valid_q <= 1'b1;
+        idex_pc_q <= ifid_pc_q;
+        idex_ctrl_q <= '0;
+        idex_imm_q <= 64'd0;
+        idex_rs1_q <= 64'd0;
+        idex_rs2_q <= 64'd0;
+        idex_rs1_addr_q <= 5'd0;
+        idex_rs2_addr_q <= 5'd0;
+        idex_rd_q <= 5'd0;
+        idex_exc_q <= 1'b1;
+        idex_cause_q <= irq_cause;
+        idex_tval_q <= 64'd0;
       end else begin
         idex_valid_q <= ifid_valid_q;
         idex_pc_q <= ifid_pc_q;
-        idex_ctrl_q <= id_ctrl;
+        idex_ctrl_q <= ifid_exc_q ? '0 : id_ctrl;
         idex_imm_q <= id_imm;
         idex_rs1_q <= id_rs1_val;
         idex_rs2_q <= id_rs2_val;
@@ -388,15 +581,17 @@ module muserisc_core import muserisc_pkg::*; (
         idex_rd_q <= id_rd;
         idex_exc_q <= id_exc;
         idex_cause_q <= id_cause;
+        idex_tval_q <= id_tval;
       end
 
-      // IF/ID: hold on stall, clear on flush.
       if (flush) begin
         ifid_valid_q <= 1'b0;
+        ifid_exc_q <= 1'b0;
       end else if (!stall) begin
         ifid_valid_q <= 1'b1;
         ifid_pc_q <= pc_q;
-        ifid_instr_q <= imem_rdata_i;
+        ifid_instr_q <= fetch_fault ? 32'd0 : imem_rdata_i;
+        ifid_exc_q <= fetch_fault;
       end
     end
   end

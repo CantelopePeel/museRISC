@@ -19,6 +19,8 @@ enum AluOp { ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND, COPY_B };
 struct Ctrl {
   bool valid = false, reg_write = false, mem_read = false, mem_write = false;
   bool alu_src_imm = false, alu_a_pc = false, word_op = false, muldiv = false;
+  bool csr = false, csr_imm = false, mret = false, sret = false;
+  bool wfi = false, sfence = false;
   int alu_op = ADD;
   bool branch = false, jal = false, jalr = false, ecall = false, ebreak = false;
   uint64_t imm = 0;
@@ -120,9 +122,20 @@ Ctrl Golden(uint32_t insn) {
     case 0x0f:  // FENCE / FENCE.I
       c.valid = true;
       break;
-    case 0x73:  // SYSTEM: ECALL/EBREAK only in stage 1
-      if (f3 == 0 && (insn >> 20) == 0) { c.valid = c.ecall = true; }
-      if (f3 == 0 && (insn >> 20) == 1) { c.valid = c.ebreak = true; }
+    case 0x73:  // SYSTEM
+      if (f3 == 0) {
+        const uint32_t imm12 = insn >> 20;
+        if (imm12 == 0) { c.valid = c.ecall = true; }
+        else if (imm12 == 1) { c.valid = c.ebreak = true; }
+        else if (imm12 == 0x302) { c.valid = c.mret = true; }
+        else if (imm12 == 0x102) { c.valid = c.sret = true; }
+        else if (imm12 == 0x105) { c.valid = c.wfi = true; }
+        else if (((insn >> 25) & 0x7f) == 0x09) { c.valid = c.sfence = true; }
+      } else if (f3 != 4) {
+        c.valid = c.reg_write = c.csr = true;
+        c.csr_imm = ((f3 >> 2) & 1) != 0;
+        c.imm = imm_i;
+      }
       break;
     default:
       break;
@@ -155,7 +168,8 @@ int main(int argc, char** argv) {
     const int kFunct3 = 0, kEbreak = 3, kEcall = 4, kJalr = 5, kJal = 6,
               kBranch = 7, kAluOp = 8, kWordOp = 12, kAluAPc = 13,
               kAluSrcImm = 14, kMemWrite = 15, kMemRead = 16,
-              kRegWrite = 17, kValid = 18, kMuldiv = 19;
+              kRegWrite = 17, kValid = 18, kMuldiv = 19, kCsr = 20,
+              kCsrImm = 21, kMret = 22, kSret = 23, kWfi = 24, kSfence = 25;
     const Field fields[] = {
         {"valid", bit(kValid), g.valid},
         {"reg_write", bit(kRegWrite), g.reg_write && g.valid},
@@ -165,6 +179,12 @@ int main(int argc, char** argv) {
         {"jal", bit(kJal), g.jal && g.valid},
         {"jalr", bit(kJalr), g.jalr && g.valid},
         {"muldiv", bit(kMuldiv), g.muldiv && g.valid},
+        {"csr", bit(kCsr), g.csr && g.valid},
+        {"csr_imm", bit(kCsrImm), g.csr_imm && g.valid},
+        {"mret", bit(kMret), g.mret && g.valid},
+        {"sret", bit(kSret), g.sret && g.valid},
+        {"wfi", bit(kWfi), g.wfi && g.valid},
+        {"sfence", bit(kSfence), g.sfence && g.valid},
         {"ecall", bit(kEcall), g.ecall && g.valid},
         {"ebreak", bit(kEbreak), g.ebreak && g.valid},
     };
@@ -201,7 +221,7 @@ int main(int argc, char** argv) {
 
   // Sweep: every opcode x funct3 x funct7 sample, two immediate
   // patterns (one with sign bits set, one clear).
-  const uint32_t f7s[] = {0x00, 0x20, 0x01, 0x7f, 0x10};
+  const uint32_t f7s[] = {0x00, 0x20, 0x01, 0x7f, 0x10, 0x09};
   for (uint32_t op = 0; op < 128; ++op) {
     for (uint32_t f3 = 0; f3 < 8; ++f3) {
       for (uint32_t f7 : f7s) {
@@ -216,8 +236,13 @@ int main(int argc, char** argv) {
   for (uint32_t imm12 = 0; imm12 < 4096; imm12 += 257) {
     if (!run_one((imm12 << 20) | 0x73u)) return 1;
   }
-  if (!run_one(0x00000073u)) return 1;
-  if (!run_one(0x00100073u)) return 1;
+  if (!run_one(0x00000073u)) return 1;  // ECALL
+  if (!run_one(0x00100073u)) return 1;  // EBREAK
+  if (!run_one(0x30200073u)) return 1;  // MRET
+  if (!run_one(0x10200073u)) return 1;  // SRET
+  if (!run_one(0x10500073u)) return 1;  // WFI
+  if (!run_one(0x12000073u)) return 1;  // SFENCE.VMA x0, x0
+  if (!run_one(0x300010f3u)) return 1;  // CSRRW x2, mstatus, x0-ish fields
 
   dut->final();
   if (cov_path != nullptr) context.coveragep()->write(cov_path);

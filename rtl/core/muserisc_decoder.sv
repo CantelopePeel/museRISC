@@ -183,7 +183,7 @@ module muserisc_decoder import muserisc_pkg::*; (
       7'b0001111: begin  // FENCE / FENCE.I: NOP in stage 1
         ctrl_o.valid = 1'b1;
       end
-      7'b1110011: begin  // SYSTEM: only ECALL/EBREAK in stage 1
+      7'b1110011: begin  // SYSTEM
         if (funct3 == 3'b000) begin
           if (instr_i[31:20] == 12'd0) begin
             ctrl_o.valid = 1'b1;
@@ -191,7 +191,27 @@ module muserisc_decoder import muserisc_pkg::*; (
           end else if (instr_i[31:20] == 12'd1) begin
             ctrl_o.valid = 1'b1;
             ctrl_o.ebreak = 1'b1;
+          end else if (instr_i[31:20] == 12'h302) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.mret = 1'b1;
+          end else if (instr_i[31:20] == 12'h102) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.sret = 1'b1;
+          end else if (instr_i[31:20] == 12'h105) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.wfi = 1'b1;
+          end else if (funct7 == 7'b0001001) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.sfence = 1'b1;
           end
+        end else if (funct3 != 3'b100) begin
+          // CSRRW/CSRRS/CSRRC and immediate forms. CSR existence
+          // and privilege are checked in EX by the CSR file.
+          ctrl_o.valid = 1'b1;
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.csr = 1'b1;
+          ctrl_o.csr_imm = funct3[2];
+          imm_o = imm_i;
         end
       end
       default: begin

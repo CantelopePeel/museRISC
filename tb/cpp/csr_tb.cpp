@@ -1,0 +1,446 @@
+// Unit test for muserisc_csr: CSR read/write semantics and masks,
+// trap entry/return state updates, delegation, interrupt priority
+// and steering, counters, and the PMP match matrix — all against
+// spec-derived expectations, driving the module's own ports.
+#include "Vmuserisc_csr.h"
+#include "verilated.h"
+#include "verilated_cov.h"
+
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+
+static uint64_t g_checks = 0;
+static bool g_fail = false;
+
+#define CHECK(cond)                                                     \
+  do {                                                                  \
+    ++g_checks;                                                         \
+    if (!(cond)) {                                                      \
+      std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);       \
+      g_fail = true;                                                    \
+      return 1;                                                         \
+    }                                                                   \
+  } while (0)
+
+int main(int argc, char** argv) {
+  VerilatedContext context;
+  context.commandArgs(argc, argv);
+  const std::unique_ptr<Vmuserisc_csr> d{new Vmuserisc_csr{&context}};
+  const char* cov_path = std::getenv("COV_FILE");
+
+  auto tick = [&]() {
+    d->clk_i = 0; d->eval();
+    d->clk_i = 1; d->eval();
+    d->clk_i = 0; d->eval();
+  };
+  auto rd = [&](uint16_t addr) {
+    d->addr_i = addr;
+    d->wr_en_i = 0;
+    d->eval();
+    return d->rdata_o;
+  };
+  auto wr = [&](uint16_t addr, uint64_t value) {
+    d->addr_i = addr;
+    d->wdata_i = value;
+    d->wr_en_i = 1;
+    tick();
+    d->wr_en_i = 0;
+    d->eval();
+  };
+  auto illegal = [&](uint16_t addr, bool write) {
+    d->addr_i = addr;
+    d->wr_en_i = write ? 1 : 0;
+    d->eval();
+    const bool ill = d->illegal_o != 0;
+    d->wr_en_i = 0;
+    return ill;
+  };
+
+  d->clk_i = 0;
+  d->rst_ni = 0;
+  d->addr_i = 0;
+  d->wdata_i = 0;
+  d->wr_en_i = 0;
+  d->sys_op_i = 0;
+  d->ret_en_i = 0;
+  d->trap_take_i = 0;
+  d->trap_cause_i = 0;
+  d->trap_pc_i = 0;
+  d->trap_tval_i = 0;
+  d->irq_m_timer_i = 0;
+  d->irq_m_soft_i = 0;
+  d->irq_m_ext_i = 0;
+  d->irq_s_timer_i = 0;
+  d->irq_s_ext_i = 0;
+  d->retire_i = 0;
+  d->pmp_addr_a_i = 0;
+  d->pmp_acc_a_i = 0;
+  d->pmp_priv_a_i = 0;
+  d->pmp_addr_b_i = 0;
+  d->pmp_acc_b_i = 0;
+  d->pmp_priv_b_i = 0;
+  tick();
+  tick();
+  d->rst_ni = 1;
+  d->eval();
+
+  // Reset state: M-mode, everything zero, misa constant.
+  CHECK(d->priv_o == 3);
+  CHECK(rd(0x301) == 0x8000000000111101ULL);  // misa RV64 IM SU
+  CHECK(rd(0x300) == ((2ull << 34) | (2ull << 32)));  // mstatus: SXL/UXL only
+  CHECK(rd(0xF14) == 0);                     // mhartid
+  CHECK(illegal(0x7c0, false));              // nonexistent CSR
+  CHECK(illegal(0xF11, true));               // read-only class (0xC00-0xFFF)
+  CHECK(!illegal(0xF11, false));
+  CHECK(!illegal(0x301, true));              // misa writes are WARL-ignored
+  wr(0x301, 0);
+  CHECK(rd(0x301) == 0x8000000000111101ULL);
+  CHECK(!illegal(0x340, true));              // mscratch rw
+
+  // Plain storage CSRs round-trip.
+  wr(0x340, 0xdeadbeefcafef00dULL);
+  CHECK(rd(0x340) == 0xdeadbeefcafef00dULL);
+  wr(0x140, 0x1122334455667788ULL);
+  CHECK(rd(0x140) == 0x1122334455667788ULL);
+  wr(0x30A, 0x5a5a5a5a5a5a5a5aULL);
+  CHECK(rd(0x30A) == 0x5a5a5a5a5a5a5a5aULL);
+  wr(0x10A, 0xa5a5a5a5a5a5a5a5ULL);
+  CHECK(rd(0x10A) == 0xa5a5a5a5a5a5a5a5ULL);
+  wr(0x306, 0xffffffffULL);
+  CHECK(rd(0x306) == 0xffffffffULL);
+  wr(0x106, 0x7ULL);
+  CHECK(rd(0x106) == 0x7ULL);
+
+  // Masked CSRs: medeleg/mideleg/mie keep only implemented bits.
+  wr(0x302, ~0ull);
+  CHECK(rd(0x302) == 0xB35DULL);
+  wr(0x303, ~0ull);
+  CHECK(rd(0x303) == 0x222ULL);
+  wr(0x304, ~0ull);
+  CHECK(rd(0x304) == 0xAAAULL);
+  wr(0x302, 0);
+  wr(0x303, 0);
+  wr(0x304, 0);
+
+  // mtvec mode WARL: modes 2/3 read back 0; alignment of base.
+  wr(0x305, 0x1003);
+  CHECK(rd(0x305) == 0x1000);
+  wr(0x305, 0x1001);
+  CHECK(rd(0x305) == 0x1001);
+
+  // mepc/sepc low bits are masked (IALIGN=32).
+  wr(0x341, 0x12345);
+  CHECK(rd(0x341) == 0x12344);
+  wr(0x141, 0x999);
+  CHECK(rd(0x141) == 0x998);
+
+  // mstatus field handling: MPP=2 (reserved) reads back 0; sstatus
+  // is a masked view; sstatus writes touch only S-visible fields.
+  wr(0x300, (2ull << 11) | (1ull << 3) | (1ull << 17));
+  CHECK(((rd(0x300) >> 11) & 3) == 0);
+  CHECK(((rd(0x300) >> 3) & 1) == 1);
+  wr(0x300, (1ull << 17));  // MIE back to 0 so the next check can tell
+  wr(0x100, (1ull << 1) | (1ull << 18) | (1ull << 3));  // bit3 must not land
+  CHECK(((rd(0x300) >> 1) & 1) == 1);   // SIE set via sstatus
+  CHECK(((rd(0x300) >> 18) & 1) == 1);  // SUM set via sstatus
+  CHECK(((rd(0x300) >> 3) & 1) == 0);   // MIE not writable via sstatus
+  wr(0x300, 0);
+  CHECK((rd(0x100) & ~(3ull << 32)) == 0);
+
+  // Counters: mcycle free-runs, inhibit works, minstret counts.
+  const uint64_t c0 = rd(0xB00);
+  tick();
+  tick();
+  CHECK(rd(0xB00) >= c0 + 2);
+  wr(0xB00, 1000);
+  CHECK(rd(0xC00) >= 1000 && rd(0xC00) <= 1010);
+  wr(0xB02, 500);
+  d->retire_i = 1;
+  tick();
+  tick();
+  d->retire_i = 0;
+  CHECK(rd(0xB02) == 502);
+  CHECK(rd(0xC02) == 502);
+  wr(0x320, 0x5);  // inhibit cycle + instret
+  const uint64_t ci = rd(0xB00);
+  d->retire_i = 1;
+  tick();
+  d->retire_i = 0;
+  CHECK(rd(0xB00) == ci);
+  CHECK(rd(0xB02) == 502);
+  wr(0x320, 0);
+  CHECK(rd(0xB03) == 0);  // mhpmcounter3 reads zero
+  wr(0xB03, 12345);
+  CHECK(rd(0xB03) == 0);
+  CHECK(!illegal(0xB03, true));
+
+  // Interrupt selection: priority and delegation steering.
+  wr(0x304, (1ull << 7) | (1ull << 11) | (1ull << 5));  // MTIE|MEIE|STIE
+  wr(0x300, (1ull << 3));                               // mstatus.MIE
+  d->irq_m_timer_i = 1;
+  d->irq_m_ext_i = 1;
+  d->eval();
+  CHECK(d->irq_valid_o);
+  CHECK(d->irq_cause_o == (0x8000000000000000ULL | 11));  // MEI wins
+  d->irq_m_ext_i = 0;
+  d->eval();
+  CHECK(d->irq_cause_o == (0x8000000000000000ULL | 7));   // then MTI
+  wr(0x303, (1ull << 5));                                 // delegate STI
+  d->irq_m_timer_i = 0;
+  d->irq_s_timer_i = 1;
+  d->eval();
+  CHECK(!d->irq_valid_o);  // delegated: not taken while in M
+  d->irq_s_timer_i = 0;
+  wr(0x304, 0);
+  wr(0x303, 0);
+  wr(0x300, 0);
+
+  // Trap entry to M: epc/cause/tval/status shuffle.
+  wr(0x305, 0x2000);  // mtvec direct
+  wr(0x300, (1ull << 3));
+  d->trap_take_i = 1;
+  d->trap_cause_i = 4;
+  d->trap_pc_i = 0x800;
+  d->trap_tval_i = 0x1003;
+  d->eval();
+  CHECK(d->trap_target_o == 0x2000);
+  CHECK(d->trap_priv_o == 3);
+  tick();
+  d->trap_take_i = 0;
+  CHECK(rd(0x341) == 0x800);
+  CHECK(rd(0x342) == 4);
+  CHECK(rd(0x343) == 0x1003);
+  CHECK(((rd(0x300) >> 7) & 1) == 1);   // MPIE = old MIE
+  CHECK(((rd(0x300) >> 3) & 1) == 0);   // MIE cleared
+  CHECK(((rd(0x300) >> 11) & 3) == 3);  // MPP = M
+
+  // Vectored target: base + 4*code for interrupts only.
+  wr(0x305, 0x2001);
+  d->trap_take_i = 1;
+  d->trap_cause_i = 0x8000000000000007ULL;
+  d->trap_pc_i = 0x900;
+  d->eval();
+  CHECK(d->trap_target_o == 0x2000 + 28);
+  d->trap_cause_i = 2;
+  d->eval();
+  CHECK(d->trap_target_o == 0x2000);  // exceptions ignore vectoring
+  tick();
+  d->trap_take_i = 0;
+  wr(0x305, 0x2000);
+
+  // MRET: back to MPP privilege, MIE restored from MPIE.
+  wr(0x341, 0x400);
+  wr(0x300, (3ull << 11) | (1ull << 7));     // MPP=M, MPIE=1, MIE=0
+  d->sys_op_i = 1;
+  d->eval();
+  CHECK(!d->sys_illegal_o);
+  CHECK(d->xret_pc_o == 0x400);
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  CHECK(d->priv_o == 3);
+  CHECK(((rd(0x300) >> 3) & 1) == 1);
+
+  // Drop to S via MRET (MPP=S), then S-mode behavior.
+  wr(0x341, 0x800);
+  wr(0x300, (1ull << 11) | (1ull << 7));
+  d->sys_op_i = 1;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1);
+  CHECK(illegal(0x300, false));   // mstatus not readable from S
+  CHECK(!illegal(0x100, false));  // sstatus is
+  CHECK(!illegal(0x180, true));   // satp writable from S
+  // SRET illegal in S when TSR=1 (set TSR while back in M later);
+  // with TSR=0 SRET is legal in S but illegal MRET is not.
+  d->sys_op_i = 1;
+  d->eval();
+  CHECK(d->sys_illegal_o);        // MRET from S
+  d->sys_op_i = 2;
+  d->eval();
+  CHECK(!d->sys_illegal_o);       // SRET from S ok
+  d->sys_op_i = 0;
+
+  // Delegated exception from S goes to S (medeleg bit 8).
+  wr(0x105, 0x3000);              // stvec (writable from S)
+  // medeleg can only be written from M; write it after returning.
+  // First get back to M: trap with a non-delegated cause.
+  d->trap_take_i = 1;
+  d->trap_cause_i = 2;
+  d->trap_pc_i = 0x800;
+  d->trap_tval_i = 0;
+  d->eval();
+  CHECK(d->trap_priv_o == 3);
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 3);
+  CHECK(((rd(0x300) >> 11) & 3) == 1);  // MPP = S
+  wr(0x302, (1ull << 8));
+  // Drop to S again and trap with cause 8: must land in S.
+  wr(0x341, 0x800);
+  wr(0x300, (1ull << 11) | (1ull << 7));
+  d->sys_op_i = 1;
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->trap_take_i = 1;
+  d->trap_cause_i = 8;
+  d->trap_pc_i = 0x810;
+  d->eval();
+  CHECK(d->trap_priv_o == 1);
+  CHECK(d->trap_target_o == 0x3000);
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 1);
+  CHECK(rd(0x141) == 0x810);       // sepc
+  CHECK(rd(0x142) == 8);           // scause
+  // SRET to U (SPP=0 after this trap since S trapped from S->SPP=1;
+  // clear SPP by writing sstatus with bit8=0 from S: allowed field).
+  wr(0x100, 0);
+  wr(0x141, 0x900);
+  d->sys_op_i = 2;
+  d->eval();
+  CHECK(d->xret_pc_o == 0x900);
+  d->ret_en_i = 1;
+  tick();
+  d->ret_en_i = 0;
+  d->sys_op_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 0);
+  CHECK(illegal(0x100, false));    // sstatus from U
+  CHECK(!illegal(0xC00, false));   // cycle from U ok
+  // Back to M for PMP checks.
+  d->trap_take_i = 1;
+  d->trap_cause_i = 2;
+  d->trap_pc_i = 0x900;
+  tick();
+  d->trap_take_i = 0;
+  d->eval();
+  CHECK(d->priv_o == 3);
+  wr(0x302, 0);
+
+  // PMP: no entries -> M allowed, S/U denied.
+  auto pmp_a = [&](uint64_t addr, int acc, int priv) {
+    d->pmp_addr_a_i = addr;
+    d->pmp_acc_a_i = static_cast<uint8_t>(acc);
+    d->pmp_priv_a_i = static_cast<uint8_t>(priv);
+    d->eval();
+    return d->pmp_allow_a_o != 0;
+  };
+  CHECK(pmp_a(0x1000, 0, 3));
+  CHECK(!pmp_a(0x1000, 0, 1));
+  CHECK(!pmp_a(0x1000, 2, 0));
+  // Catch-all entry 15 NAPOT RWX: S/U allowed everywhere.
+  wr(0x3BF, ~0ull);
+  wr(0x3A2, (0x1full << 56));
+  CHECK(pmp_a(0x1000, 0, 1));
+  CHECK(pmp_a(0xdead000, 2, 0));
+  // Entry 0: NAPOT 4 KiB at 0x80000, R only.
+  wr(0x3B0, ((0x80000ull >> 2) | 0x1ffull));
+  wr(0x3A0, (3 << 3) | 1);
+  CHECK(rd(0x3A0) == ((3 << 3) | 1));
+  CHECK(pmp_a(0x80000, 0, 1));        // R ok
+  CHECK(!pmp_a(0x80000, 1, 1));       // W denied
+  CHECK(!pmp_a(0x80fff, 2, 1));       // X denied (region edge)
+  CHECK(pmp_a(0x81000, 1, 1));        // outside -> catch-all
+  CHECK(pmp_a(0x80000, 1, 3));        // M bypasses unlocked entry
+  // Lock entry 0: M is now checked too; cfg writes are ignored.
+  wr(0x3A0, (1 << 7) | (3 << 3) | 1);
+  CHECK(!pmp_a(0x80000, 1, 3));
+  wr(0x3A0, 0x1f);
+  CHECK((rd(0x3A0) & 0xff) == ((1 << 7) | (3 << 3) | 1));
+  // TOR entry 1: [entry0 top, 0x90000) no access. Entry0 addr is
+  // the NAPOT encoding; TOR uses raw pmpaddr values, so reprogram:
+  // entry0 OFF cannot happen while locked; use entries 2 (TOR top
+  // 0x90000 with prev = entry1 addr 0x88000).
+  wr(0x3B1, (0x88000ull >> 2));
+  wr(0x3B2, (0x90000ull >> 2));
+  wr(0x3A0, (rd(0x3A0) & 0xff) | ((1ull << 3) << 16) | (0ull << 8));
+  // entry2 cfg = TOR(01), no perms; entry1 OFF.
+  CHECK(!pmp_a(0x88000, 0, 1));
+  CHECK(!pmp_a(0x8ffff, 0, 1));
+  CHECK(pmp_a(0x90000, 0, 1));
+  // NA4 entry 3: exactly 4 bytes at 0xA0000, R only.
+  wr(0x3B3, (0xA0000ull >> 2));
+  wr(0x3A0, (rd(0x3A0) & ~(0xffull << 24)) | (0x11ull << 24));
+  CHECK(pmp_a(0xA0000, 0, 1));
+  CHECK(!pmp_a(0xA0000, 1, 1));
+  CHECK(pmp_a(0xA0004, 1, 1));  // past the 4-byte grain: catch-all
+  // Locked TOR entry 5 also locks pmpaddr4 (its lower bound).
+  wr(0x3B4, (0xB0000ull >> 2));
+  wr(0x3B5, (0xB8000ull >> 2));
+  wr(0x3A0, (rd(0x3A0) & ~(0xffffull << 32)) | (0x89ull << 40));
+  CHECK(((rd(0x3A0) >> 40) & 0xffull) == 0x89ull);  // entry5 locked TOR
+  CHECK(((rd(0x3A0) >> 32) & 0xffull) == 0);        // entry4 itself OFF
+  wr(0x3B4, (0xC0000ull >> 2));
+  CHECK(rd(0x3B4) == (0xB0000ull >> 2));
+  CHECK(pmp_a(0xB0000, 0, 1));   // TOR R
+  CHECK(!pmp_a(0xB0000, 1, 1));  // TOR W denied
+
+  // Remaining CSR storage + read-only identity registers.
+  CHECK(rd(0xF12) == 0x4D555345ULL);  // marchid "MUSE"
+  CHECK(rd(0xF13) == 0x30000ULL);     // mimpid
+  CHECK(rd(0xF15) == 0);              // mconfigptr
+  CHECK(rd(0xC01) == rd(0xC00));      // time mirrors cycle (same eval)
+  wr(0x142, 0x1234);                  // scause write port
+  CHECK(rd(0x142) == 0x1234);
+  wr(0x143, 0xabcd);                  // stval write port
+  CHECK(rd(0x143) == 0xabcd);
+  wr(0x342, 0x5678);                  // mcause write port
+  CHECK(rd(0x342) == 0x5678);
+  wr(0x343, 0x9abc);                  // mtval write port
+  CHECK(rd(0x343) == 0x9abc);
+  // sip write (SSIP) visible through mip and the delegated sip view.
+  wr(0x303, (1ull << 1));
+  wr(0x144, (1ull << 1));
+  CHECK((rd(0x144) & (1ull << 1)) != 0);
+  CHECK((rd(0x344) & (1ull << 1)) != 0);
+  wr(0x144, 0);
+  wr(0x303, 0);
+  // satp storage reaches the MMU-facing output.
+  wr(0x180, (8ull << 60) | 0x12345ull);
+  CHECK(rd(0x180) == ((8ull << 60) | 0x12345ull));
+  CHECK(d->satp_o == ((8ull << 60) | 0x12345ull));
+  wr(0x180, 0);
+  // mstatus TVM/TW/TSR storage.
+  wr(0x300, (1ull << 20) | (1ull << 21) | (1ull << 22));
+  CHECK((rd(0x300) & ((1ull << 20) | (1ull << 21) | (1ull << 22))) ==
+        ((1ull << 20) | (1ull << 21) | (1ull << 22)));
+  CHECK((d->mstatus_o & (1ull << 20)) != 0);
+  wr(0x300, 0);
+
+  // Remaining interrupt priority rungs: MSI(3), SEI(9), SSI(1).
+  wr(0x304, (1ull << 3) | (1ull << 9) | (1ull << 1));
+  wr(0x300, (1ull << 3));
+  d->irq_m_soft_i = 1;
+  d->eval();
+  CHECK(d->irq_valid_o);
+  CHECK(d->irq_cause_o == (0x8000000000000000ULL | 3));
+  d->irq_m_soft_i = 0;
+  d->irq_s_ext_i = 1;
+  d->eval();
+  CHECK(d->irq_cause_o == (0x8000000000000000ULL | 9));
+  d->irq_s_ext_i = 0;
+  wr(0x344, (1ull << 1));  // mip.SSIP software-pending
+  d->eval();
+  CHECK(d->irq_cause_o == (0x8000000000000000ULL | 1));
+  wr(0x344, 0);
+  wr(0x304, 0);
+  wr(0x300, 0);
+
+  d->final();
+  if (cov_path != nullptr) context.coveragep()->write(cov_path);
+  if (g_fail) return 1;
+  std::printf("CSR TB PASS (%llu checks)\n",
+              static_cast<unsigned long long>(g_checks));
+  return 0;
+}

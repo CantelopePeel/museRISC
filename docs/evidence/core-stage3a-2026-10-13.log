@@ -1,0 +1,45 @@
+In-house core stage 3a (issue #18): CSRs, M/S/U privilege, precise
+traps + interrupts, PMP
+Command: make core-test   (host Verilator 5.044, riscv64-elf-gcc)
+
+ALU TB PASS (205642 checks)
+MULDIV TB PASS (165877 checks)
+DECODER TB PASS (12311 checks)
+REGFILE TB PASS (4194 checks)
+CSR TB PASS (117 checks)
+CORE TB PASS rv64i_directed.bin (315 cycles)
+CORE TB PASS rv64m_directed.bin (167 cycles)
+CORE TB PASS pipeline_directed.bin (648 cycles)
+CORE TB PASS priv_directed.bin (801012 cycles)
+CORE TB PASS trap_illegal.bin (expected trap cause 2 at pc 0x4, 5 cycles)
+CORE TB PASS trap_misalign.bin (expected trap cause 4 at pc 0x4, 5 cycles)
+CORE TB PASS trap_ecall.bin (expected trap cause 11 at pc 0x4, 5 cycles)
+CORE TB PASS trap_ebreak.bin (expected trap cause 3 at pc 0x4, 5 cycles)
+CORE TB PASS trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 6 cycles)
+CORE TB PASS trap_younger_store.bin (expected trap cause 4 at pc 0x4, 5 cycles)
+Total coverage (475/926) 51.00%
+
+Annotated source lines executed at least once (verilator_coverage):
+  muserisc_alu.sv: 36/36
+  muserisc_core.sv: 316/316
+  muserisc_csr.sv: 305/305
+  muserisc_decoder.sv: 156/156
+  muserisc_muldiv.sv: 50/50
+  muserisc_regfile.sv: 13/13
+  TOTAL 876/876 = 100.0% (no %000000 lines)
+
+Combined line+toggle points: 475/926 = 51% (residue is
+toggle/partial-expression points on wide datapaths).
+Repo gates also green at this commit: make test, make lint.
+
+priv_directed.S drives 14 test groups under --irq-timer-after 2000:
+CSR round-trips and masks, S-mode drop via MRET, delegated ECALL to
+S, PMP load/store/execute denials (incl. a NAPOT X-deny page taking
+an instruction access fault), M timer interrupt with precise epc,
+delegated supervisor timer interrupt taken in S (cause
+0x8000000000000005), counter CSRs, MPRV data path, and
+illegal-CSR/privilege violations. csr_tb.cpp checks the CSR file
+directly at its ports: write masks, delegation steering, vectored
+trap targets, interrupt priority (MEI > MSI > MTI > SEI > SSI >
+STI), xRET state shuffles, PMP OFF/TOR/NA4/NAPOT matching,
+W-without-R WARL, and entry/adjacent-TOR locking.

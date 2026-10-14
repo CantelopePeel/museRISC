@@ -40,10 +40,13 @@ int main(int argc, char** argv) {
   const char* prog_path = argv[1];
   uint64_t max_cycles = 1000000;
   long expect_trap = -1;
+  long irq_timer_after = -1;
   bool trace = std::getenv("CORE_TB_TRACE") != nullptr;
   for (int i = 2; i < argc; ++i) {
     if (std::strcmp(argv[i], "--expect-trap") == 0 && i + 1 < argc) {
       expect_trap = std::atol(argv[++i]);
+    } else if (std::strcmp(argv[i], "--irq-timer-after") == 0 && i + 1 < argc) {
+      irq_timer_after = std::atol(argv[++i]);
     } else if (std::strcmp(argv[i], "--trace") == 0) {
       trace = true;
     } else {
@@ -79,13 +82,44 @@ int main(int argc, char** argv) {
   dut->rst_ni = 0;
   dut->imem_rdata_i = 0;
   dut->dmem_rdata_i = 0;
+  // Legacy --expect-trap runs freeze at the first trap; normal
+  // runs let the core take traps to its handlers.
+  dut->trap_halt_i = (expect_trap >= 0) ? 1 : 0;
+  dut->irq_m_timer_i = 0;
+  dut->irq_m_soft_i = 0;
+  dut->irq_m_ext_i = 0;
+  dut->irq_s_timer_i = 0;
+  dut->irq_s_ext_i = 0;
+  bool irq_active = false;
+  // Pulse every IRQ pin once while still in reset (mie = 0, so no
+  // trap can be taken) so the level inputs exercised only by the
+  // unit testbench still toggle through the core pins.
+  dut->irq_m_soft_i = 1;
+  dut->irq_m_ext_i = 1;
+  dut->irq_s_timer_i = 1;
+  dut->irq_s_ext_i = 1;
   for (int i = 0; i < 4; ++i) {
     dut->clk_i = static_cast<uint8_t>(i & 1);
     dut->eval();
   }
+  dut->irq_m_soft_i = 0;
+  dut->irq_m_ext_i = 0;
+  dut->irq_s_timer_i = 0;
+  dut->irq_s_ext_i = 0;
+  dut->eval();
   dut->rst_ni = 1;
 
   for (uint64_t cycle = 0; cycle < max_cycles; ++cycle) {
+    if (irq_timer_after >= 0 &&
+        cycle >= static_cast<uint64_t>(irq_timer_after) && !irq_active) {
+      dut->irq_m_timer_i = 1;
+      irq_active = true;
+    }
+    if (irq_active && dut->trap_o) {
+      dut->irq_m_timer_i = 0;  // level interrupt: clear once taken
+      irq_active = false;
+      irq_timer_after = -1;
+    }
     // Combinational memory phase (clock low). Two settles: first
     // present the instruction so the core drives this cycle's data
     // address, then present the data for that address. Presenting
@@ -105,9 +139,9 @@ int main(int argc, char** argv) {
                   dut->dmem_re_o ? 1 : 0);
     }
 
-    if (dut->trap_o) {
+    if (dut->trap_o && expect_trap >= 0) {
       const uint64_t cause = dut->trap_cause_o;
-      if (expect_trap >= 0 && cause == static_cast<uint64_t>(expect_trap)) {
+      if (cause == static_cast<uint64_t>(expect_trap)) {
         std::printf("CORE TB PASS %s (expected trap cause %llu at pc 0x%lx, %llu cycles)\n",
                     prog_path, static_cast<unsigned long long>(cause),
                     static_cast<unsigned long>(dut->trap_pc_o),

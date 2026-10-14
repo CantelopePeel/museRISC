@@ -26,6 +26,12 @@ package muserisc_pkg;
   // Decoder output consumed by the datapath. One struct so stage 2
   // can register it verbatim between decode and execute.
   typedef struct packed {
+    logic    sfence;       // SFENCE.VMA (serializing; flushes TLBs)
+    logic    wfi;          // WFI (executes as NOP unless TW traps it)
+    logic    sret;         // SRET
+    logic    mret;         // MRET
+    logic    csr_imm;      // CSR source is the 5-bit zero-extended rs1 field
+    logic    csr;          // CSR read/write instruction (funct3 selects op)
     logic    muldiv;       // result comes from the M unit (funct3 selects)
     logic    valid;        // legal instruction in the implemented subset
     logic    reg_write;    // write rd at end of cycle

@@ -669,3 +669,42 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   before any synthesis target), and traps still halt the
   machine at WB; real trap state is stage 3. No compliance
   claim attaches yet.
+
+## In-house core stage 3a — CSRs, privilege, traps, PMP (2026-10-13, #18)
+
+- Artifact: [`core-stage3a-2026-10-13.log`](core-stage3a-2026-10-13.log)
+  (`make core-test` extract); plan in
+  [`docs/CORE.md`](../CORE.md).
+- New `muserisc_csr` (505 lines): M/S/U CSR file with spec write
+  masks, `sstatus`/`sie`/`sip` masked views, counters,
+  trap entry/return with delegation (`medeleg`/`mideleg`),
+  direct+vectored trap targets, interrupt priority
+  (MEI > MSI > MTI > SEI > SSI > STI), and 16 PMP entries
+  (OFF/TOR/NA4/NAPOT, W-without-R WARL, entry and
+  adjacent-TOR locking). The pipeline takes precise traps at
+  WB (trapping instruction and everything younger write
+  nothing), injects interrupts in ID for a precise `epc`,
+  executes CSR ops in EX committing on the EX→MEM edge, and
+  checks PMP on fetch and data (with MPRV applied to data).
+  `trap_halt_i` preserves the stage-1/2 freeze-and-report mode
+  for the directed trap TBs.
+- Verification: new C++ CSR unit TB (117 checks at the module
+  ports), decoder TB grown to 12,311 checks for the SYSTEM
+  space, and `sw/core-tests/priv_directed.S` (14 groups:
+  CSR masks, MRET/SRET, delegation, PMP R/W/X denials
+  including a NAPOT execute-deny instruction access fault,
+  M timer IRQ and a delegated S timer IRQ with precise
+  `epc`, counters, MPRV, privilege violations) — all PASS
+  alongside the unchanged stage-1/2 suite.
+- Coverage: every annotated `rtl/core/` source line executed
+  (876/876); combined line+toggle points 475/926 (51%).
+  `make test` and `make lint` also pass at this commit.
+- One coverage-driven RTL cleanup: `pmp_locked` rewritten
+  from early-`return` form to a single expression (identical
+  semantics, proven by the same lock readback checks)
+  because Verilator attributes no count to the nested
+  return line even when the path provably executes.
+- Caveat: `satp` is stored but no translation exists yet —
+  Sv39+Svnapot MMU is stage 3b, followed by the riscv-tests
+  and ACT stage gates (3c/3d). No compliance claim attaches
+  yet.
