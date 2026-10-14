@@ -418,46 +418,63 @@ module muserisc_decoder import muserisc_pkg::*; (
           endcase
         end
       end
-      7'b0000111: begin  // FLW / FLD and vector unit-stride loads
+      7'b0000111, 7'b0100111: begin
+        // FLW/FLD, FSW/FSD, and vector loads/stores. Vector
+        // forms (mew=0, width in funct3; index width for the
+        // indexed classes): unit-stride, strided, indexed
+        // (unordered/ordered), whole-register, and
+        // fault-only-first loads. The class rides in bext_op
+        // (VLS_*); the register count for whole-register
+        // transfers rides in the immediate.
+        logic is_store_v, vec_ls;
+        logic [6:0] vclass;
+        is_store_v = (opcode == 7'b0100111);
+        if (is_store_v) imm_o = imm_s;
+        vec_ls = 1'b0;
+        vclass = VLS_UNIT;
         if ((funct3 == 3'b000 || funct3 == 3'b101 ||
              funct3 == 3'b110 || funct3 == 3'b111) &&
-            (instr_i[31:26] == 6'b000000) &&
-            (instr_i[24:20] == 5'd0)) begin
-          // vle8/16/32/64.v (nf=1, mew=0, mop=unit-stride).
-          ctrl_o.valid = 1'b1;
-          ctrl_o.mem_read = 1'b1;
-          ctrl_o.alu_src_imm = 1'b1;
-          ctrl_o.vec = 1'b1;
-          ctrl_o.vec_rd = 1'b1;
-          imm_o = 64'd0;
-        end else if (funct3 == 3'b010 || funct3 == 3'b011) begin
-          ctrl_o.valid = 1'b1;
-          ctrl_o.mem_read = 1'b1;
-          ctrl_o.alu_src_imm = 1'b1;
-          ctrl_o.fp = 1'b1;
-          ctrl_o.fp_rd = 1'b1;
-          ctrl_o.fmt_d = funct3[0];
+            !instr_i[28]) begin
+          if (instr_i[27:26] == 2'b00) begin
+            if (instr_i[24:20] == 5'd0) begin
+              vec_ls = 1'b1;  // unit-stride (+ segments by nf)
+              vclass = VLS_UNIT;
+            end else if (instr_i[24:20] == 5'd8) begin
+              vec_ls = (instr_i[31:29] == 3'd0) ||
+                       (instr_i[31:29] == 3'd1) ||
+                       (instr_i[31:29] == 3'd3) ||
+                       (instr_i[31:29] == 3'd7);
+              vclass = VLS_WHOLE;
+            end else if (!is_store_v && (instr_i[24:20] == 5'd16)) begin
+              vec_ls = instr_i[31:29] == 3'd0;
+              vclass = VLS_FF;
+            end
+          end else begin
+            vec_ls = 1'b1;  // strided/indexed (+ segments)
+            vclass = (instr_i[27:26] == 2'b10) ? VLS_STRIDED
+                                               : VLS_INDEXED;
+          end
         end
-      end
-      7'b0100111: begin  // FSW / FSD and vector unit-stride stores
-        imm_o = imm_s;
-        if ((funct3 == 3'b000 || funct3 == 3'b101 ||
-             funct3 == 3'b110 || funct3 == 3'b111) &&
-            (instr_i[31:26] == 6'b000000) &&
-            (instr_i[24:20] == 5'd0)) begin
-          // vse8/16/32/64.v (nf=1, mew=0, mop=unit-stride).
+        if (vec_ls) begin
           ctrl_o.valid = 1'b1;
-          ctrl_o.mem_write = 1'b1;
+          ctrl_o.mem_read = !is_store_v;
+          ctrl_o.mem_write = is_store_v;
           ctrl_o.alu_src_imm = 1'b1;
           ctrl_o.vec = 1'b1;
-          imm_o = 64'd0;
+          ctrl_o.vec_rd = !is_store_v;
+          ctrl_o.bext_op = vclass;
+          imm_o = (vclass == VLS_WHOLE)
+                  ? {61'd0, instr_i[31:29]} + 64'd1 : 64'd0;
         end else if (funct3 == 3'b010 || funct3 == 3'b011) begin
           ctrl_o.valid = 1'b1;
-          ctrl_o.mem_write = 1'b1;
+          ctrl_o.mem_read = !is_store_v;
+          ctrl_o.mem_write = is_store_v;
           ctrl_o.alu_src_imm = 1'b1;
           ctrl_o.fp = 1'b1;
-          ctrl_o.fp_rs2 = 1'b1;
+          ctrl_o.fp_rd = !is_store_v;
+          ctrl_o.fp_rs2 = is_store_v;
           ctrl_o.fmt_d = funct3[0];
+          imm_o = is_store_v ? imm_s : imm_i;
         end
       end
       7'b1000011, 7'b1000111, 7'b1001011, 7'b1001111: begin  // FMA

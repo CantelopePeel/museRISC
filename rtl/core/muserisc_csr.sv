@@ -82,6 +82,8 @@ module muserisc_csr (
     input  wire        vec_dirty_i,   // a vector reg write commits
     input  wire        vstart_we_i,   // faulting vector LS sets vstart
     input  wire [63:0] vstart_wdata_i,
+    input  wire        vl_we_i,       // fault-only-first trims vl
+    input  wire [63:0] vl_wdata_i,
     output logic [1:0] vxrm_o,        // fixed-point rounding mode
     input  wire        vxsat_set_i,   // a fixed-point op saturated
     // PMP checks (physical addresses, combinational)
@@ -846,6 +848,7 @@ module muserisc_csr (
         if (virt_q) vs_vs_q <= 2'b11;  // both VS fields go Dirty
       end
       if (vxsat_set_i) vxsat_q <= 1'b1;
+      if (vl_we_i) vl_q <= vl_wdata_i;
       if (vstart_we_i) vstart_q <= vstart_wdata_i;
       // vsetvl* commit (EX). Setting vill zeroes vl and the
       // remaining vtype fields; vstart always clears.

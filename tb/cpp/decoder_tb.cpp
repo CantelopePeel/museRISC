@@ -111,26 +111,45 @@ Ctrl Golden(uint32_t insn) {
       }
       break;
     }
-    case 0x07:  // FLW/FLD and vector unit-stride loads
+    case 0x07: case 0x27: {  // FL*/FS* and vector loads/stores
+      const bool is_store = (op == 0x27);
+      const uint32_t nf = (insn >> 29) & 7, mop = (insn >> 26) & 3;
+      const uint32_t lumop = (insn >> 20) & 31;
+      bool vec_ls = false;
+      int vclass = 100;
       if ((f3 == 0 || f3 == 5 || f3 == 6 || f3 == 7) &&
-          ((insn >> 26) & 0x3f) == 0 && ((insn >> 20) & 0x1f) == 0) {
-        c.valid = c.mem_read = c.alu_src_imm = c.vec = c.vec_rd = true;
-        c.imm = 0;
+          ((insn >> 28) & 1) == 0) {
+        if (mop == 0) {
+          if (lumop == 0) { vec_ls = true; vclass = 100; }
+          else if (lumop == 8) {
+            vec_ls = nf == 0 || nf == 1 || nf == 3 || nf == 7;
+            vclass = 103;
+          } else if (!is_store && lumop == 16) {
+            vec_ls = nf == 0; vclass = 104;
+          }
+        } else {
+          vec_ls = true;
+          vclass = mop == 2 ? 101 : 102;
+        }
+      }
+      if (vec_ls) {
+        c.valid = c.alu_src_imm = c.vec = true;
+        c.mem_read = !is_store;
+        c.mem_write = is_store;
+        c.vec_rd = !is_store;
+        c.bext_op = vclass;
+        c.imm = vclass == 103 ? nf + 1 : 0;
       } else if (f3 == 2 || f3 == 3) {
-        c.valid = c.mem_read = c.alu_src_imm = c.fp = c.fp_rd = true;
-        c.fmt_d = (f3 == 3); c.imm = imm_i;
+        c.valid = c.alu_src_imm = c.fp = true;
+        c.mem_read = !is_store;
+        c.mem_write = is_store;
+        c.fp_rd = !is_store;
+        c.fp_rs2 = is_store;
+        c.fmt_d = (f3 == 3);
+        c.imm = is_store ? imm_s : imm_i;
       }
       break;
-    case 0x27:  // FSW/FSD and vector unit-stride stores
-      if ((f3 == 0 || f3 == 5 || f3 == 6 || f3 == 7) &&
-          ((insn >> 26) & 0x3f) == 0 && ((insn >> 20) & 0x1f) == 0) {
-        c.valid = c.mem_write = c.alu_src_imm = c.vec = true;
-        c.imm = 0;
-      } else if (f3 == 2 || f3 == 3) {
-        c.valid = c.mem_write = c.alu_src_imm = c.fp = c.fp_rs2 = true;
-        c.fmt_d = (f3 == 3); c.imm = imm_s;
-      }
-      break;
+    }
     case 0x43: case 0x47: case 0x4b: case 0x4f: {  // FMA group
       const uint32_t fmt = (insn >> 25) & 3;
       if (fmt <= 1 && (f3 <= 4 || f3 == 7)) {

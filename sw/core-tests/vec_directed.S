@@ -334,6 +334,75 @@ _start:
     li a2, 77
     bne a0, a2, fail
 
+    // 21: strided load/store (stride 8 over e32 data).
+    li t0, 21
+    li a1, 4
+    vsetvli a0, a1, e32, m1, ta, ma
+    la a1, vec_buf
+    li a2, 8
+    vlse32.v v2, (a1), a2          // low words of each dword
+    la a1, vec_out
+    vse32.v v2, (a1)
+    la a1, vec_out
+    lw a0, 8(a1)
+    li a2, 0x25262728
+    bne a0, a2, fail
+    vid.v v2
+    la a1, vec_out
+    li a2, 8
+    vsse32.v v2, (a1), a2          // out32[0,2,4,6] = 0,1,2,3
+    la a1, vec_out
+    lw a0, 16(a1)
+    li a2, 2
+    bne a0, a2, fail
+
+    // 22: indexed load/store (byte offsets 12,8,4,0).
+    li t0, 22
+    la a1, vec_idx
+    vle32.v v4, (a1)
+    la a1, vec_buf
+    vluxei32.v v2, (a1), v4
+    vmv.x.s a0, v2                 // buf32[3]
+    li a2, 0x11121314
+    bne a0, a2, fail
+    la a1, vec_out
+    vsuxei32.v v2, (a1), v4        // scatter back reversed
+    la a1, vec_out
+    lw a0, 0(a1)                   // <- v2 el3 = buf32[0]
+    li a2, 0x05060708
+    bne a0, a2, fail
+
+    // 23: whole-register load/store under vill.
+    li t0, 23
+    li a2, 0x100
+    li a1, 4
+    vsetvl a0, a1, a2              // vill = 1
+    la a1, vec_buf
+    vl1re64.v v2, (a1)
+    la a1, vec_out
+    vs1r.v v2, (a1)
+    la a1, vec_out
+    ld a0, 8(a1)
+    li a2, 0x1112131415161718
+    bne a0, a2, fail
+
+    // 24: segment load/store (2 fields, e32).
+    li t0, 24
+    li a1, 2
+    vsetvli a0, a1, e32, m1, ta, ma
+    la a1, vec_buf
+    vlseg2e32.v v2, (a1)           // v2=f0 {05060708,15161718}
+                                    // v3=f1 {01020304,11121314}
+    vmv.x.s a0, v3
+    li a2, 0x01020304
+    bne a0, a2, fail
+    la a1, vec_out
+    vsseg2e32.v v2, (a1)
+    la a1, vec_out
+    lw a0, 8(a1)                   // interleaved word 2 = f0e1
+    li a2, 0x15161718
+    bne a0, a2, fail
+
     // 99: mid-instruction fault. PMP (locked, so last test):
     // allow [0, buf+16), deny [buf+16, buf+64). The e64 load
     // commits elements 0-1, faults at element 2, vstart=2.
@@ -365,6 +434,32 @@ _start:
     vmv.x.s a0, v2                 // element 0 committed
     li a2, 0x0102030405060708
     bne a0, a2, fail
+    // Fault-only-first over the same split buffer: loads
+    // elements 0-1, trims vl to 2, and does not trap.
+    li a1, 4
+    vsetvli a0, a1, e64, m1, ta, ma
+    la a1, trap_cause
+    sd x0, 0(a1)
+    la a1, vec_buf
+    vle64ff.v v2, (a1)
+    la a1, trap_cause
+    ld a1, 0(a1)
+    bnez a1, fail
+    csrr a0, vl
+    li a2, 2
+    bne a0, a2, fail
+    // But a fault on the first accessed element traps.
+    li a1, 4
+    vsetvli a0, a1, e64, m1, ta, ma
+    la a1, trap_cause
+    sd x0, 0(a1)
+    la a1, vec_buf
+    addi a1, a1, 16
+    vle64ff.v v2, (a1)
+    la a1, trap_cause
+    ld a1, 0(a1)
+    li a2, 5
+    bne a1, a2, fail
     j pass
 
 handler_m:
@@ -400,6 +495,8 @@ vec_out:    .skip 512
 vec_buf:    .dword 0x0102030405060708, 0x1112131415161718
             .dword 0x2122232425262728, 0x3132333435363738
             .skip 480
+vec_idx:    .word 12, 8, 4, 0
+            .skip 496
     .skip 512
 stack_top:
     .skip 512

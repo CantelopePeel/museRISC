@@ -22,7 +22,7 @@ module muserisc_vregfile
 
     input  wire        we_i,
     input  wire [4:0]  waddr_i,     // vd group base
-    input  wire [2:0]  wlmul_i,     // effective LMUL code (0..3 = 1..8)
+    input  wire [3:0]  wnum_i,      // registers to write (1..8)
     input  wire [4095:0] wdata_i
 );
 
@@ -43,7 +43,7 @@ module muserisc_vregfile
   // Only the registers in the effective group are written;
   // fractional LMUL writes the single destination register.
   logic [3:0] group_n;
-  assign group_n = 4'd1 << wlmul_i;
+  assign group_n = wnum_i;
 
   always_ff @(posedge clk_i) begin
     if (we_i) begin
