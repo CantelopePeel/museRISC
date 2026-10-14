@@ -1,30 +1,41 @@
 #!/usr/bin/env bash
 # Install the host tools museRISC needs (see scripts/setup.sh for the
 # list and `make test` / `make lint` / `make core-test` for users).
-#   ./scripts/install_deps.sh              # distro packages + mise
+#   ./scripts/install_deps.sh              # packages + Verilator + SoftFloat
 #   ./scripts/install_deps.sh --gcc15      # also the pinned GCC 15+ RISC-V
 #                                          # toolchain ACT4 needs (Linux x86_64)
+# Project-local tools are built into deps/ (git-ignored); load them with
+#   source deps/env.sh
 # Supports Ubuntu/Debian (apt) and macOS (Homebrew). Docker is not
 # installed here; install it from https://docs.docker.com/engine/install/
 # if you want `make openroad` or the CVA6 flows.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+ROOT=$PWD
+DEPS=$ROOT/deps
 
+# Ubuntu's Verilator 5.020 internal-faults (docs/COMPLIANCE.md) and
+# crashes `make core-test`. Ara pins a 5.047 devel snapshot; v5.048 is
+# the first release containing it.
+VERILATOR_TAG="v5.048"
 # Same pin as .github/workflows/compliance.yml.
 RISCV_TOOLCHAIN_TAG="2026.08.27"
-RISCV_TOOLCHAIN_DIR="${RISCV_TOOLCHAIN_DIR:-$HOME/riscv-toolchain}"
+# Same pin as docs/COMPLIANCE.md; sim/Makefile's FPU TB links it.
+SOFTFLOAT_COMMIT="a0c6494c"
 
 want_gcc15=0
 case "${1:-}" in
   --gcc15) want_gcc15=1 ;;
   "") ;;
-  -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
   *) echo "unknown option: $1 (use --gcc15)" >&2; exit 2 ;;
 esac
 
 sudo_cmd() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
+ncpu() { getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu; }
 
-case "$(uname -s)" in
+os=$(uname -s)
+case "$os" in
   Linux)
     if ! command -v apt-get >/dev/null; then
       echo "only apt-based distros are supported; install the tools listed by ./scripts/setup.sh manually" >&2
@@ -32,8 +43,10 @@ case "$(uname -s)" in
     fi
     echo "== Installing apt packages =="
     sudo_cmd apt-get update
-    sudo_cmd apt-get install -y iverilog verilator yosys z3 \
-      gcc-riscv64-unknown-elf curl git make python3 xz-utils
+    # Second line: Verilator build dependencies.
+    sudo_cmd apt-get install -y iverilog yosys z3 gcc-riscv64-unknown-elf \
+      curl git make python3 xz-utils \
+      autoconf g++ flex bison help2man perl libfl-dev zlib1g-dev
     ;;
   Darwin)
     if ! command -v brew >/dev/null; then
@@ -41,45 +54,89 @@ case "$(uname -s)" in
       exit 1
     fi
     echo "== Installing Homebrew packages =="
+    # Homebrew's Verilator is current, so it is not built from source.
     brew install verilator icarus-verilog yosys riscv64-elf-gcc mise z3
     ;;
   *)
-    echo "unsupported OS: $(uname -s)" >&2
+    echo "unsupported OS: $os" >&2
     exit 1
     ;;
 esac
+
+mkdir -p "$DEPS/src"
+
+if [ "$os" = Linux ]; then
+  if [ -x "$DEPS/bin/verilator" ] &&
+     "$DEPS/bin/verilator" --version | grep -q "^Verilator ${VERILATOR_TAG#v} "; then
+    echo "== Verilator $VERILATOR_TAG already in deps/ =="
+  else
+    echo "== Building Verilator $VERILATOR_TAG into deps/ =="
+    src=$DEPS/src/verilator
+    [ -d "$src/.git" ] || git clone https://github.com/verilator/verilator.git "$src"
+    git -C "$src" fetch --tags -q
+    git -C "$src" -c advice.detachedHead=false checkout -q "$VERILATOR_TAG"
+    (
+      cd "$src"
+      unset VERILATOR_ROOT
+      autoconf
+      ./configure --prefix="$DEPS"
+      make -j"$(ncpu)"
+      make install
+    )
+  fi
+fi
+
+if [ "$want_gcc15" = 1 ]; then
+  if [ "$os-$(uname -m)" != "Linux-x86_64" ]; then
+    echo "--gcc15: no prebuilt toolchain for $os-$(uname -m); Homebrew's riscv64-elf-gcc is already recent" >&2
+    exit 1
+  fi
+  . /etc/os-release
+  asset="riscv64-elf-ubuntu-${VERSION_ID:-24.04}-gcc.tar.xz"
+  if [ -x "$DEPS/riscv-toolchain/riscv/bin/riscv64-unknown-elf-gcc" ]; then
+    echo "== GCC 15+ toolchain already in deps/ =="
+  else
+    echo "== Downloading RISC-V toolchain $RISCV_TOOLCHAIN_TAG ($asset) into deps/ =="
+    tmp=$(mktemp)
+    trap 'rm -f "$tmp"' EXIT
+    curl -fL "https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/${RISCV_TOOLCHAIN_TAG}/${asset}" -o "$tmp"
+    mkdir -p "$DEPS/riscv-toolchain"
+    tar -xJf "$tmp" -C "$DEPS/riscv-toolchain"
+  fi
+fi
+
+# sim/Makefile expects SoftFloat in third_party/ with the HostRISCV build
+# directory that scripts/build_testfloat.sh creates.
+sf=third_party/berkeley-softfloat-3
+if [ ! -f "$sf/build/HostRISCV/Makefile" ]; then
+  echo "== Fetching Berkeley SoftFloat $SOFTFLOAT_COMMIT =="
+  mkdir -p third_party
+  [ -d "$sf/.git" ] || git clone https://github.com/ucb-bar/berkeley-softfloat-3.git "$sf"
+  git -C "$sf" -c advice.detachedHead=false checkout -q "$SOFTFLOAT_COMMIT"
+  mkdir -p "$sf/build/HostRISCV"
+  sed -e 's/^==> *//' -e 's/SPECIALIZE_TYPE ?= 8086/SPECIALIZE_TYPE ?= RISCV/' \
+    "$sf/build/template-FAST_INT64/Makefile" > "$sf/build/HostRISCV/Makefile"
+  cp "$sf/build/Linux-RISCV64-GCC/platform.h" "$sf/build/HostRISCV/"
+fi
 
 if ! command -v mise >/dev/null && [ ! -x "$HOME/.local/bin/mise" ]; then
   echo "== Installing mise (ACT4 tool manager) =="
   curl -fsSL https://mise.run | sh
 fi
 
-if [ "$want_gcc15" = 1 ]; then
-  if [ "$(uname -s)-$(uname -m)" != "Linux-x86_64" ]; then
-    echo "--gcc15: no prebuilt toolchain for $(uname -s)-$(uname -m); Homebrew's riscv64-elf-gcc is already recent" >&2
-    exit 1
-  fi
-  . /etc/os-release
-  asset="riscv64-elf-ubuntu-${VERSION_ID:-24.04}-gcc.tar.xz"
-  if find "$RISCV_TOOLCHAIN_DIR" -path '*/bin/riscv64-unknown-elf-gcc' -print -quit 2>/dev/null | grep -q .; then
-    echo "== GCC 15+ toolchain already in $RISCV_TOOLCHAIN_DIR =="
-  else
-    echo "== Downloading RISC-V toolchain $RISCV_TOOLCHAIN_TAG ($asset) =="
-    tmp=$(mktemp)
-    trap 'rm -f "$tmp"' EXIT
-    curl -fL "https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/${RISCV_TOOLCHAIN_TAG}/${asset}" -o "$tmp"
-    mkdir -p "$RISCV_TOOLCHAIN_DIR"
-    tar -xJf "$tmp" -C "$RISCV_TOOLCHAIN_DIR"
-  fi
-  gcc_bin=$(dirname "$(find "$RISCV_TOOLCHAIN_DIR" -path '*/bin/riscv64-unknown-elf-gcc' -print -quit)")
-  echo "Add the GCC 15+ toolchain to PATH (before the distro one) for ACT4:"
-  echo "  export PATH=\"$gcc_bin:\$PATH\""
-fi
-
-case ":$PATH:" in
-  *":$HOME/.local/bin:"*) ;;
-  *) echo "Add mise to PATH:  export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
-esac
+cat > "$DEPS/env.sh" <<'EOF'
+# Generated by scripts/install_deps.sh. Usage: source deps/env.sh
+_muse_deps=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+for _d in "$_muse_deps/riscv-toolchain/riscv/bin" "$_muse_deps/bin" "$HOME/.local/bin"; do
+  case ":$PATH:" in *":$_d:"*) ;; *) [ -d "$_d" ] && PATH="$_d:$PATH" ;; esac
+done
+export PATH
+unset VERILATOR_ROOT _d _muse_deps
+EOF
 
 echo
+echo "Load project tools with:  source deps/env.sh"
+# shellcheck source=/dev/null
+. "$DEPS/env.sh"
 ./scripts/setup.sh | sed -n '/== Host tools ==/,/MISSING  riscv\|ok       riscv/p'
+echo "  verilator: $(verilator --version)"
