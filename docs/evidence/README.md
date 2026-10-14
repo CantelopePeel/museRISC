@@ -822,3 +822,15 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   by the declared configuration (RV64IM + priv/Sv39
   scope) and this run is simulation only. A Linux boot
   attempt is the remaining stage-3d item.
+
+### Linux/OpenSBI boot attempt — blocked on A (stage 4)
+
+- Log: [`core-stage3d-linux-attempt-2026-10-13.log`](core-stage3d-linux-attempt-2026-10-13.log).
+  OpenSBI generic builds cleanly under Docker with a
+  Linux toolchain, but targets RV64GC (59% compressed
+  instructions) and — decisively — refuses to configure
+  without atomics: `riscv_locks.c: #error "need A or
+  Zaamo or Zalrsc"` under `PLATFORM_RISCV_ISA=rv64im_*`.
+  The boot is therefore gated on stage 4 (A) and, for
+  stock binaries, stage 5 (C); harness CLINT/UART models
+  are the remaining small pieces. No boot is claimed.

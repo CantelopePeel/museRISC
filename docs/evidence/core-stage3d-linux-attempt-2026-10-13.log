@@ -1,0 +1,44 @@
+In-house core stage 3d (issue #18): Linux/OpenSBI boot attempt
+Outcome: BLOCKED on the A extension (stage 4), as expected —
+recorded here so the stage-3 gate is an attempt with evidence,
+not a skip.
+
+What was tried
+--------------
+1. Host toolchain build of OpenSBI (generic platform):
+     make PLATFORM=generic CROSS_COMPILE=riscv64-elf-
+   -> "Your linker does not support creating PIEs, opensbi
+      requires this" (bare-metal riscv64-elf-ld on this host;
+      no riscv64-linux-gnu toolchain installed).
+
+2. Docker build (ubuntu:24.04 + gcc-riscv64-linux-gnu):
+     make PLATFORM=generic CROSS_COMPILE=riscv64-linux-gnu-
+   -> builds cleanly (fw_jump/fw_dynamic/fw_payload .elf).
+   But the result targets RV64GC: ELF flags "RVC,
+   soft-float ABI", 36,302 of 61,498 instructions are
+   2-byte compressed (our stage-3 core is IALIGN=32;
+   C arrives at stage 5), and it contains lr/sc/amo
+   instructions (A extension, stage 4).
+
+3. RV64IM build override, matching this core:
+     make PLATFORM=generic CROSS_COMPILE=riscv64-linux-gnu- \
+       PLATFORM_RISCV_ISA=rv64im_zicsr_zifencei \
+       PLATFORM_RISCV_ABI=lp64
+   -> lib/sbi/riscv_locks.c:68:2: error:
+      #error "need A or Zaamo or Zalrsc"
+   OpenSBI has no supported configuration without atomics,
+   and Linux proper requires A (and in practice C) too.
+
+Prerequisites for a real boot, in stage order
+---------------------------------------------
+- Stage 4: A (lr/sc + AMOs) — unblocks OpenSBI; F/D as
+  planned for kernel/userland ABI.
+- Stage 5: C (IALIGN=16) — OpenSBI/Linux can be built
+  without it, but stock binaries assume it.
+- Harness devices (small, do with stage 4): CLINT
+  (mtime/mtimecmp -> irq_m_timer_i, MSIP), an 8250 UART
+  (THR -> stdout), and a DTB describing them; the core
+  side already has the interrupt pins, PMP, Sv39 and
+  delegation OpenSBI needs. Performance work (iterative
+  divider, caches) determines how far a kernel boot gets
+  in reasonable wall-clock on Verilator.
