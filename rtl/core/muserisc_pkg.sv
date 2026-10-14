@@ -41,6 +41,10 @@ package muserisc_pkg;
     logic    sc;           // store-conditional (result = success flag)
     logic    lr;           // load-reserved (sets the reservation)
     logic    amo;          // atomic RMW (funct5 in amo_op)
+    logic    hlv;          // HLV/HLVX/HSV guest-memory access
+    logic    hlvx;         // HLVX (execute-permission load)
+    logic    hfence;       // HFENCE.VVMA/GVMA (full TLB flush here)
+    logic    hfence_gvma;  // GVMA variant (TVM legality differs)
     logic    sfence;       // SFENCE.VMA (serializing; flushes TLBs)
     logic    wfi;          // WFI (executes as NOP unless TW traps it)
     logic    sret;         // SRET

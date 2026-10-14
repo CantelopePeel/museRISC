@@ -64,6 +64,7 @@ int main(int argc, char** argv) {
   auto tick = [&]() {
     // Combinational port service, then the clock edge applies
     // an A/D writeback exactly once.
+    d->d_satp_i = d->satp_i;  // this TB uses one context unless noted
     d->clk_i = 0;
     d->walk_rdata_i = rd64(d->walk_addr_o & ~7ull);
     d->eval();
@@ -111,6 +112,7 @@ int main(int argc, char** argv) {
     return 3;
   };
   auto xlate_d = [&](uint64_t va, bool write, int priv, uint64_t* pa) {
+    d->d_satp_i = d->satp_i;
     d->d_va_i = va;
     d->d_write_i = write ? 1 : 0;
     d->d_priv_i = uint8_t(priv);
@@ -139,11 +141,13 @@ int main(int argc, char** argv) {
   };
 
   // Init + reset.
-  d->clk_i = 0; d->rst_ni = 0; d->satp_i = 0; d->hgatp_i = 0;
+  d->clk_i = 0; d->rst_ni = 0; d->satp_i = 0; d->d_satp_i = 0;
+  d->hgatp_i = 0;
   d->sum_i = 0; d->mxr_i = 0; d->hs_mxr_i = 0;
   d->flush_i = 0; d->abort_i = 0;
   d->if_va_i = 0; d->if_priv_i = 3; d->if_virt_i = 0;
-  d->d_va_i = 0; d->d_write_i = 0; d->d_priv_i = 3; d->d_virt_i = 0;
+  d->d_va_i = 0; d->d_write_i = 0; d->d_exec_i = 0; d->d_priv_i = 3;
+  d->d_virt_i = 0;
   d->d_valid_i = 0;
   d->walk_grant_i = 1; d->walk_rdata_i = 0; d->walk_pmp_allow_i = 1;
   tick(); tick();
@@ -390,6 +394,19 @@ int main(int argc, char** argv) {
   d->satp_i = Satp(0);
   flush_tlb();
   CHECK(xlate_d(0x400000ull, false, 1, &pa) == 0 && pa == 0x20000ull);
+  // HLVX translation class: an X-only VS+G page is readable
+  // only when d_exec_i makes the data port translate as fetch.
+  d->satp_i = SatpRoot(kVsRootGpa, 3);
+  d->hgatp_i = SatpRoot(kGRoot, 9);
+  wr64(kVsL0Host + 0 * 8, Pte(0x90000, kV | kX | kA | kD));
+  wr64(kGL0 + 0x90 * 8, Pte(0x60000, kV | kX | kU | kA | kD));
+  flush_tlb();
+  d->d_exec_i = 1;
+  CHECK(xlate_d(0x400000ull, false, 1, &pa) == 0 && pa == 0x60000ull);
+  d->d_exec_i = 0;
+  CHECK(xlate_d(0x400000ull, false, 1, &pa) == 1);
+  wr64(kVsL0Host + 0 * 8, Pte(0x90000, kV | kR | kW | kA | kD));
+  wr64(kGL0 + 0x90 * 8, Pte(0x60000, kV | kR | kW | kX | kU | kA | kD));
   d->if_virt_i = 0;
   d->d_virt_i = 0;
 

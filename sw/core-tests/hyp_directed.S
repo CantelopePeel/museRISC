@@ -7,6 +7,7 @@
 // a load guest-page fault (cause 21) for an unmapped GPA.
 // Convention: t0 = test number, exit store 0 = pass.
     .option norvc
+    .option arch, +h
     .text
     .globl _start
 _start:
@@ -62,6 +63,11 @@ _start:
     sd t2, 0(t1)
     li t2, 0x000c00c7              // -> GPA 0x300000, V RW A D
     sd t2, 8(t1)
+    la t2, guest_special_page      // L0[2]: same page, U=1
+    srli t2, t2, 2
+    li a1, 0xd7                    // V RW U A D
+    or t2, t2, a1
+    sd t2, 16(t1)
     la t1, vs_root
     srli t1, t1, 12
     li t2, 0x8000000000000000      // vsatp MODE=Sv39
@@ -117,7 +123,7 @@ hs_finish:
     li t0, 20
     la a1, hs_count
     ld a1, 0(a1)
-    li a2, 4
+    li a2, 5
     bne a1, a2, fail
     la a1, hs_causes
     ld a2, 0(a1)
@@ -131,6 +137,8 @@ hs_finish:
     bne a2, a3, fail               // load guest-page fault
     ld a2, 24(a1)
     li a3, 22
+    bne a2, a3, fail               // HLV in VS (virtual instr)
+    ld a2, 32(a1)
     bne a2, a3, fail               // S CSR in VU
     li t0, 23
     la a1, hs_htvals
@@ -158,6 +166,89 @@ hs_finish:
     ld a1, 0(a1)
     li a2, 1
     bne a1, a2, fail
+
+    // Stage 7c from HS: HLV/HSV under vsatp+hgatp. SPVP=1
+    // accesses as VS; SPVP=0 accesses as VU (U page at
+    // VA 0x402000, reached only with the VU effective mode).
+    li t0, 30
+    la a1, guest_vsatp
+    ld a1, 0(a1)
+    csrw 0x280, a1                 // vsatp
+    li a1, (1 << 8)
+    csrs 0x600, a1                 // hstatus.SPVP = VS
+    li a1, 0x400000
+    hlv.d a2, (a1)
+    li a3, 0x600d
+    bne a2, a3, fail
+    li a2, 0x12345678
+    hsv.w a2, (a1)
+    hlv.wu a2, (a1)
+    li a3, 0x12345678
+    bne a2, a3, fail
+    li a1, (1 << 8)
+    csrc 0x600, a1                 // SPVP = VU
+    li a1, 0x402000
+    hlv.d a2, (a1)
+    bne a2, a3, fail
+    li a1, (1 << 8)
+    csrs 0x600, a1                 // back to VS
+    // HFENCE flushes the combined TLB: remap VA 0x400000 to
+    // the alt page, fence, observe it; restore and fence back.
+    li t0, 31
+    la t1, vs_l0
+    la t2, guest_alt_page
+    srli t2, t2, 2
+    li a3, 0xc7
+    or t2, t2, a3
+    sd t2, 0(t1)
+    hfence.vvma zero, zero
+    li a1, 0x400000
+    hlv.d a2, (a1)
+    li a3, 0xa17
+    bne a2, a3, fail
+    la t1, vs_l0
+    la t2, guest_special_page
+    srli t2, t2, 2
+    li a3, 0xc7
+    or t2, t2, a3
+    sd t2, 0(t1)
+    hfence.gvma zero, zero
+    li a1, 0x400000
+    hlv.d a2, (a1)
+    li a3, 0x12345678
+    bne a2, a3, fail
+    // HLVX reads an execute-only guest page.
+    li t0, 32
+    la t1, vs_l0
+    la t2, guest_special_page
+    srli t2, t2, 2
+    li a3, 0xc9                    // V X A D (no R)
+    or t2, t2, a3
+    sd t2, 0(t1)
+    hfence.vvma zero, zero
+    li a1, 0x400000
+    hlvx.wu a2, (a1)
+    li a3, 0x12345678
+    bne a2, a3, fail
+    la t1, vs_l0
+    la t2, guest_special_page
+    srli t2, t2, 2
+    li a3, 0xc7
+    or t2, t2, a3
+    sd t2, 0(t1)
+    hfence.gvma zero, zero
+    // An HLV guest fault from HS sets hstatus.GVA with SPV=0.
+    li t0, 33
+    li a1, 0x401000
+    hlv.d a2, (a1)                 // -> HS handler (visit 6)
+    csrr a1, 0x600
+    li a2, 0xc0
+    and a1, a1, a2
+    li a3, 0x40                    // GVA=1, SPV=0
+    bne a1, a3, fail
+    csrr a1, 0x643                 // htval
+    li a2, 0xc0000
+    bne a1, a2, fail
     j pass
 
 guest_vs:
@@ -181,6 +272,8 @@ guest_vs:
     ld a0, 0(a1)                   // GPA 0x300000: guest fault
     csrw satp, x0                  // back to Bare for VU drop
     sfence.vma
+    li a1, 0x400000
+    hlv.d a0, (a1)                 // V=1: virtual instruction
     csrw sstatus, x0               // vsstatus.SPP = VU
     la a0, guest_vu
     csrw sepc, a0                  // substituted vsepc
@@ -195,7 +288,7 @@ guest_vu:
 1:  j 1b
 
 // HS trap handler: records scause/htval per visit; resumes
-// the guest after calls 1-3 and exits the VM on the fourth.
+// the guest after calls 1-4 and exits the VM on the fifth.
 handler_hs:
     csrrw sp, sscratch, sp
     sd t0, 0(sp)
@@ -218,7 +311,7 @@ handler_hs:
     ld t1, 0(t2)
     addi t1, t1, 1
     sd t1, 0(t2)
-    li a0, 4
+    li a0, 5
     beq t1, a0, 1f
     csrr t1, sepc
     addi t1, t1, 4
@@ -273,8 +366,8 @@ fail:
     .data
     .align 3
 hs_count:     .dword 0
-hs_causes:    .dword 0, 0, 0, 0
-hs_htvals:    .dword 0, 0, 0, 0
+hs_causes:    .dword 0, 0, 0, 0, 0, 0, 0, 0
+hs_htvals:    .dword 0, 0, 0, 0, 0, 0, 0, 0
 guest_vsatp:  .dword 0
 guest_vs_flag: .dword 0
 guest_vu_flag: .dword 0
@@ -294,3 +387,6 @@ vs_l1:        .skip 4096
 vs_l0:        .skip 4096
     .align 12
 guest_special_page: .skip 4096
+    .align 12
+guest_alt_page: .dword 0xa17
+    .skip 4088

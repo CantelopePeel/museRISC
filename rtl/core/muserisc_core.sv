@@ -61,7 +61,9 @@ module muserisc_core import muserisc_pkg::*; (
   // The core consumes mstatus.MPRV/MPP today; satp feeds the MMU.
   /* verilator lint_off UNUSEDSIGNAL */
   logic [63:0] csr_mstatus, csr_satp, csr_hgatp;
+  logic [63:0] csr_fsatp, csr_vsatp;
   logic        virt, dvirt, csr_virt_inst, csr_sum, csr_mxr, csr_hs_mxr;
+  logic        csr_spvp, csr_vs_sum, csr_vs_mxr;
   /* verilator lint_on UNUSEDSIGNAL */
   logic [1:0]  eff_priv_data;  // MPRV-adjusted privilege for data
   assign eff_priv_data = (priv == 2'b11 && csr_mstatus[17])
@@ -237,7 +239,8 @@ module muserisc_core import muserisc_pkg::*; (
                        (id_opcode == 7'b0111011) ||
                        (id_opcode == 7'b0100011) ||
                        (id_opcode == 7'b1100011) ||
-                       (id_opcode == 7'b0101111);  // AMO/SC source
+                       (id_opcode == 7'b0101111) ||  // AMO/SC source
+                       (id_ctrl.hlv && id_ctrl.mem_write);  // HSV data
                        // (LR's rs2 field is x0; the rd!=0 guard covers it)
 
   // ID/EX register
@@ -277,7 +280,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] ex_result;
   logic        branch_taken;
   logic        ex_misalign, ex_illegal;
-  logic        ex_exc;
+  logic        ex_exc, ex_gva;
   logic [63:0] ex_cause, ex_tval, ex_gpa;
   logic        ex_ret, ex_serialize;
 
@@ -291,7 +294,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] exmem_addr_q;
   logic [63:0] exmem_store_data_q;
   logic [4:0]  exmem_rd_q;
-  logic        exmem_exc_q;
+  logic        exmem_exc_q, exmem_gva_q;
   logic [63:0] exmem_cause_q, exmem_tval_q, exmem_gpa_q;
 
   // MEM/WB register
@@ -301,7 +304,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [4:0]  memwb_rd_q;
   logic        memwb_reg_write_q;
   logic        memwb_fp_write_q;
-  logic        memwb_exc_q;
+  logic        memwb_exc_q, memwb_gva_q;
   logic [63:0] memwb_cause_q, memwb_tval_q, memwb_gpa_q;
 
   logic        wb_write;
@@ -487,21 +490,26 @@ module muserisc_core import muserisc_pkg::*; (
                   !trap_fire && !mem_exc && !mem_stall &&
                   ((idex_ctrl_q.funct3[1:0] == 2'b01) ||
                    (idex_rs1_addr_q != 5'd0));
-  assign sfence_fire = idex_valid_q && idex_ctrl_q.sfence && !idex_exc_q &&
-                       !sys_illegal && !mem_stall;
+  assign sfence_fire = idex_valid_q &&
+                       (idex_ctrl_q.sfence || idex_ctrl_q.hfence) &&
+                       !idex_exc_q && !sys_illegal && !mem_stall;
   assign sys_op = idex_ctrl_q.mret   ? 3'd1 :
                   idex_ctrl_q.sret   ? 3'd2 :
                   idex_ctrl_q.wfi    ? 3'd3 :
-                  idex_ctrl_q.sfence ? 3'd4 : 3'd0;
+                  idex_ctrl_q.sfence ? 3'd4 :
+                  idex_ctrl_q.hfence ? (idex_ctrl_q.hfence_gvma ? 3'd6 : 3'd5) :
+                  idex_ctrl_q.hlv    ? 3'd7 : 3'd0;
   assign ex_ret = idex_valid_q && (idex_ctrl_q.mret || idex_ctrl_q.sret) &&
                   !idex_exc_q && !sys_illegal;
-  // SFENCE and xRET serialize: redirect and flush like a jump.
+  // SFENCE/HFENCE and xRET serialize: redirect and flush.
   assign ex_serialize = ex_ret ||
-                        (idex_valid_q && idex_ctrl_q.sfence &&
+                        (idex_valid_q &&
+                         (idex_ctrl_q.sfence || idex_ctrl_q.hfence) &&
                          !idex_exc_q && !sys_illegal);
   assign ex_illegal = (idex_ctrl_q.csr ? csr_illegal :
                       ((idex_ctrl_q.mret || idex_ctrl_q.sret ||
-                        idex_ctrl_q.wfi || idex_ctrl_q.sfence) && sys_illegal)) ||
+                        idex_ctrl_q.wfi || idex_ctrl_q.sfence ||
+                        idex_ctrl_q.hfence || idex_ctrl_q.hlv) && sys_illegal)) ||
                       fp_illegal;
 
   always_comb begin
@@ -540,7 +548,8 @@ module muserisc_core import muserisc_pkg::*; (
                   (idex_ctrl_q.branch && branch_taken) || ex_serialize);
   always_comb begin
     if (ex_ret)                  redirect_pc = xret_pc;
-    else if (idex_ctrl_q.sfence) redirect_pc = idex_pc_q + (idex_rvc_q ? 64'd2 : 64'd4);
+    else if (idex_ctrl_q.sfence || idex_ctrl_q.hfence)
+                                 redirect_pc = idex_pc_q + (idex_rvc_q ? 64'd2 : 64'd4);
     else if (idex_ctrl_q.jalr)   redirect_pc = (ex_rs1 + idex_imm_q) & ~64'd1;
     else                         redirect_pc = idex_pc_q + idex_imm_q;
   end
@@ -559,6 +568,7 @@ module muserisc_core import muserisc_pkg::*; (
 
   always_comb begin
     ex_gpa = idex_gpa_q;
+    ex_gva = 1'b0;
     if (idex_exc_q) begin
       ex_exc = idex_valid_q;
       ex_cause = idex_cause_q;
@@ -574,6 +584,7 @@ module muserisc_core import muserisc_pkg::*; (
       ex_tval = redirect_pc;
     end else if (ex_misalign) begin
       ex_exc = idex_valid_q;
+      ex_gva = idex_valid_q && idex_ctrl_q.hlv;
       ex_cause = idex_ctrl_q.mem_write ? CAUSE_STORE_MISALIGN
                                        : CAUSE_LOAD_MISALIGN;
       ex_tval = alu_result;
@@ -591,8 +602,22 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] mem_result;
   logic        data_access, mem_uses_port;
   logic        mem_pmp_fault, mem_trans_fault;
-  logic        mem_exc;
+  logic        mem_exc, mem_gva;
   logic [63:0] mem_cause, mem_tval, mem_gpa;
+  // Effective data-translation context in MEM. HLV/HSV run
+  // as VS/VU (hstatus.SPVP) under vsatp + hgatp regardless of
+  // the executing mode; MPRV does not affect them.
+  logic [1:0]  eff_priv_mem;
+  logic        eff_virt_mem;
+  logic [63:0] d_satp_mux;
+  logic        mmu_sum, mmu_mxr;
+  assign eff_priv_mem = exmem_ctrl_q.hlv
+      ? (csr_spvp ? 2'b01 : 2'b00) : eff_priv_data;
+  assign eff_virt_mem = exmem_ctrl_q.hlv ? 1'b1 : dvirt;
+  assign d_satp_mux = exmem_ctrl_q.hlv ? csr_vsatp : csr_satp;
+  assign mmu_sum = exmem_ctrl_q.hlv ? csr_vs_sum : csr_sum;
+  assign mmu_mxr = exmem_ctrl_q.hlv
+      ? (csr_vs_mxr || csr_hs_mxr) : csr_mxr;
 
   // A translation miss parks the access in MEM (pipeline hold);
   // a translation fault or a PMP denial on the PA excepts it.
@@ -757,11 +782,13 @@ module muserisc_core import muserisc_pkg::*; (
   always_comb begin
     if (exmem_exc_q) begin
       mem_exc = exmem_valid_q;
+      mem_gva = exmem_gva_q;
       mem_cause = exmem_cause_q;
       mem_tval = exmem_tval_q;
       mem_gpa = exmem_gpa_q;
     end else if (mem_trans_fault) begin
       mem_exc = 1'b1;
+      mem_gva = exmem_ctrl_q.hlv;
       mem_cause = exmem_ctrl_q.mem_write
           ? (mmu_d_fault_guest ? 64'd23 :
              mmu_d_fault_page ? 64'd15 : 64'd7)
@@ -771,11 +798,13 @@ module muserisc_core import muserisc_pkg::*; (
       mem_gpa = mmu_d_fault_gpa;
     end else if (mem_pmp_fault) begin
       mem_exc = 1'b1;
+      mem_gva = exmem_ctrl_q.hlv;
       mem_cause = exmem_ctrl_q.mem_write ? 64'd7 : 64'd5;
       mem_tval = exmem_addr_q;
       mem_gpa = 64'd0;
     end else begin
       mem_exc = 1'b0;
+      mem_gva = 1'b0;
       mem_cause = 64'd0;
       mem_tval = 64'd0;
       mem_gpa = 64'd0;
@@ -806,6 +835,7 @@ module muserisc_core import muserisc_pkg::*; (
       .trap_pc_i     (memwb_pc_q),
       .trap_tval_i   (memwb_tval_q),
       .trap_gpa_i    (memwb_gpa_q),
+      .trap_gva_i    (memwb_gva_q),
       .trap_tinst_i  (64'd0),  // zero is a legal htinst/mtinst value
       .trap_target_o (trap_target),
       .trap_priv_o   (trap_priv_unused),
@@ -824,6 +854,11 @@ module muserisc_core import muserisc_pkg::*; (
       .mxr_o         (csr_mxr),
       .hs_mxr_o      (csr_hs_mxr),
       .satp_o        (csr_satp),
+      .fsatp_o       (csr_fsatp),
+      .vsatp_o       (csr_vsatp),
+      .spvp_o        (csr_spvp),
+      .vs_sum_o      (csr_vs_sum),
+      .vs_mxr_o      (csr_vs_mxr),
       .hgatp_o       (csr_hgatp),
       .mstatus_o     (csr_mstatus),
       .xret_pc_o     (xret_pc),
@@ -833,8 +868,9 @@ module muserisc_core import muserisc_pkg::*; (
       .pmp_priv_a_i  (priv),
       .pmp_allow_a_o (pmp_allow_fetch),
       .pmp_addr_b_i  (mmu_d_pa),
-      .pmp_acc_b_i   (exmem_ctrl_q.mem_write ? 2'd1 : 2'd0),
-      .pmp_priv_b_i  (eff_priv_data),
+      .pmp_acc_b_i   (exmem_ctrl_q.hlvx ? 2'd3 :
+                      exmem_ctrl_q.mem_write ? 2'd1 : 2'd0),
+      .pmp_priv_b_i  (eff_priv_mem),
       .pmp_allow_b_o (pmp_allow_data),
       .pmp_addr_c_i  (walk_addr),
       .pmp_acc_c_i   (walk_acc),
@@ -848,10 +884,11 @@ module muserisc_core import muserisc_pkg::*; (
   muserisc_mmu u_mmu (
       .clk_i            (clk_i),
       .rst_ni           (rst_ni),
-      .satp_i           (csr_satp),
+      .satp_i           (csr_fsatp),
+      .d_satp_i         (d_satp_mux),
       .hgatp_i          (csr_hgatp),
-      .sum_i            (csr_sum),
-      .mxr_i            (csr_mxr),
+      .sum_i            (mmu_sum),
+      .mxr_i            (mmu_mxr),
       .hs_mxr_i         (csr_hs_mxr),
       .flush_i          (sfence_fire),
       .abort_i          (trap_take),
@@ -866,8 +903,9 @@ module muserisc_core import muserisc_pkg::*; (
       .if_fault_gpa_o   (mmu_if_fault_gpa),
       .d_va_i           (exmem_addr_q),
       .d_write_i        (exmem_ctrl_q.mem_write),
-      .d_priv_i         (eff_priv_data),
-      .d_virt_i         (dvirt),
+      .d_exec_i         (exmem_ctrl_q.hlvx),
+      .d_priv_i         (eff_priv_mem),
+      .d_virt_i         (eff_virt_mem),
       .d_valid_i        (data_access),
       .d_pa_o           (mmu_d_pa),
       .d_ok_o           (mmu_d_ok),
@@ -936,6 +974,7 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_store_data_q <= 64'd0;
       exmem_rd_q <= 5'd0;
       exmem_exc_q <= 1'b0;
+      exmem_gva_q <= 1'b0;
       exmem_cause_q <= 64'd0;
       exmem_tval_q <= 64'd0;
       exmem_gpa_q <= 64'd0;
@@ -944,6 +983,7 @@ module muserisc_core import muserisc_pkg::*; (
       memwb_rd_q <= 5'd0;
       memwb_reg_write_q <= 1'b0;
       memwb_exc_q <= 1'b0;
+      memwb_gva_q <= 1'b0;
       memwb_cause_q <= 64'd0;
       memwb_tval_q <= 64'd0;
       memwb_gpa_q <= 64'd0;
@@ -969,6 +1009,7 @@ module muserisc_core import muserisc_pkg::*; (
       memwb_reg_write_q <= exmem_ctrl_q.reg_write;
       memwb_fp_write_q <= exmem_ctrl_q.fp_rd;
       memwb_exc_q <= mem_exc;
+      memwb_gva_q <= mem_gva;
       memwb_cause_q <= mem_cause;
       memwb_tval_q <= mem_tval;
       memwb_gpa_q <= mem_gpa;
@@ -981,6 +1022,7 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_store_data_q <= idex_ctrl_q.fp_rs2 ? ex_frs2 : ex_rs2;
       exmem_rd_q <= idex_rd_q;
       exmem_exc_q <= ex_exc;
+      exmem_gva_q <= ex_gva;
       exmem_cause_q <= ex_cause;
       exmem_tval_q <= ex_tval;
       exmem_gpa_q <= ex_gpa;

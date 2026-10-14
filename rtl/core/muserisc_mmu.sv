@@ -34,7 +34,8 @@
 module muserisc_mmu (
     input  wire        clk_i,
     input  wire        rst_ni,
-    input  wire [63:0] satp_i,         // satp (V=0) / vsatp (effective V=1)
+    input  wire [63:0] satp_i,         // fetch satp/vsatp for current V
+    input  wire [63:0] d_satp_i,       // data satp/vsatp (HLV may differ)
     input  wire [63:0] hgatp_i,
     input  wire        sum_i,          // effective VS/HS SUM for data
     input  wire        mxr_i,          // effective VS/HS MXR for stage 1
@@ -54,6 +55,7 @@ module muserisc_mmu (
     // Data lookup
     input  wire [63:0] d_va_i,
     input  wire        d_write_i,
+    input  wire        d_exec_i,       // HLVX: translate as execute
     input  wire [1:0]  d_priv_i,
     input  wire        d_virt_i,
     input  wire        d_valid_i,
@@ -94,10 +96,12 @@ module muserisc_mmu (
   tlb_entry_t tlb_q [0:31];
   logic [4:0]  fill_ptr_q;
 
-  logic        satp_sv39, hgatp_sv39x4;
-  logic [15:0] satp_asid, hgatp_vmid;
+  logic        satp_sv39, d_satp_sv39, hgatp_sv39x4;
+  logic [15:0] satp_asid, d_satp_asid, hgatp_vmid;
   assign satp_sv39 = (satp_i[63:60] == 4'd8);
   assign satp_asid = satp_i[59:44];
+  assign d_satp_sv39 = (d_satp_i[63:60] == 4'd8);
+  assign d_satp_asid = d_satp_i[59:44];
   assign hgatp_sv39x4 = (hgatp_i[63:60] == 4'd8);
   assign hgatp_vmid = hgatp_i[59:44];
 
@@ -189,7 +193,7 @@ module muserisc_mmu (
   logic        if_vs_trans, d_vs_trans, if_g_trans, d_g_trans;
   logic        if_trans, d_trans;
   assign if_vs_trans = satp_sv39 && (if_priv_i != 2'b11);
-  assign d_vs_trans  = satp_sv39 && (d_priv_i != 2'b11);
+  assign d_vs_trans  = d_satp_sv39 && (d_priv_i != 2'b11);
   assign if_g_trans = if_virt_i && hgatp_sv39x4;
   assign d_g_trans  = d_virt_i && hgatp_sv39x4;
   assign if_trans = if_vs_trans || if_g_trans;
@@ -241,7 +245,7 @@ module muserisc_mmu (
     d_fault_page_o = 1'b1;
     d_fault_guest_o = 1'b0;
     d_fault_gpa_o = 64'd0;
-    f = find_entry(d_va_i, satp_asid, d_virt_i, hgatp_vmid,
+    f = find_entry(d_va_i, d_satp_asid, d_virt_i, hgatp_vmid,
                    d_g_trans, d_vs_trans);
     e = tlb_q[f[4:0]];
     if (!d_trans) begin
@@ -259,9 +263,13 @@ module muserisc_mmu (
       d_fault_gpa_o = wf_gpa_q;
     end else if (f[5]) begin
       d_pa_o = entry_pa(e, d_va_i);
-      if (!perm_ok(e, d_priv_i, d_write_i ? 2'd1 : 2'd0, sum_i, mxr_i)) begin
+      if (!perm_ok(e, d_priv_i,
+                   d_exec_i ? 2'd2 : d_write_i ? 2'd1 : 2'd0,
+                   sum_i, mxr_i)) begin
         d_fault_o = d_valid_i;
-      end else if (g_perm_ok(e, d_write_i ? 2'd1 : 2'd0, hs_mxr_i) &&
+      end else if (g_perm_ok(e,
+                             d_exec_i ? 2'd2 : d_write_i ? 2'd1 : 2'd0,
+                             hs_mxr_i) &&
                    e.a && (!d_write_i || e.d)) begin
         d_ok_o = 1'b1;
       end
@@ -271,6 +279,11 @@ module muserisc_mmu (
   logic miss_f, miss_d;
   assign miss_f = if_trans && !if_ok_o && !if_fault_o;
   assign miss_d = d_valid_i && d_trans && !d_ok_o && !d_fault_o;
+  logic [1:0]  d_acc;
+  logic [63:0] d_root_pte;
+  assign d_acc = d_exec_i ? 2'd2 : d_write_i ? 2'd1 : 2'd0;
+  assign d_root_pte = {8'd0, d_satp_i[43:0], 12'd0} +
+                      {52'd0, d_va_i[38:30], 3'd0};
 
   // ------------------------------------------------------------
   // Page-table walker
@@ -524,30 +537,29 @@ module muserisc_mmu (
             req_vs_q <= d_vs_trans;
             req_g_q <= d_g_trans;
             req_va_q <= d_va_i;
-            req_acc_q <= d_write_i ? 2'd1 : 2'd0;
+            req_acc_q <= d_acc;
             req_priv_q <= d_priv_i;
-            req_asid_q <= satp_asid;
+            req_asid_q <= d_satp_asid;
             req_vmid_q <= hgatp_vmid;
             level_q <= 2'd2;
             wf_valid_q <= 1'b0;
             if (d_vs_trans) begin
-              vs_pte_gpa_q <= pte_addr(satp_i[43:0], d_va_i, 2'd2);
+              vs_pte_gpa_q <= d_root_pte;
               if (d_g_trans) begin
                 state_q <= W_G_READ;
-                g_gpa_q <= pte_addr(satp_i[43:0], d_va_i, 2'd2);
+                g_gpa_q <= d_root_pte;
                 g_acc_q <= 2'd0;
                 g_purpose_q <= 2'd1;
                 g_level_q <= 2'd2;
-                pte_addr_q <= g_pte_addr(hgatp_i[43:0],
-                    pte_addr(satp_i[43:0], d_va_i, 2'd2), 2'd2);
+                pte_addr_q <= g_pte_addr(hgatp_i[43:0], d_root_pte, 2'd2);
               end else begin
                 state_q <= W_VS_READ;
-                pte_addr_q <= pte_addr(satp_i[43:0], d_va_i, 2'd2);
+                pte_addr_q <= d_root_pte;
               end
             end else begin
               state_q <= W_G_READ;
               g_gpa_q <= d_va_i;
-              g_acc_q <= d_write_i ? 2'd1 : 2'd0;
+              g_acc_q <= d_acc;
               g_purpose_q <= 2'd0;
               g_level_q <= 2'd2;
               pte_addr_q <= g_pte_addr(hgatp_i[43:0], d_va_i, 2'd2);
@@ -596,27 +608,26 @@ module muserisc_mmu (
             req_vs_q <= d_vs_trans;
             req_g_q <= d_g_trans;
             req_va_q <= d_va_i;
-            req_acc_q <= d_write_i ? 2'd1 : 2'd0;
+            req_acc_q <= d_acc;
             req_priv_q <= d_priv_i;
-            req_asid_q <= satp_asid;
+            req_asid_q <= d_satp_asid;
             req_vmid_q <= hgatp_vmid;
             level_q <= 2'd2;
             if (d_vs_trans) begin
-              vs_pte_gpa_q <= pte_addr(satp_i[43:0], d_va_i, 2'd2);
+              vs_pte_gpa_q <= d_root_pte;
               if (d_g_trans) begin
-                g_gpa_q <= pte_addr(satp_i[43:0], d_va_i, 2'd2);
+                g_gpa_q <= d_root_pte;
                 g_acc_q <= 2'd0;
                 g_purpose_q <= 2'd1;
                 g_level_q <= 2'd2;
-                pte_addr_q <= g_pte_addr(hgatp_i[43:0],
-                    pte_addr(satp_i[43:0], d_va_i, 2'd2), 2'd2);
+                pte_addr_q <= g_pte_addr(hgatp_i[43:0], d_root_pte, 2'd2);
               end else begin
                 state_q <= W_VS_READ;
-                pte_addr_q <= pte_addr(satp_i[43:0], d_va_i, 2'd2);
+                pte_addr_q <= d_root_pte;
               end
             end else begin
               g_gpa_q <= d_va_i;
-              g_acc_q <= d_write_i ? 2'd1 : 2'd0;
+              g_acc_q <= d_acc;
               g_purpose_q <= 2'd0;
               g_level_q <= 2'd2;
               pte_addr_q <= g_pte_addr(hgatp_i[43:0], d_va_i, 2'd2);
@@ -707,28 +718,27 @@ module muserisc_mmu (
             req_vs_q <= d_vs_trans;
             req_g_q <= d_g_trans;
             req_va_q <= d_va_i;
-            req_acc_q <= d_write_i ? 2'd1 : 2'd0;
+            req_acc_q <= d_acc;
             req_priv_q <= d_priv_i;
-            req_asid_q <= satp_asid;
+            req_asid_q <= d_satp_asid;
             req_vmid_q <= hgatp_vmid;
             level_q <= 2'd2;
             if (d_vs_trans) begin
-              vs_pte_gpa_q <= pte_addr(satp_i[43:0], d_va_i, 2'd2);
+              vs_pte_gpa_q <= d_root_pte;
               if (d_g_trans) begin
                 state_q <= W_G_READ;
-                g_gpa_q <= pte_addr(satp_i[43:0], d_va_i, 2'd2);
+                g_gpa_q <= d_root_pte;
                 g_acc_q <= 2'd0;
                 g_purpose_q <= 2'd1;
                 g_level_q <= 2'd2;
-                pte_addr_q <= g_pte_addr(hgatp_i[43:0],
-                    pte_addr(satp_i[43:0], d_va_i, 2'd2), 2'd2);
+                pte_addr_q <= g_pte_addr(hgatp_i[43:0], d_root_pte, 2'd2);
               end else begin
-                pte_addr_q <= pte_addr(satp_i[43:0], d_va_i, 2'd2);
+                pte_addr_q <= d_root_pte;
               end
             end else begin
               state_q <= W_G_READ;
               g_gpa_q <= d_va_i;
-              g_acc_q <= d_write_i ? 2'd1 : 2'd0;
+              g_acc_q <= d_acc;
               g_purpose_q <= 2'd0;
               g_level_q <= 2'd2;
               pte_addr_q <= g_pte_addr(hgatp_i[43:0], d_va_i, 2'd2);

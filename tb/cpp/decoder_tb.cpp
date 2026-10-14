@@ -21,6 +21,8 @@ struct Ctrl {
   bool alu_src_imm = false, alu_a_pc = false, word_op = false, muldiv = false;
   bool csr = false, csr_imm = false, mret = false, sret = false;
   bool wfi = false, sfence = false;
+  bool hlv = false, hlvx = false, hfence = false, hfence_gvma = false;
+  int funct3 = 0;
   bool amo = false, lr = false, sc = false;
   int amo_op = 0;
   bool bext = false;
@@ -64,6 +66,7 @@ Ctrl Golden(uint32_t insn) {
   const uint64_t imm_j = Sext((((insn >> 31) & 1) << 20) | (((insn >> 12) & 0xff) << 12) |
                               (((insn >> 20) & 1) << 11) | (((insn >> 21) & 0x3ff) << 1), 21);
   c.imm = imm_i;
+  c.funct3 = static_cast<int>(f3);
   const bool alt = ((insn >> 30) & 1) != 0;
   switch (op) {
     case 0x37:  // LUI
@@ -340,7 +343,31 @@ Ctrl Golden(uint32_t insn) {
         else if (imm12 == 0x102) { c.valid = c.sret = true; }
         else if (imm12 == 0x105) { c.valid = c.wfi = true; }
         else if (((insn >> 25) & 0x7f) == 0x09) { c.valid = c.sfence = true; }
-      } else if (f3 != 4) {
+        else if (((insn >> 25) & 0x7f) == 0x11) { c.valid = c.hfence = true; }
+        else if (((insn >> 25) & 0x7f) == 0x31) {
+          c.valid = c.hfence = c.hfence_gvma = true;
+        }
+      } else if (f3 == 4) {
+        if (((insn >> 28) & 0xf) == 0x6) {
+          const uint32_t size = (insn >> 26) & 3;
+          const uint32_t var = (insn >> 20) & 31;
+          if (!((insn >> 25) & 1)) {
+            if (var == 0 || (var == 1 && size != 3) ||
+                (var == 3 && (size == 1 || size == 2))) {
+              c.valid = c.reg_write = c.mem_read = c.alu_src_imm = true;
+              c.hlv = true;
+              c.hlvx = (var == 3);
+              c.imm = 0;
+              c.funct3 = static_cast<int>(
+                  size + ((var != 0 && size != 3) ? 4 : 0));
+            }
+          } else if (((insn >> 7) & 31) == 0) {
+            c.valid = c.mem_write = c.alu_src_imm = c.hlv = true;
+            c.imm = 0;
+            c.funct3 = static_cast<int>(size);
+          }
+        }
+      } else {
         c.valid = c.reg_write = c.csr = true;
         c.csr_imm = ((f3 >> 2) & 1) != 0;
         c.imm = imm_i;
@@ -379,10 +406,11 @@ int main(int argc, char** argv) {
               kAluSrcImm = 14, kMemWrite = 15, kMemRead = 16,
               kRegWrite = 17, kValid = 18, kMuldiv = 19, kCsr = 20,
               kCsrImm = 21, kMret = 22, kSret = 23, kWfi = 24, kSfence = 25,
-              kAmo = 26, kLr = 27, kSc = 28, kAmoOp = 29,
-              kFp = 34, kFpRs2 = 35, kFpRs1 = 36, kFpRd = 37,
-              kFpRm = 38, kFpOp = 39, kFmtD = 40, kFpuAux = 41,
-              kFpuOp = 43, kBext = 48, kBextOp = 49;
+              kHfenceGvma = 26, kHfence = 27, kHlvx = 28, kHlv = 29,
+              kAmo = 30, kLr = 31, kSc = 32, kAmoOp = 33,
+              kFp = 38, kFpRs2 = 39, kFpRs1 = 40, kFpRd = 41,
+              kFpRm = 42, kFpOp = 43, kFmtD = 44, kFpuAux = 45,
+              kFpuOp = 47, kBext = 52, kBextOp = 53;
     const Field fields[] = {
         {"valid", bit(kValid), g.valid},
         {"reg_write", bit(kRegWrite), g.reg_write && g.valid},
@@ -398,6 +426,10 @@ int main(int argc, char** argv) {
         {"sret", bit(kSret), g.sret && g.valid},
         {"wfi", bit(kWfi), g.wfi && g.valid},
         {"sfence", bit(kSfence), g.sfence && g.valid},
+        {"hfence", bit(kHfence), g.hfence && g.valid},
+        {"hfence_gvma", bit(kHfenceGvma), g.hfence_gvma && g.valid},
+        {"hlv", bit(kHlv), g.hlv && g.valid},
+        {"hlvx", bit(kHlvx), g.hlvx && g.valid},
         {"amo", bit(kAmo), g.amo && g.valid},
         {"lr", bit(kLr), g.lr && g.valid},
         {"sc", bit(kSc), g.sc && g.valid},
@@ -456,7 +488,8 @@ int main(int argc, char** argv) {
       }
     }
     if (dut->rs1_o != ((insn >> 15) & 31) || dut->rs2_o != ((insn >> 20) & 31) ||
-        dut->rd_o != ((insn >> 7) & 31) || ((c >> kFunct3) & 7u) != ((insn >> 12) & 7)) {
+        dut->rd_o != ((insn >> 7) & 31) ||
+        static_cast<int>((c >> kFunct3) & 7u) != g.funct3) {
       std::printf("FAIL insn=0x%08x register/funct3 extraction\n", insn);
       return false;
     }
@@ -486,6 +519,22 @@ int main(int argc, char** argv) {
   if (!run_one(0x10200073u)) return 1;  // SRET
   if (!run_one(0x10500073u)) return 1;  // WFI
   if (!run_one(0x12000073u)) return 1;  // SFENCE.VMA x0, x0
+  // Hypervisor encodings (assembler-generated, a0/a1 forms).
+  if (!run_one(0x6005c573u)) return 1;  // HLV.B
+  if (!run_one(0x6015c573u)) return 1;  // HLV.BU
+  if (!run_one(0x6405c573u)) return 1;  // HLV.H
+  if (!run_one(0x6415c573u)) return 1;  // HLV.HU
+  if (!run_one(0x6805c573u)) return 1;  // HLV.W
+  if (!run_one(0x6815c573u)) return 1;  // HLV.WU
+  if (!run_one(0x6c05c573u)) return 1;  // HLV.D
+  if (!run_one(0x6435c573u)) return 1;  // HLVX.HU
+  if (!run_one(0x6835c573u)) return 1;  // HLVX.WU
+  if (!run_one(0x62a5c073u)) return 1;  // HSV.B
+  if (!run_one(0x66a5c073u)) return 1;  // HSV.H
+  if (!run_one(0x6aa5c073u)) return 1;  // HSV.W
+  if (!run_one(0x6ea5c073u)) return 1;  // HSV.D
+  if (!run_one(0x22c58073u)) return 1;  // HFENCE.VVMA
+  if (!run_one(0x62c58073u)) return 1;  // HFENCE.GVMA
   if (!run_one(0x300010f3u)) return 1;  // CSRRW x2, mstatus, x0-ish fields
   // A extension: LR.W x13,(x9) / SC.W x13,x17,(x9) / AMOADD.D /
   // AMOMAXU.W with aq+rl / illegal funct5 / LR with rs2 != x0.

@@ -70,6 +70,7 @@ int main(int argc, char** argv) {
   d->trap_pc_i = 0;
   d->trap_tval_i = 0;
   d->trap_gpa_i = 0;
+  d->trap_gva_i = 0;
   d->trap_tinst_i = 0;
   d->irq_m_timer_i = 0;
   d->irq_m_soft_i = 0;
@@ -575,6 +576,11 @@ int main(int argc, char** argv) {
   CHECK(d->priv_o == 1 && d->virt_o == 0);
   CHECK(!illegal(0x600, false));                     // H CSR from HS
   CHECK(!illegal(0x200, false));                     // VS CSR from HS
+  for (int op = 5; op <= 7; ++op) {                  // HFENCE/HLV in HS
+    d->sys_op_i = op;
+    d->eval();
+    CHECK(!d->sys_illegal_o && !d->virt_inst_o);
+  }
   d->sys_op_i = 2;
   d->eval();
   CHECK(d->xret_pc_o == 0x880);
@@ -592,6 +598,13 @@ int main(int argc, char** argv) {
   CHECK(d->illegal_o && d->virt_inst_o);             // hstatus from VS
   d->addr_i = 0x200; d->eval();
   CHECK(d->illegal_o && d->virt_inst_o);             // vsstatus direct
+  for (int op = 5; op <= 7; ++op) {                  // HFENCE/HLV in VS
+    d->sys_op_i = op;
+    d->eval();
+    CHECK(d->sys_illegal_o && d->virt_inst_o);
+  }
+  d->sys_op_i = 0;
+  d->eval();
   // Ecall-from-VS (cause 10) is medeleg-delegated to HS.
   d->trap_take_i = 1;
   d->trap_cause_i = 10;

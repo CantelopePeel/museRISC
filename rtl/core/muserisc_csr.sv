@@ -24,6 +24,7 @@ module muserisc_csr (
     // Privileged-instruction legality helpers (EX)
     output logic       sys_illegal_o, // mret/sret/wfi/sfence not allowed now
     input  wire [2:0]  sys_op_i,      // 0 none 1 mret 2 sret 3 wfi 4 sfence
+                                      // 5 hfence.vvma 6 hfence.gvma 7 hlv
     input  wire        ret_en_i,      // xRET takes effect at the next edge
     // Trap entry (WB)
     input  wire        trap_take_i,
@@ -31,6 +32,7 @@ module muserisc_csr (
     input  wire [63:0] trap_pc_i,
     input  wire [63:0] trap_tval_i,
     input  wire [63:0] trap_gpa_i,   // faulting GPA for htval/mtval2
+    input  wire        trap_gva_i,   // HLV fault: tval holds a guest VA
     input  wire [63:0] trap_tinst_i, // transformed instr (0 = none)
     output logic [63:0] trap_target_o,
     output logic [1:0] trap_priv_o,   // privilege the trap is taken to
@@ -52,6 +54,11 @@ module muserisc_csr (
     output logic       mxr_o,        // effective data MXR (VS if V=1)
     output logic       hs_mxr_o,     // HS MXR (overrides G-stage X)
     output logic [63:0] satp_o,      // effective data satp/vsatp
+    output logic [63:0] fsatp_o,     // fetch satp for the current V
+    output logic [63:0] vsatp_o,     // raw vsatp (HLV data context)
+    output logic       spvp_o,       // hstatus.SPVP (HLV privilege)
+    output logic       vs_sum_o,     // vsstatus.SUM (HLV)
+    output logic       vs_mxr_o,     // vsstatus.MXR (HLV stage 1)
     output logic [63:0] hgatp_o,
     output logic [63:0] mstatus_o,
     output logic [63:0] xret_pc_o,    // mepc or sepc per sys_op_i
@@ -120,6 +127,11 @@ module muserisc_csr (
   assign dvirt_o = virt_q || ((priv_q == PRIV_M) && mstatus_mprv_q &&
                                (mstatus_mpp_q != PRIV_M) && mstatus_mpv_q);
   assign satp_o = dvirt_o ? vsatp_q : satp_q;
+  assign fsatp_o = virt_q ? vsatp_q : satp_q;
+  assign vsatp_o = vsatp_q;
+  assign spvp_o = h_spvp_q;
+  assign vs_sum_o = vs_sum_q;
+  assign vs_mxr_o = vs_mxr_q;
   assign hgatp_o = hgatp_q;
   assign sum_o = dvirt_o ? vs_sum_q : mstatus_sum_q;
   assign mxr_o = dvirt_o ? vs_mxr_q : mstatus_mxr_q;
@@ -427,6 +439,32 @@ module muserisc_csr (
           sys_illegal_o = 1'b1;
         end
       end
+      3'd5: begin                                       // HFENCE.VVMA
+        if (virt_q) begin
+          sys_illegal_o = 1'b1;
+          sys_virt_inst = 1'b1;
+        end else if (priv_q == PRIV_U) begin
+          sys_illegal_o = 1'b1;
+        end
+      end
+      3'd6: begin                                       // HFENCE.GVMA
+        if (virt_q) begin
+          sys_illegal_o = 1'b1;
+          sys_virt_inst = 1'b1;
+        end else if (priv_q == PRIV_U) begin
+          sys_illegal_o = 1'b1;
+        end else if ((priv_q == PRIV_S) && mstatus_tvm_q) begin
+          sys_illegal_o = 1'b1;
+        end
+      end
+      3'd7: begin                                       // HLV/HLVX/HSV
+        if (virt_q) begin
+          sys_illegal_o = 1'b1;
+          sys_virt_inst = 1'b1;
+        end else if ((priv_q == PRIV_U) && !h_hu_q) begin
+          sys_illegal_o = 1'b1;
+        end
+      end
       default: ;
     endcase
   end
@@ -554,6 +592,8 @@ module muserisc_csr (
           allow = pmpcfg_q[i][0];
         end else if (acc == 2'd1) begin
           allow = pmpcfg_q[i][1];
+        end else if (acc == 2'd3) begin
+          allow = pmpcfg_q[i][0] && pmpcfg_q[i][2];  // HLVX: R+X
         end else begin
           allow = pmpcfg_q[i][2];
         end
@@ -705,7 +745,7 @@ module muserisc_csr (
           mstatus_sie_q <= 1'b0;
           mstatus_spp_q <= priv_q[0];
           h_spv_q <= virt_q;
-          h_gva_q <= virt_q && !trap_is_irq &&
+          h_gva_q <= (virt_q || trap_gva_i) && !trap_is_irq &&
                      ((trap_code <= 6'd1) || (trap_code == 6'd3) ||
                       ((trap_code >= 6'd4) && (trap_code <= 6'd7)) ||
                       (trap_code == 6'd12) || (trap_code == 6'd13) ||
@@ -723,7 +763,7 @@ module muserisc_csr (
           mstatus_mie_q <= 1'b0;
           mstatus_mpp_q <= priv_q;
           mstatus_mpv_q <= virt_q;
-          mstatus_gva_q <= virt_q && !trap_is_irq &&
+          mstatus_gva_q <= (virt_q || trap_gva_i) && !trap_is_irq &&
                      ((trap_code <= 6'd1) || (trap_code == 6'd3) ||
                       ((trap_code >= 6'd4) && (trap_code <= 6'd7)) ||
                       (trap_code == 6'd12) || (trap_code == 6'd13) ||

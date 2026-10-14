@@ -591,8 +591,52 @@ module muserisc_decoder import muserisc_pkg::*; (
           end else if (funct7 == 7'b0001001) begin
             ctrl_o.valid = 1'b1;
             ctrl_o.sfence = 1'b1;
+          end else if (funct7 == 7'b0010001) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.hfence = 1'b1;           // HFENCE.VVMA
+          end else if (funct7 == 7'b0110001) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.hfence = 1'b1;           // HFENCE.GVMA
+            ctrl_o.hfence_gvma = 1'b1;
           end
-        end else if (funct3 != 3'b100) begin
+        end else if (funct3 == 3'b100) begin
+          // HLV/HLVX/HSV: funct7[6:3]=0110, size in [27:26],
+          // store in [25]. Loads select signed/unsigned/HLVX
+          // in instr[24:20] (0/1/3); address is rs1 with no
+          // offset. ctrl funct3 is rewritten to the ordinary
+          // load/store size+sign encoding for the MEM stage.
+          if (instr_i[31:28] == 4'b0110) begin
+            if (!instr_i[25]) begin
+              if ((instr_i[24:20] == 5'd0) ||
+                  ((instr_i[24:20] == 5'd1) &&
+                   (instr_i[27:26] != 2'b11)) ||
+                  ((instr_i[24:20] == 5'd3) &&
+                   ((instr_i[27:26] == 2'b01) ||
+                    (instr_i[27:26] == 2'b10)))) begin
+                ctrl_o.valid = 1'b1;
+                ctrl_o.reg_write = 1'b1;
+                ctrl_o.mem_read = 1'b1;
+                ctrl_o.hlv = 1'b1;
+                ctrl_o.hlvx = (instr_i[24:20] == 5'd3);
+                ctrl_o.alu_src_imm = 1'b1;
+                imm_o = 64'd0;
+                unique case (instr_i[27:26])
+                  2'b00: ctrl_o.funct3 = instr_i[20] ? 3'b100 : 3'b000;
+                  2'b01: ctrl_o.funct3 = instr_i[20] ? 3'b101 : 3'b001;
+                  2'b10: ctrl_o.funct3 = instr_i[20] ? 3'b110 : 3'b010;
+                  default: ctrl_o.funct3 = 3'b011;
+                endcase
+              end
+            end else if (instr_i[11:7] == 5'd0) begin
+              ctrl_o.valid = 1'b1;
+              ctrl_o.mem_write = 1'b1;
+              ctrl_o.hlv = 1'b1;
+              ctrl_o.alu_src_imm = 1'b1;
+              imm_o = 64'd0;
+              ctrl_o.funct3 = {1'b0, instr_i[27:26]};
+            end
+          end
+        end else begin
           // CSRRW/CSRRS/CSRRC and immediate forms. CSR existence
           // and privilege are checked in EX by the CSR file.
           ctrl_o.valid = 1'b1;
