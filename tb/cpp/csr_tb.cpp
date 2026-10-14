@@ -81,6 +81,9 @@ int main(int argc, char** argv) {
   d->pmp_addr_b_i = 0;
   d->pmp_acc_b_i = 0;
   d->pmp_priv_b_i = 0;
+  d->pmp_addr_c_i = 0;
+  d->pmp_acc_c_i = 0;
+  d->pmp_priv_c_i = 1;  // walker port is checked as S-mode
   tick();
   tick();
   d->rst_ni = 1;

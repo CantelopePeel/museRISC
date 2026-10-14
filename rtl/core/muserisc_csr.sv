@@ -55,7 +55,11 @@ module muserisc_csr (
     input  wire [63:0] pmp_addr_b_i,
     input  wire [1:0]  pmp_acc_b_i,
     input  wire [1:0]  pmp_priv_b_i,
-    output logic       pmp_allow_b_o
+    output logic       pmp_allow_b_o,
+    input  wire [63:0] pmp_addr_c_i,
+    input  wire [1:0]  pmp_acc_c_i,
+    input  wire [1:0]  pmp_priv_c_i,
+    output logic       pmp_allow_c_o
 );
   localparam logic [1:0] PRIV_U = 2'b00, PRIV_S = 2'b01, PRIV_M = 2'b11;
 
@@ -323,6 +327,7 @@ module muserisc_csr (
 
   assign pmp_allow_a_o = pmp_check(pmp_addr_a_i, pmp_acc_a_i, pmp_priv_a_i);
   assign pmp_allow_b_o = pmp_check(pmp_addr_b_i, pmp_acc_b_i, pmp_priv_b_i);
+  assign pmp_allow_c_o = pmp_check(pmp_addr_c_i, pmp_acc_c_i, pmp_priv_c_i);
 
   // PMP write locking: an entry is locked by its own L bit, and
   // pmpaddr[i] is also locked when entry i+1 is a locked TOR entry
@@ -438,7 +443,11 @@ module muserisc_csr (
           12'h142: scause_q <= wdata_i;
           12'h143: stval_q <= wdata_i;
           12'h144: mip_ssip_q <= wdata_i[1];
-          12'h180: satp_q <= wdata_i;
+          12'h180: begin  // satp MODE is WARL: only Bare/Sv39 stick
+            if ((wdata_i[63:60] == 4'd0) || (wdata_i[63:60] == 4'd8)) begin
+              satp_q <= wdata_i;
+            end
+          end
           12'h300: begin  // mstatus
             mstatus_sie_q <= wdata_i[1];
             mstatus_mie_q <= wdata_i[3];

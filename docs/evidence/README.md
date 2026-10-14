@@ -708,3 +708,37 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   Sv39+Svnapot MMU is stage 3b, followed by the riscv-tests
   and ACT stage gates (3c/3d). No compliance claim attaches
   yet.
+
+## In-house core stage 3b — Sv39+Svnapot MMU (2026-10-13, #18)
+
+- Artifact: [`core-stage3b-2026-10-13.log`](core-stage3b-2026-10-13.log)
+  (`make core-test` extract); plan in
+  [`docs/CORE.md`](../CORE.md).
+- New `muserisc_mmu` (408 lines): unified 32-entry
+  fully-associative TLB with fetch and data lookup ports,
+  one walker sharing the core data port (data misses
+  preempt fetch walks), Sv39 4K/2M/1G, Svnapot 64K,
+  ASID+global, hardware A/D (Svadu), full-flush SFENCE,
+  and recorded walk faults that die when the requester's
+  VA moves on (no negative caching). Fetch translates in
+  IF (stalling there on a miss); a data miss parks the
+  access in MEM and holds the pipeline, with younger CSR
+  writes and xRETs gated so nothing commits ahead of a
+  possibly-faulting older access. PMP now checks physical
+  addresses, with a new third port for implicit PTE
+  accesses (S-mode); `satp` MODE is WARL-clamped.
+- Verification: new C++ MMU unit TB (53 checks against
+  hand-built page tables in TB memory: walks, superpages,
+  NAPOT, canonicality, malformed PTEs, U/SUM/MXR, A/D
+  writebacks incl. PMP-denied writeback, ASID/global,
+  fault auto-clear, data-preempts-fetch) and
+  `sw/core-tests/vm_directed.S` (14 groups on the running
+  core, page faults 12/13/15 with `tval`, U excursion,
+  SFENCE staleness, MPRV) — all PASS, stage-1..3a suite
+  unchanged.
+- Coverage: every annotated `rtl/core/` source line executed
+  (1126/1126); combined line+toggle points 621/1210 (51%).
+  `make test` and `make lint` also pass at this commit.
+- Caveat: translation exists but no upstream suite has
+  judged it yet — riscv-tests (3c) and ACT + a Linux boot
+  attempt (3d) are next. No compliance claim attaches yet.

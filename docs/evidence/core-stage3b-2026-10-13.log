@@ -1,0 +1,67 @@
+In-house core stage 3b (issue #18): Sv39 + Svnapot MMU
+Command: make core-test   (host Verilator 5.044, riscv64-elf-gcc)
+
+ALU TB PASS (205642 checks)
+MULDIV TB PASS (165877 checks)
+DECODER TB PASS (12311 checks)
+REGFILE TB PASS (4194 checks)
+CSR TB PASS (117 checks)
+MMU TB PASS (53 checks)
+CORE TB PASS rv64i_directed.bin (315 cycles)
+CORE TB PASS rv64m_directed.bin (167 cycles)
+CORE TB PASS pipeline_directed.bin (648 cycles)
+CORE TB PASS priv_directed.bin (801012 cycles)
+CORE TB PASS vm_directed.bin (8744 cycles)
+CORE TB PASS trap_illegal.bin (expected trap cause 2 at pc 0x4, 5 cycles)
+CORE TB PASS trap_misalign.bin (expected trap cause 4 at pc 0x4, 5 cycles)
+CORE TB PASS trap_ecall.bin (expected trap cause 11 at pc 0x4, 5 cycles)
+CORE TB PASS trap_ebreak.bin (expected trap cause 3 at pc 0x4, 5 cycles)
+CORE TB PASS trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 6 cycles)
+CORE TB PASS trap_younger_store.bin (expected trap cause 4 at pc 0x4, 5 cycles)
+Total coverage (621/1210) 51.00%
+
+Annotated source lines executed at least once (verilator_coverage):
+  muserisc_alu.sv: 36/36
+  muserisc_core.sv: 342/342
+  muserisc_csr.sv: 311/311
+  muserisc_decoder.sv: 156/156
+  muserisc_mmu.sv: 218/218
+  muserisc_muldiv.sv: 50/50
+  muserisc_regfile.sv: 13/13
+  TOTAL 1126/1126 = 100.0% (no %000000 lines)
+
+Combined line+toggle points: 621/1210 = 51% (residue is
+toggle/partial-expression points on wide datapaths).
+Repo gates also green at this commit: make test, make lint.
+
+muserisc_mmu (408 lines): one unified 32-entry fully-associative
+TLB with fetch and data combinational lookup ports, one walker
+sharing the core data port (data misses preempt fetch walks;
+MEM keeps the port whenever it has a usable access), Sv39
+4K/2M/1G leaves, Svnapot 64K, ASID+global matching, hardware
+A/D updates (Svadu semantics, store hit with D=0 re-walks and
+overwrites the same TLB slot), full-flush SFENCE.VMA, and a
+recorded-fault protocol that cannot negative-cache (a fault
+dies when its port's VA moves on). PMP applies to translated
+PAs; a third PMP port checks implicit PTE accesses as S-mode,
+and PMP denial of an A/D writeback surfaces as an access
+fault. satp MODE is WARL-clamped to Bare/Sv39 in the CSR file.
+
+mmu_tb.cpp drives the module against a TB memory holding
+hand-built tables: Bare/M passthrough, walks at all levels,
+both superpages (incl. misaligned), NAPOT, canonicality,
+malformed PTEs (W-without-R, reserved bits, bad N, pointer at
+L0, non-leaf A/D/U), U/SUM/MXR rules, A/D memory writebacks,
+ASID/global/flush, port-denial and grant-stall behavior, the
+A/D-writeback PMP denial, fault auto-clear, and data
+preemption of a fetch walk. vm_directed.S then runs 14 groups
+on the core: translated loads/stores/execute, page faults
+12/13/15 with tval checks, MXR, SUM, a U-mode excursion from
+a U-page stub, A/D updates observed in memory, SFENCE
+staleness, NAPOT, a 2M superpage with a 4K alias, and MPRV.
+Three bugs found while bringing the test up were all in the
+test itself (U stub initially linked into a U=0 page, the
+S handler consuming an M-intended redirect cell for a U trap,
+and a misaligned sd); the RTL needed no functional fixes,
+only expression-form rewrites of two TLB helper functions
+whose early returns Verilator coverage cannot attribute.

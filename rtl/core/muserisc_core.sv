@@ -1,7 +1,8 @@
 // In-house RV64 core (issue #18). Five-stage in-order pipeline
 // (IF/ID/EX/MEM/WB) over combinational-read Harvard memory ports
-// with M/S/U privilege, precise traps, interrupts, and PMP;
-// see docs/CORE.md for the contract and staging plan.
+// with M/S/U privilege, precise traps, interrupts, PMP, and an
+// Sv39+Svnapot MMU; see docs/CORE.md for the contract and
+// staging plan.
 //
 // Pipeline policy:
 // - Full forwarding to EX (EX/MEM and MEM/WB) plus a WB->ID
@@ -21,6 +22,10 @@
 //   stage-1/2 freeze-and-report behavior for directed TBs.
 // - Interrupts are injected in ID as an exception on the next
 //   unexecuted instruction, making epc precise by construction.
+// - Virtual memory: fetch translates combinationally (TLB hit)
+//   or stalls IF while the walker runs; a data miss stalls the
+//   whole pipeline with the access parked in MEM. PMP is always
+//   checked on physical addresses (port C covers PTE accesses).
 `default_nettype none
 module muserisc_core import muserisc_pkg::*; (
     input  wire        clk_i,
@@ -71,7 +76,17 @@ module muserisc_core import muserisc_pkg::*; (
   logic        trap_fire, trap_take;
   logic [63:0] trap_target;
   logic [1:0]  trap_priv_unused;
-  logic        pmp_allow_fetch, pmp_allow_data;
+  logic        pmp_allow_fetch, pmp_allow_data, pmp_allow_walk;
+
+  // MMU (instantiated after MEM; signals declared here for IF)
+  logic [63:0] mmu_if_pa, mmu_d_pa;
+  logic        mmu_if_ok, mmu_if_fault, mmu_if_fault_page;
+  logic        mmu_d_ok, mmu_d_fault, mmu_d_fault_page;
+  logic        walk_req, walk_we, walk_grant;
+  logic [63:0] walk_addr, walk_wdata;
+  logic [1:0]  walk_acc;
+  logic        mem_stall;     // data translation miss: hold all regs
+  logic        sfence_fire;   // SFENCE.VMA commits this cycle
 
   // ------------------------------------------------------------
   // IF stage
@@ -81,16 +96,22 @@ module muserisc_core import muserisc_pkg::*; (
   logic        flush;
   logic [63:0] redirect_pc;
   logic        freeze;
-  logic        fetch_fault;
+  logic        fetch_fault, fetch_stall;
+  logic [63:0] fetch_cause;
 
-  assign imem_addr_o = pc_q;
-  assign fetch_fault = !pmp_allow_fetch;
+  assign imem_addr_o = mmu_if_pa;
+  // Translation faults outrank the PMP check on the PA.
+  assign fetch_fault = mmu_if_fault || (mmu_if_ok && !pmp_allow_fetch);
+  assign fetch_cause = mmu_if_fault
+      ? (mmu_if_fault_page ? 64'd12 : 64'd1) : 64'd1;
+  assign fetch_stall = !mmu_if_ok && !mmu_if_fault;
 
   // IF/ID register
   logic        ifid_valid_q;
   logic [63:0] ifid_pc_q;
   logic [31:0] ifid_instr_q;
-  logic        ifid_exc_q;      // instruction access fault at fetch
+  logic        ifid_exc_q;      // fetch fault (access or page)
+  logic [63:0] ifid_cause_q;
 
   // ------------------------------------------------------------
   // ID stage
@@ -116,7 +137,7 @@ module muserisc_core import muserisc_pkg::*; (
   always_comb begin
     if (ifid_exc_q) begin
       id_exc = ifid_valid_q;
-      id_cause = 64'd1;                       // instruction access fault
+      id_cause = ifid_cause_q;                // 1 access / 12 page fault
       id_tval = ifid_pc_q;
     end else if (id_ctrl.ecall) begin
       id_exc = ifid_valid_q;
@@ -137,7 +158,8 @@ module muserisc_core import muserisc_pkg::*; (
     end
   end
 
-  assign irq_inject = irq_valid && ifid_valid_q && !stall && !flush && !freeze;
+  assign irq_inject = irq_valid && ifid_valid_q && !stall && !flush &&
+                      !freeze && !mem_stall;
 
   // Which sources the ID instruction reads (load-use interlock).
   logic [6:0] id_opcode;
@@ -278,10 +300,14 @@ module muserisc_core import muserisc_pkg::*; (
       default: csr_wdata = csr_rdata & ~csr_src;          // CSRRC(I)
     endcase
   end
+  // !mem_stall: a CSR write must not commit while an older
+  // instruction is parked in MEM (it could still page-fault).
   assign csr_we = idex_valid_q && idex_ctrl_q.csr && !idex_exc_q &&
-                  !trap_fire &&
+                  !trap_fire && !mem_stall &&
                   ((idex_ctrl_q.funct3[1:0] == 2'b01) ||
                    (idex_rs1_addr_q != 5'd0));
+  assign sfence_fire = idex_valid_q && idex_ctrl_q.sfence && !idex_exc_q &&
+                       !sys_illegal && !mem_stall;
   assign sys_op = idex_ctrl_q.mret   ? 3'd1 :
                   idex_ctrl_q.sret   ? 3'd2 :
                   idex_ctrl_q.wfi    ? 3'd3 :
@@ -363,34 +389,44 @@ module muserisc_core import muserisc_pkg::*; (
   // ------------------------------------------------------------
   logic [63:0] load_data;
   logic [63:0] mem_result;
-  logic        mem_fault;
+  logic        data_access, mem_uses_port;
+  logic        mem_pmp_fault, mem_trans_fault;
   logic        mem_exc;
   logic [63:0] mem_cause, mem_tval;
 
-  assign mem_fault = exmem_valid_q && !exmem_exc_q &&
-                     (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write) &&
-                     !pmp_allow_data;
-
-  assign dmem_addr_o = exmem_addr_q;
-  assign dmem_re_o = exmem_valid_q && exmem_ctrl_q.mem_read &&
-                     !exmem_exc_q && !mem_fault;
+  // A translation miss parks the access in MEM (pipeline hold);
+  // a translation fault or a PMP denial on the PA excepts it.
+  assign data_access = exmem_valid_q && !exmem_exc_q &&
+                       (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write);
+  assign mem_stall = data_access && !mmu_d_ok && !mmu_d_fault;
+  assign mem_trans_fault = data_access && mmu_d_fault;
+  assign mem_pmp_fault = data_access && mmu_d_ok && !pmp_allow_data;
+  assign mem_uses_port = data_access && mmu_d_ok && !mem_pmp_fault;
+  // The walker borrows the port whenever MEM is not using it.
+  assign walk_grant = walk_req && !mem_uses_port;
+  assign dmem_addr_o = walk_grant ? walk_addr : mmu_d_pa;
+  assign dmem_re_o = mem_uses_port && exmem_ctrl_q.mem_read;
 
   always_comb begin
     dmem_be_o = 8'd0;
     dmem_wdata_o = 64'd0;
-    if (exmem_valid_q && exmem_ctrl_q.mem_write && !exmem_exc_q &&
-        !mem_fault && !trap_fire) begin
+    if (walk_grant && walk_we) begin
+      // PTE A/D writeback (suppressed on PMP denial; the MMU
+      // turns that into an access fault for the requester).
+      dmem_be_o = pmp_allow_walk ? 8'hFF : 8'd0;
+      dmem_wdata_o = walk_wdata;
+    end else if (mem_uses_port && exmem_ctrl_q.mem_write && !trap_fire) begin
       unique case (exmem_ctrl_q.funct3[1:0])
         2'b00: begin
-          dmem_be_o = 8'h01 << dmem_addr_o[2:0];
+          dmem_be_o = 8'h01 << exmem_addr_q[2:0];
           dmem_wdata_o = {8{exmem_store_data_q[7:0]}};
         end
         2'b01: begin
-          dmem_be_o = 8'h03 << {dmem_addr_o[2:1], 1'b0};
+          dmem_be_o = 8'h03 << {exmem_addr_q[2:1], 1'b0};
           dmem_wdata_o = {4{exmem_store_data_q[15:0]}};
         end
         2'b10: begin
-          dmem_be_o = 8'h0F << {dmem_addr_o[2], 2'b00};
+          dmem_be_o = 8'h0F << {exmem_addr_q[2], 2'b00};
           dmem_wdata_o = {2{exmem_store_data_q[31:0]}};
         end
         default: begin
@@ -402,7 +438,7 @@ module muserisc_core import muserisc_pkg::*; (
   end
 
   logic [63:0] load_shifted;
-  assign load_shifted = dmem_rdata_i >> {dmem_addr_o[2:0], 3'b000};
+  assign load_shifted = dmem_rdata_i >> {exmem_addr_q[2:0], 3'b000};
   always_comb begin
     unique case (exmem_ctrl_q.funct3)
       3'b000:  load_data = {{56{load_shifted[7]}}, load_shifted[7:0]};
@@ -422,7 +458,13 @@ module muserisc_core import muserisc_pkg::*; (
       mem_exc = exmem_valid_q;
       mem_cause = exmem_cause_q;
       mem_tval = exmem_tval_q;
-    end else if (mem_fault) begin
+    end else if (mem_trans_fault) begin
+      mem_exc = 1'b1;
+      mem_cause = exmem_ctrl_q.mem_write
+          ? (mmu_d_fault_page ? 64'd15 : 64'd7)
+          : (mmu_d_fault_page ? 64'd13 : 64'd5);
+      mem_tval = exmem_addr_q;  // faulting VA
+    end else if (mem_pmp_fault) begin
       mem_exc = 1'b1;
       mem_cause = exmem_ctrl_q.mem_write ? 64'd7 : 64'd5;
       mem_tval = exmem_addr_q;
@@ -446,7 +488,7 @@ module muserisc_core import muserisc_pkg::*; (
       .wdata_i       (csr_wdata),
       .sys_illegal_o (sys_illegal),
       .sys_op_i      (sys_op),
-      .ret_en_i      (ex_ret && !trap_fire),
+      .ret_en_i      (ex_ret && !trap_fire && !mem_stall),
       .trap_take_i   (trap_take),
       .trap_cause_i  (memwb_cause_q),
       .trap_pc_i     (memwb_pc_q),
@@ -464,24 +506,63 @@ module muserisc_core import muserisc_pkg::*; (
       .satp_o        (csr_satp),
       .mstatus_o     (csr_mstatus),
       .xret_pc_o     (xret_pc),
-      .retire_i      (memwb_valid_q && !memwb_exc_q),
-      .pmp_addr_a_i  (pc_q),
+      .retire_i      (memwb_valid_q && !memwb_exc_q && !mem_stall),
+      .pmp_addr_a_i  (mmu_if_pa),
       .pmp_acc_a_i   (2'd2),
       .pmp_priv_a_i  (priv),
       .pmp_allow_a_o (pmp_allow_fetch),
-      .pmp_addr_b_i  (exmem_addr_q),
+      .pmp_addr_b_i  (mmu_d_pa),
       .pmp_acc_b_i   (exmem_ctrl_q.mem_write ? 2'd1 : 2'd0),
       .pmp_priv_b_i  (eff_priv_data),
-      .pmp_allow_b_o (pmp_allow_data)
+      .pmp_allow_b_o (pmp_allow_data),
+      .pmp_addr_c_i  (walk_addr),
+      .pmp_acc_c_i   (walk_acc),
+      .pmp_priv_c_i  (2'b01),  // implicit PTE accesses check as S
+      .pmp_allow_c_o (pmp_allow_walk)
+  );
+
+  // ------------------------------------------------------------
+  // MMU (Sv39 + Svnapot TLB and walker)
+  // ------------------------------------------------------------
+  muserisc_mmu u_mmu (
+      .clk_i            (clk_i),
+      .rst_ni           (rst_ni),
+      .satp_i           (csr_satp),
+      .sum_i            (csr_mstatus[18]),
+      .mxr_i            (csr_mstatus[19]),
+      .flush_i          (sfence_fire),
+      .abort_i          (trap_take),
+      .if_va_i          (pc_q),
+      .if_priv_i        (priv),
+      .if_pa_o          (mmu_if_pa),
+      .if_ok_o          (mmu_if_ok),
+      .if_fault_o       (mmu_if_fault),
+      .if_fault_page_o  (mmu_if_fault_page),
+      .d_va_i           (exmem_addr_q),
+      .d_write_i        (exmem_ctrl_q.mem_write),
+      .d_priv_i         (eff_priv_data),
+      .d_valid_i        (data_access),
+      .d_pa_o           (mmu_d_pa),
+      .d_ok_o           (mmu_d_ok),
+      .d_fault_o        (mmu_d_fault),
+      .d_fault_page_o   (mmu_d_fault_page),
+      .walk_req_o       (walk_req),
+      .walk_addr_o      (walk_addr),
+      .walk_we_o        (walk_we),
+      .walk_wdata_o     (walk_wdata),
+      .walk_acc_o       (walk_acc),
+      .walk_grant_i     (walk_grant),
+      .walk_rdata_i     (dmem_rdata_i),
+      .walk_pmp_allow_i (pmp_allow_walk)
   );
 
   // ------------------------------------------------------------
   // PC and pipeline registers
   // ------------------------------------------------------------
   always_comb begin
-    if (flush)                pc_d = redirect_pc;
-    else if (stall || freeze) pc_d = pc_q;
-    else                      pc_d = pc_q + 64'd4;
+    if (flush)                             pc_d = redirect_pc;
+    else if (stall || freeze || fetch_stall) pc_d = pc_q;
+    else                                   pc_d = pc_q + 64'd4;
   end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -494,6 +575,7 @@ module muserisc_core import muserisc_pkg::*; (
       ifid_pc_q <= 64'd0;
       ifid_instr_q <= 32'd0;
       ifid_exc_q <= 1'b0;
+      ifid_cause_q <= 64'd0;
       idex_pc_q <= 64'd0;
       idex_ctrl_q <= '0;
       idex_imm_q <= 64'd0;
@@ -529,7 +611,9 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_valid_q <= 1'b0;
       memwb_valid_q <= 1'b0;
       ifid_exc_q <= 1'b0;
-    end else if (!freeze) begin
+    end else if (!freeze && !mem_stall) begin
+      // (mem_stall holds every pipeline register; the parked
+      // MEM access retries once its translation resolves.)
       pc_q <= pc_d;
 
       memwb_valid_q <= exmem_valid_q;
@@ -587,11 +671,16 @@ module muserisc_core import muserisc_pkg::*; (
       if (flush) begin
         ifid_valid_q <= 1'b0;
         ifid_exc_q <= 1'b0;
-      end else if (!stall) begin
+      end else if (!stall && !fetch_stall) begin
         ifid_valid_q <= 1'b1;
         ifid_pc_q <= pc_q;
         ifid_instr_q <= fetch_fault ? 32'd0 : imem_rdata_i;
         ifid_exc_q <= fetch_fault;
+        ifid_cause_q <= fetch_cause;
+      end else if (fetch_stall && !stall) begin
+        // Walker is resolving this PC: bubble ID until it lands.
+        ifid_valid_q <= 1'b0;
+        ifid_exc_q <= 1'b0;
       end
     end
   end

@@ -27,13 +27,15 @@ SWFLAGS       := -march=rv64im_zicsr_zifencei -mabi=lp64 -nostdlib -T $(ROOT)/sw
 
 CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv $(RTL)/muserisc_alu.sv \
             $(RTL)/muserisc_muldiv.sv $(RTL)/muserisc_decoder.sv \
-            $(RTL)/muserisc_csr.sv $(RTL)/muserisc_core.sv
+            $(RTL)/muserisc_csr.sv $(RTL)/muserisc_mmu.sv \
+            $(RTL)/muserisc_core.sv
 TESTS    := rv64i_directed rv64m_directed pipeline_directed priv_directed \
+            vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
             trap_store_misalign trap_younger_store
 
-.PHONY: all alu muldiv decoder regfile csr core sw coverage clean
-all: alu muldiv decoder regfile csr core coverage
+.PHONY: all alu muldiv decoder regfile csr mmu core sw coverage clean
+all: alu muldiv decoder regfile csr mmu core coverage
 
 $(BUILD) $(OBJ):
 	mkdir -p $@
@@ -83,6 +85,15 @@ $(BUILD)/csr_tb: $(ROOT)/tb/cpp/csr_tb.cpp $(RTL)/muserisc_csr.sv | $(BUILD) $(O
 csr: $(BUILD)/csr_tb
 	cd $(BUILD) && COV_FILE=cov_csr.dat ./csr_tb
 
+## ---- MMU unit test -------------------------------------------------------
+$(BUILD)/mmu_tb: $(ROOT)/tb/cpp/mmu_tb.cpp $(RTL)/muserisc_mmu.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/mmu --top-module muserisc_mmu \
+	  -o $(abspath $(BUILD)/mmu_tb) $(RTL)/muserisc_mmu.sv \
+	  $(abspath $(ROOT)/tb/cpp/mmu_tb.cpp)
+
+mmu: $(BUILD)/mmu_tb
+	cd $(BUILD) && COV_FILE=cov_mmu.dat ./mmu_tb
+
 ## ---- Core harness + directed software ---------------------------------
 $(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(CORE_RTL) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/core --top-module muserisc_core \
@@ -98,6 +109,7 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_rv64m.dat ./core_tb rv64m_directed.bin
 	cd $(BUILD) && COV_FILE=cov_pipeline.dat ./core_tb pipeline_directed.bin
 	cd $(BUILD) && COV_FILE=cov_priv.dat ./core_tb priv_directed.bin --irq-timer-after 2000
+	cd $(BUILD) && COV_FILE=cov_vm.dat ./core_tb vm_directed.bin
 	cd $(BUILD) && COV_FILE=cov_trap_illegal.dat ./core_tb trap_illegal.bin 100000 --expect-trap 2
 	cd $(BUILD) && COV_FILE=cov_trap_misalign.dat ./core_tb trap_misalign.bin 100000 --expect-trap 4
 	cd $(BUILD) && COV_FILE=cov_trap_ecall.dat ./core_tb trap_ecall.bin 100000 --expect-trap 11
@@ -111,9 +123,10 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 # explicitly so a stale merged file can never feed back into a merge.
 COV_INPUTS := $(BUILD)/cov_alu.dat $(BUILD)/cov_muldiv.dat \
               $(BUILD)/cov_decoder.dat $(BUILD)/cov_regfile.dat \
-              $(BUILD)/cov_csr.dat \
+              $(BUILD)/cov_csr.dat $(BUILD)/cov_mmu.dat \
               $(BUILD)/cov_rv64i.dat $(BUILD)/cov_rv64m.dat \
               $(BUILD)/cov_pipeline.dat $(BUILD)/cov_priv.dat \
+              $(BUILD)/cov_vm.dat \
               $(BUILD)/cov_trap_illegal.dat $(BUILD)/cov_trap_misalign.dat \
               $(BUILD)/cov_trap_ecall.dat $(BUILD)/cov_trap_ebreak.dat \
               $(BUILD)/cov_trap_smisalign.dat $(BUILD)/cov_trap_ystore.dat
