@@ -111,14 +111,22 @@ Ctrl Golden(uint32_t insn) {
       }
       break;
     }
-    case 0x07:  // FLW/FLD
-      if (f3 == 2 || f3 == 3) {
+    case 0x07:  // FLW/FLD and vector unit-stride loads
+      if ((f3 == 0 || f3 == 5 || f3 == 6 || f3 == 7) &&
+          ((insn >> 26) & 0x3f) == 0 && ((insn >> 20) & 0x1f) == 0) {
+        c.valid = c.mem_read = c.alu_src_imm = c.vec = c.vec_rd = true;
+        c.imm = 0;
+      } else if (f3 == 2 || f3 == 3) {
         c.valid = c.mem_read = c.alu_src_imm = c.fp = c.fp_rd = true;
         c.fmt_d = (f3 == 3); c.imm = imm_i;
       }
       break;
-    case 0x27:  // FSW/FSD
-      if (f3 == 2 || f3 == 3) {
+    case 0x27:  // FSW/FSD and vector unit-stride stores
+      if ((f3 == 0 || f3 == 5 || f3 == 6 || f3 == 7) &&
+          ((insn >> 26) & 0x3f) == 0 && ((insn >> 20) & 0x1f) == 0) {
+        c.valid = c.mem_write = c.alu_src_imm = c.vec = true;
+        c.imm = 0;
+      } else if (f3 == 2 || f3 == 3) {
         c.valid = c.mem_write = c.alu_src_imm = c.fp = c.fp_rs2 = true;
         c.fmt_d = (f3 == 3); c.imm = imm_s;
       }

@@ -418,8 +418,19 @@ module muserisc_decoder import muserisc_pkg::*; (
           endcase
         end
       end
-      7'b0000111: begin  // FLW / FLD
-        if (funct3 == 3'b010 || funct3 == 3'b011) begin
+      7'b0000111: begin  // FLW / FLD and vector unit-stride loads
+        if ((funct3 == 3'b000 || funct3 == 3'b101 ||
+             funct3 == 3'b110 || funct3 == 3'b111) &&
+            (instr_i[31:26] == 6'b000000) &&
+            (instr_i[24:20] == 5'd0)) begin
+          // vle8/16/32/64.v (nf=1, mew=0, mop=unit-stride).
+          ctrl_o.valid = 1'b1;
+          ctrl_o.mem_read = 1'b1;
+          ctrl_o.alu_src_imm = 1'b1;
+          ctrl_o.vec = 1'b1;
+          ctrl_o.vec_rd = 1'b1;
+          imm_o = 64'd0;
+        end else if (funct3 == 3'b010 || funct3 == 3'b011) begin
           ctrl_o.valid = 1'b1;
           ctrl_o.mem_read = 1'b1;
           ctrl_o.alu_src_imm = 1'b1;
@@ -428,9 +439,19 @@ module muserisc_decoder import muserisc_pkg::*; (
           ctrl_o.fmt_d = funct3[0];
         end
       end
-      7'b0100111: begin  // FSW / FSD
+      7'b0100111: begin  // FSW / FSD and vector unit-stride stores
         imm_o = imm_s;
-        if (funct3 == 3'b010 || funct3 == 3'b011) begin
+        if ((funct3 == 3'b000 || funct3 == 3'b101 ||
+             funct3 == 3'b110 || funct3 == 3'b111) &&
+            (instr_i[31:26] == 6'b000000) &&
+            (instr_i[24:20] == 5'd0)) begin
+          // vse8/16/32/64.v (nf=1, mew=0, mop=unit-stride).
+          ctrl_o.valid = 1'b1;
+          ctrl_o.mem_write = 1'b1;
+          ctrl_o.alu_src_imm = 1'b1;
+          ctrl_o.vec = 1'b1;
+          imm_o = 64'd0;
+        end else if (funct3 == 3'b010 || funct3 == 3'b011) begin
           ctrl_o.valid = 1'b1;
           ctrl_o.mem_write = 1'b1;
           ctrl_o.alu_src_imm = 1'b1;

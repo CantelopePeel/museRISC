@@ -226,7 +226,7 @@ module muserisc_core import muserisc_pkg::*; (
   end
 
   assign irq_inject = irq_valid && ifid_valid_q && !stall && !flush &&
-                      !freeze && !mem_stall;
+                      !freeze && !mem_stall && !vec_wb_stall;
 
   // Which sources the ID instruction reads (load-use interlock).
   logic [6:0] id_opcode;
@@ -294,6 +294,9 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] exmem_result_q;
   logic [63:0] exmem_addr_q;
   logic [63:0] exmem_store_data_q;
+  logic [4095:0] exmem_vec_data_q;  // vd old / vs3 group for MEM
+  logic [511:0]  exmem_vec_mask_q;  // v0 snapshot for MEM
+  logic          exmem_vm_q;        // vector mask-enable bit
   logic [4:0]  exmem_rd_q;
   logic        exmem_exc_q, exmem_gva_q;
   logic [63:0] exmem_cause_q, exmem_tval_q, exmem_gpa_q;
@@ -307,8 +310,19 @@ module muserisc_core import muserisc_pkg::*; (
   logic        memwb_fp_write_q;
   logic        memwb_exc_q, memwb_gva_q;
   logic [63:0] memwb_cause_q, memwb_tval_q, memwb_gpa_q;
+  logic        memwb_vec_we_q;    // vector load writeback in WB
+  logic [4:0]  memwb_vec_rd_q;
+  logic [2:0]  memwb_vec_lmul_q;
+  logic [4095:0] memwb_vec_data_q;
 
   logic        wb_write;
+  // A vector load writes the VRF from WB and completes in
+  // MEM the cycle before; a vector op in EX in either cycle
+  // would read or write stale state, so EX holds across both
+  // (bubbles into EX/MEM, front stages frozen).
+  logic        vec_wb_stall;
+  assign vec_wb_stall = (memwb_vec_we_q || vls_vrf_we) &&
+                        idex_valid_q && idex_ctrl_q.vec && !idex_exc_q;
   assign wb_write = memwb_valid_q && memwb_reg_write_q && !memwb_exc_q;
   logic        wb_fp_write;
   assign wb_fp_write = memwb_valid_q && memwb_fp_write_q &&
@@ -471,7 +485,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [4095:0] vec_vs2, vec_vs1, vec_old_vd, vec_result;
   logic [511:0]  vec_v0;
   logic [63:0]   vec_scalar;
-  logic          vec_we, vec_illegal, vec_align_bad;
+  logic          vec_we, vec_illegal, vec_align_bad, vls_vrf_we;
   logic [2:0]    vec_lmul_eff;
   logic [63:0]   vset_avl, vset_vtype_raw;
   logic          vset_en;
@@ -485,6 +499,7 @@ module muserisc_core import muserisc_pkg::*; (
   assign vec_align_bad =
       (idex_ctrl_q.bext_op != VOP_MVSX) &&
       (idex_ctrl_q.bext_op != VOP_MVXS) &&
+      !(idex_ctrl_q.mem_read || idex_ctrl_q.mem_write) &&
       (((vec_lmul_eff == 3'd1) &&
        (idex_rd_q[0] || idex_instr_q[20] ||
         ((idex_ctrl_q.fpu_aux == VFORM_VV) && idex_instr_q[15]))) ||
@@ -497,10 +512,39 @@ module muserisc_core import muserisc_pkg::*; (
       // Masked destination may not overlap the v0 mask register.
       (idex_ctrl_q.vec_rd && !idex_instr_q[25] &&
        (idex_rd_q < (5'd1 << vec_lmul_eff))));
+  // Unit-stride LS legality in EX: EMUL in [1/8, 8] and the
+  // register group aligned to EMUL; masked loads may not
+  // overwrite v0. EEW comes from funct3 like the MEM sequencer.
+  logic [2:0] ex_eew_code;
+  logic signed [3:0] ex_emul_log2;
+  logic ex_vls_bad;
+  assign ex_eew_code = (idex_ctrl_q.funct3 == 3'b000) ? 3'd0 :
+                       (idex_ctrl_q.funct3 == 3'b101) ? 3'd1 :
+                       (idex_ctrl_q.funct3 == 3'b110) ? 3'd2 : 3'd3;
+  always_comb begin
+    logic signed [3:0] lmul_log2;
+    unique case (csr_vtype[2:0])
+      3'd5: lmul_log2 = -4'sd3;
+      3'd6: lmul_log2 = -4'sd2;
+      3'd7: lmul_log2 = -4'sd1;
+      default: lmul_log2 = 4'(signed'({1'b0, csr_vtype[2:0]}));
+    endcase
+    ex_emul_log2 = 4'(signed'({1'b0, ex_eew_code})) -
+                   4'(signed'({1'b0, csr_vtype[5:3]})) + lmul_log2;
+  end
+  assign ex_vls_bad = (ex_emul_log2 > 4'sd3) ||
+      (ex_emul_log2 < -4'sd3) ||
+      ((ex_emul_log2 == 4'sd1) && idex_rd_q[0]) ||
+      ((ex_emul_log2 == 4'sd2) && |idex_rd_q[1:0]) ||
+      ((ex_emul_log2 == 4'sd3) && |idex_rd_q[2:0]) ||
+      (idex_ctrl_q.mem_read && !idex_instr_q[25] &&
+       (idex_rd_q < (5'd1 << ((ex_emul_log2 < 0) ? 3'd0
+                                                 : ex_emul_log2[2:0]))));
   assign vec_illegal = idex_ctrl_q.vec &&
       ((csr_vec_vs == 2'b00) ||
        (!idex_ctrl_q.vset && csr_vtype[63]) ||
-       (!idex_ctrl_q.vset && vec_align_bad));
+       (!idex_ctrl_q.vset && vec_align_bad) ||
+       ((idex_ctrl_q.mem_read || idex_ctrl_q.mem_write) && ex_vls_bad));
   assign vset_avl = (idex_ctrl_q.fpu_aux == 2'd1)
       ? {59'd0, idex_instr_q[19:15]} : ex_rs1;
   assign vset_vtype_raw = (idex_ctrl_q.fpu_aux == 2'd0)
@@ -508,9 +552,11 @@ module muserisc_core import muserisc_pkg::*; (
       (idex_ctrl_q.fpu_aux == 2'd1)
       ? {54'd0, idex_instr_q[29:20]} : ex_rs2;
   assign vset_en = idex_valid_q && idex_ctrl_q.vset && !idex_exc_q &&
-                   !vec_illegal && !trap_fire && !mem_exc && !mem_stall;
+                   !vec_illegal && !trap_fire && !mem_exc && !mem_stall &&
+                   !vec_wb_stall;
   assign vec_we = idex_valid_q && idex_ctrl_q.vec_rd && !idex_exc_q &&
-                  !vec_illegal && !trap_fire && !mem_exc && !mem_stall;
+                  !vec_illegal && !trap_fire && !mem_exc && !mem_stall &&
+                  !vec_wb_stall;
 
   muserisc_vregfile u_vregfile (
       .clk_i     (clk_i),
@@ -521,10 +567,10 @@ module muserisc_core import muserisc_pkg::*; (
       .raddr_c_i (idex_rd_q),
       .rdata_c_o (vec_old_vd),
       .v0_o      (vec_v0),
-      .we_i      (vec_we),
-      .waddr_i   (idex_rd_q),
-      .wlmul_i   (vec_lmul_eff),
-      .wdata_i   (vec_result)
+      .we_i      (vec_we || memwb_vec_we_q),
+      .waddr_i   (memwb_vec_we_q ? memwb_vec_rd_q : idex_rd_q),
+      .wlmul_i   (memwb_vec_we_q ? memwb_vec_lmul_q : vec_lmul_eff),
+      .wdata_i   (memwb_vec_we_q ? memwb_vec_data_q : vec_result)
   );
 
   muserisc_vec u_vec (
@@ -646,7 +692,9 @@ module muserisc_core import muserisc_pkg::*; (
 
   always_comb begin
     ex_misalign = 1'b0;
-    if (idex_ctrl_q.mem_read || idex_ctrl_q.mem_write) begin
+    // A vector LS with vl=0 accesses nothing and cannot fault.
+    if ((idex_ctrl_q.mem_read || idex_ctrl_q.mem_write) &&
+        !(idex_ctrl_q.vec && (csr_vl == 64'd0))) begin
       unique case (idex_ctrl_q.funct3[1:0])
         2'b01:   ex_misalign = alu_result[0];
         2'b10:   ex_misalign = |alu_result[1:0];
@@ -709,11 +757,151 @@ module muserisc_core import muserisc_pkg::*; (
   assign mmu_mxr = exmem_ctrl_q.hlv
       ? (csr_vs_mxr || csr_hs_mxr) : csr_mxr;
 
+  // ---- Vector load/store sequencer (stage 8b) ----
+  // Unit-stride accesses iterate one element per completed
+  // memory cycle through the existing MMU/PMP path. Masked-off
+  // elements are skipped without an access. On a fault the
+  // elements before it commit and vstart is set to the
+  // faulting index, per the resumable-trap model.
+  logic        vls_is, vls_has_cur, vls_more, vls_elem_done, vls_done;
+  logic        vls_started_q;
+  logic [63:0] vls_idx_q, vls_cur, vls_addr;
+  logic [4095:0] vls_data_q;
+  logic [2:0]  vls_eew_code;
+  assign vls_is = exmem_valid_q && !exmem_exc_q && exmem_ctrl_q.vec &&
+                  (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write);
+  assign vls_eew_code = (exmem_ctrl_q.funct3 == 3'b000) ? 3'd0 :
+                        (exmem_ctrl_q.funct3 == 3'b101) ? 3'd1 :
+                        (exmem_ctrl_q.funct3 == 3'b110) ? 3'd2 : 3'd3;
+  logic [63:0] vls_idx_eff;
+  assign vls_idx_eff = vls_started_q ? vls_idx_q : csr_vstart;
+  always_comb begin
+    vls_cur = csr_vl;
+    vls_has_cur = 1'b0;
+    vls_more = 1'b0;
+    for (int i = 0; i < 512; i++) begin
+      if ((64'(unsigned'(i)) >= vls_idx_eff) &&
+          (64'(unsigned'(i)) < csr_vl) &&
+          (exmem_vm_q || exmem_vec_mask_q[i])) begin
+        if (!vls_has_cur) begin
+          vls_cur = 64'(unsigned'(i));
+          vls_has_cur = 1'b1;
+        end else begin
+          vls_more = 1'b1;
+        end
+      end
+    end
+  end
+  assign vls_addr = exmem_addr_q + (vls_cur << vls_eew_code);
+  logic [63:0] mem_va;
+  assign mem_va = vls_is ? vls_addr : exmem_addr_q;
+  assign vls_elem_done = vls_is && vls_has_cur && mmu_d_ok &&
+                         pmp_allow_data && !(|mmu_d_pa[63:56]);
+  assign vls_done = vls_is &&
+                    (!vls_has_cur || (vls_elem_done && !vls_more));
+  // Captured load data including the element completing now.
+  logic [4095:0] vls_cap_base, vls_cap_next, vls_merged;
+  assign vls_cap_base = vls_started_q ? vls_data_q : exmem_vec_data_q;
+  always_comb begin
+    vls_cap_next = vls_cap_base;
+    if (vls_elem_done && exmem_ctrl_q.mem_read) begin
+      unique case (vls_eew_code)
+        3'd0: vls_cap_next[vls_cur[8:0]*8 +: 8] = load_shifted[7:0];
+        3'd1: vls_cap_next[vls_cur[7:0]*16 +: 16] = load_shifted[15:0];
+        3'd2: vls_cap_next[vls_cur[6:0]*32 +: 32] = load_shifted[31:0];
+        default: vls_cap_next[vls_cur[5:0]*64 +: 64] = load_shifted;
+      endcase
+    end
+  end
+  // Final (or partial-fault) destination merge at EEW.
+  always_comb begin
+    logic [63:0] cap_el;
+    vls_merged = exmem_vec_data_q;
+    for (int i = 0; i < 512; i++) begin
+      if ((64'(unsigned'(i)) >= csr_vstart) &&
+          (i < (512 >> vls_eew_code))) begin
+        cap_el = 64'd0;
+        unique case (vls_eew_code)
+          3'd0: cap_el = {56'd0, vls_cap_next[i*8 +: 8]};
+          3'd1: cap_el = {48'd0, vls_cap_next[i*16 +: 16]};
+          3'd2: cap_el = {32'd0, vls_cap_next[i*32 +: 32]};
+          default: cap_el = vls_cap_next[i*64 +: 64];
+        endcase
+        if ((64'(unsigned'(i)) < csr_vl) &&
+            (exmem_vm_q || exmem_vec_mask_q[i]) &&
+            // On a fault only elements before it have data.
+            (vls_done || (64'(unsigned'(i)) < vls_cur))) begin
+          unique case (vls_eew_code)
+            3'd0: vls_merged[i*8 +: 8] = cap_el[7:0];
+            3'd1: vls_merged[i*16 +: 16] = cap_el[15:0];
+            3'd2: vls_merged[i*32 +: 32] = cap_el[31:0];
+            default: vls_merged[i*64 +: 64] = cap_el;
+          endcase
+        end else if (vls_done && (64'(unsigned'(i)) >= csr_vl) &&
+                     csr_vtype[6]) begin
+          unique case (vls_eew_code)
+            3'd0: vls_merged[i*8 +: 8] = 8'hff;
+            3'd1: vls_merged[i*16 +: 16] = 16'hffff;
+            3'd2: vls_merged[i*32 +: 32] = 32'hffff_ffff;
+            default: vls_merged[i*64 +: 64] = 64'hffff_ffff_ffff_ffff;
+          endcase
+        end else if (vls_done && (64'(unsigned'(i)) < csr_vl) &&
+                     csr_vtype[7]) begin
+          unique case (vls_eew_code)
+            3'd0: vls_merged[i*8 +: 8] = 8'hff;
+            3'd1: vls_merged[i*16 +: 16] = 16'hffff;
+            3'd2: vls_merged[i*32 +: 32] = 32'hffff_ffff;
+            default: vls_merged[i*64 +: 64] = 64'hffff_ffff_ffff_ffff;
+          endcase
+        end
+      end
+    end
+  end
+  // EMUL for the destination group: (EEW/SEW)*LMUL as a
+  // register count code (fractional counts write one register).
+  logic signed [3:0] vls_emul_log2;
+  logic [2:0] vls_wlmul;
+  always_comb begin
+    logic signed [3:0] lmul_log2;
+    unique case (csr_vtype[2:0])
+      3'd5: lmul_log2 = -4'sd3;
+      3'd6: lmul_log2 = -4'sd2;
+      3'd7: lmul_log2 = -4'sd1;
+      default: lmul_log2 = 4'(signed'({1'b0, csr_vtype[2:0]}));
+    endcase
+    vls_emul_log2 = 4'(signed'({1'b0, vls_eew_code})) -
+                    4'(signed'({1'b0, csr_vtype[5:3]})) + lmul_log2;
+    vls_wlmul = (vls_emul_log2 < 0) ? 3'd0 : vls_emul_log2[2:0];
+  end
+  logic vls_fault;
+  assign vls_fault = vls_is && (mem_trans_fault || mem_pmp_fault);
+  assign vls_vrf_we = exmem_ctrl_q.mem_read && (vls_done || vls_fault);
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      vls_started_q <= 1'b0;
+      vls_idx_q <= 64'd0;
+      vls_data_q <= '0;
+    end else if (!vls_is || vls_done || vls_fault) begin
+      vls_started_q <= 1'b0;
+      if (vls_elem_done) vls_data_q <= vls_cap_next;
+    end else if (!vls_started_q) begin
+      vls_started_q <= 1'b1;
+      vls_idx_q <= vls_elem_done ? (vls_cur + 64'd1) : csr_vstart;
+      vls_data_q <= vls_cap_next;
+    end else if (vls_elem_done) begin
+      vls_idx_q <= vls_cur + 64'd1;
+      vls_data_q <= vls_cap_next;
+    end
+  end
+
   // A translation miss parks the access in MEM (pipeline hold);
   // a translation fault or a PMP denial on the PA excepts it.
   assign data_access = exmem_valid_q && !exmem_exc_q &&
-                       (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write);
-  assign mem_stall = data_access && !mmu_d_ok && !mmu_d_fault;
+                       (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write) &&
+                       (!vls_is || vls_has_cur);
+  assign mem_stall = (data_access && !mmu_d_ok && !mmu_d_fault) ||
+                     (vls_is && !vls_done && !vls_fault);
   assign mem_trans_fault = data_access && mmu_d_fault;
   // PMP denial, or a physical address outside the 56-bit map.
   assign mem_pmp_fault = data_access && mmu_d_ok &&
@@ -728,7 +916,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic        res_valid_q;
   logic [63:0] res_pa_q;
   logic        res_is_d_q;  // reserved access size: 1 = 8B, 0 = 4B
-  assign load_shifted = dmem_rdata_i >> {exmem_addr_q[2:0], 3'b000};
+  assign load_shifted = dmem_rdata_i >> {mem_va[2:0], 3'b000};
 
   // AMO read-modify-write, executed in MEM against the loaded
   // value (combinational memory: read and write are one cycle).
@@ -784,6 +972,18 @@ module muserisc_core import muserisc_pkg::*; (
     eff_store_data = exmem_ctrl_q.amo
         ? ((exmem_ctrl_q.funct3 == 3'b010) ? {32'd0, r32} : r64)
         : exmem_store_data_q;
+    if (vls_is) begin
+      // Vector store element at the sequencer index.
+      unique case (vls_eew_code)
+        3'd0: eff_store_data =
+            {56'd0, exmem_vec_data_q[vls_cur[8:0]*8 +: 8]};
+        3'd1: eff_store_data =
+            {48'd0, exmem_vec_data_q[vls_cur[7:0]*16 +: 16]};
+        3'd2: eff_store_data =
+            {32'd0, exmem_vec_data_q[vls_cur[6:0]*32 +: 32]};
+        default: eff_store_data = exmem_vec_data_q[vls_cur[5:0]*64 +: 64];
+      endcase
+    end
   end
   // "Reserve exactly enough to cover the access": an SC
   // succeeds iff its whole access lies within the LR's range.
@@ -802,15 +1002,15 @@ module muserisc_core import muserisc_pkg::*; (
                  (!exmem_ctrl_q.sc || sc_success)) begin
       unique case (exmem_ctrl_q.funct3[1:0])
         2'b00: begin
-          dmem_be_o = 8'h01 << exmem_addr_q[2:0];
+          dmem_be_o = 8'h01 << mem_va[2:0];
           dmem_wdata_o = {8{eff_store_data[7:0]}};
         end
         2'b01: begin
-          dmem_be_o = 8'h03 << {exmem_addr_q[2:1], 1'b0};
+          dmem_be_o = 8'h03 << {mem_va[2:1], 1'b0};
           dmem_wdata_o = {4{eff_store_data[15:0]}};
         end
         2'b10: begin
-          dmem_be_o = 8'h0F << {exmem_addr_q[2], 2'b00};
+          dmem_be_o = 8'h0F << {mem_va[2], 2'b00};
           dmem_wdata_o = {2{eff_store_data[31:0]}};
         end
         default: begin
@@ -884,13 +1084,13 @@ module muserisc_core import muserisc_pkg::*; (
              mmu_d_fault_page ? 64'd15 : 64'd7)
           : (mmu_d_fault_guest ? 64'd21 :
              mmu_d_fault_page ? 64'd13 : 64'd5);
-      mem_tval = exmem_addr_q;  // faulting VA
+      mem_tval = mem_va;  // faulting VA (element addr for VLS)
       mem_gpa = mmu_d_fault_gpa;
     end else if (mem_pmp_fault) begin
       mem_exc = 1'b1;
       mem_gva = exmem_ctrl_q.hlv;
       mem_cause = exmem_ctrl_q.mem_write ? 64'd7 : 64'd5;
-      mem_tval = exmem_addr_q;
+      mem_tval = mem_va;
       mem_gpa = 64'd0;
     end else begin
       mem_exc = 1'b0;
@@ -932,7 +1132,9 @@ module muserisc_core import muserisc_pkg::*; (
                       (idex_ctrl_q.fpu_aux != 2'd1) &&
                       (idex_rd_q != 5'd0) &&
                       (idex_rs1_addr_q == 5'd0)),
-      .vec_dirty_i   (vec_we),
+      .vec_dirty_i   (vec_we || memwb_vec_we_q),
+      .vstart_we_i   (vls_fault),
+      .vstart_wdata_i(vls_cur),
       .wdata_i       (csr_wdata),
       .sys_illegal_o (sys_illegal),
       .sys_op_i      (sys_op),
@@ -1008,7 +1210,7 @@ module muserisc_core import muserisc_pkg::*; (
       .if_fault_page_o  (mmu_if_fault_page),
       .if_fault_guest_o (mmu_if_fault_guest),
       .if_fault_gpa_o   (mmu_if_fault_gpa),
-      .d_va_i           (exmem_addr_q),
+      .d_va_i           (mem_va),
       .d_write_i        (exmem_ctrl_q.mem_write),
       .d_exec_i         (exmem_ctrl_q.hlvx),
       .d_priv_i         (eff_priv_mem),
@@ -1035,7 +1237,8 @@ module muserisc_core import muserisc_pkg::*; (
   // ------------------------------------------------------------
   always_comb begin
     if (flush)                             pc_d = redirect_pc;
-    else if (stall || freeze || fetch_stall || straddle_enter)
+    else if (stall || freeze || fetch_stall || straddle_enter ||
+             vec_wb_stall)
                                            pc_d = pc_q;
     else if (fetch_fault)                  pc_d = pc_q + 64'd4;
     else                                   pc_d = pc_q +
@@ -1079,6 +1282,8 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_result_q <= 64'd0;
       exmem_addr_q <= 64'd0;
       exmem_store_data_q <= 64'd0;
+      exmem_vec_data_q <= '0;
+      exmem_vec_mask_q <= '0;
       exmem_rd_q <= 5'd0;
       exmem_exc_q <= 1'b0;
       exmem_gva_q <= 1'b0;
@@ -1116,17 +1321,24 @@ module muserisc_core import muserisc_pkg::*; (
       memwb_reg_write_q <= exmem_ctrl_q.reg_write;
       memwb_fp_write_q <= exmem_ctrl_q.fp_rd;
       memwb_exc_q <= mem_exc;
+      memwb_vec_we_q <= vls_vrf_we;
+      memwb_vec_rd_q <= exmem_rd_q;
+      memwb_vec_lmul_q <= vls_wlmul;
+      memwb_vec_data_q <= vls_merged;
       memwb_gva_q <= mem_gva;
       memwb_cause_q <= mem_cause;
       memwb_tval_q <= mem_tval;
       memwb_gpa_q <= mem_gpa;
 
-      exmem_valid_q <= idex_valid_q;
+      exmem_valid_q <= idex_valid_q && !vec_wb_stall;
       exmem_pc_q <= idex_pc_q;
       exmem_ctrl_q <= idex_ctrl_q;
       exmem_result_q <= ex_result;
       exmem_addr_q <= alu_result;
       exmem_store_data_q <= idex_ctrl_q.fp_rs2 ? ex_frs2 : ex_rs2;
+      exmem_vec_data_q <= vec_old_vd;
+      exmem_vec_mask_q <= vec_v0;
+      exmem_vm_q <= idex_instr_q[25];
       exmem_rd_q <= idex_rd_q;
       exmem_exc_q <= ex_exc;
       exmem_gva_q <= ex_gva;
@@ -1134,7 +1346,10 @@ module muserisc_core import muserisc_pkg::*; (
       exmem_tval_q <= ex_tval;
       exmem_gpa_q <= ex_gpa;
 
-      if (stall || flush) begin
+      if (vec_wb_stall) begin
+        // Hold the EX vector op; it re-executes next cycle
+        // against the updated VRF.
+      end else if (stall || flush) begin
         idex_valid_q <= 1'b0;
       end else if (irq_inject) begin
         // The fetched instruction has not executed; epc will
@@ -1181,7 +1396,7 @@ module muserisc_core import muserisc_pkg::*; (
         ifid_valid_q <= 1'b0;
         ifid_exc_q <= 1'b0;
         straddle_q <= 1'b0;
-      end else if (!stall && !fetch_stall) begin
+      end else if (!stall && !fetch_stall && !vec_wb_stall) begin
         if (straddle_enter) begin
           // Hold the low parcel; complete it next cycle.
           ifid_valid_q <= 1'b0;
@@ -1200,7 +1415,7 @@ module muserisc_core import muserisc_pkg::*; (
           ifid_gpa_q <= mmu_if_fault_guest ? mmu_if_fault_gpa : 64'd0;
           straddle_q <= 1'b0;
         end
-      end else if (fetch_stall && !stall) begin
+      end else if (fetch_stall && !stall && !vec_wb_stall) begin
         // Walker is resolving this PC: bubble ID until it lands.
         ifid_valid_q <= 1'b0;
         ifid_exc_q <= 1'b0;

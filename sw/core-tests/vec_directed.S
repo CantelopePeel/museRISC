@@ -1,8 +1,9 @@
-// Vector stage 8a directed test (issue #23): vsetvl family
-// and VLMAX/vill semantics, mstatus.VS gating, vmv moves,
-// and the first integer ALU classes at several SEW/LMUL
-// settings, including a masked-off element. Vector memory
-// instructions are stage 8b and are not exercised here.
+// Vector directed test (issue #23, stages 8a/8b): vsetvl
+// family and VLMAX/vill semantics, mstatus.VS gating, vmv
+// moves, the first integer ALU classes, and unit-stride
+// vector loads/stores including EEW != SEW, masked loads,
+// and a mid-instruction PMP fault that commits the elements
+// before it and sets vstart to the faulting index.
 // Convention: t0 = test number, exit store 0 = pass.
     .option norvc
     .option arch, +v
@@ -146,6 +147,93 @@ _start:
     vmv.x.s a0, v2
     li a2, 6
     bne a0, a2, fail
+
+    // 9: unit-stride e64 load/store round trip, checked
+    // element-wise with scalar loads.
+    li t0, 9
+    li a1, 4
+    vsetvli a0, a1, e64, m1, ta, ma
+    la a1, vec_buf
+    vle64.v v2, (a1)
+    vmv.x.s a0, v2
+    li a2, 0x0102030405060708
+    bne a0, a2, fail
+    vadd.vi v2, v2, 1
+    la a1, vec_out
+    vse64.v v2, (a1)
+    la a1, vec_out
+    ld a0, 8(a1)
+    li a2, 0x1112131415161719
+    bne a0, a2, fail
+    ld a0, 24(a1)
+    li a2, 0x3132333435363739
+    bne a0, a2, fail
+
+    // 10: EEW < SEW load (e32 data under e64 vtype packs
+    // pairs of words into 64-bit elements).
+    li t0, 10
+    li a1, 4
+    vsetvli a0, a1, e64, m1, ta, ma
+    la a1, vec_buf
+    vle32.v v2, (a1)
+    vmv.x.s a0, v2                 // buf words 0,1 packed LE
+    li a2, 0x0102030405060708
+    bne a0, a2, fail
+
+    // 11: masked load (mask bits 0 and 2) preserves the
+    // masked-off elements of the old destination (mu).
+    li t0, 11
+    li a1, 4
+    vsetvli a0, a1, e64, m1, tu, mu
+    vmv.v.i v2, -2                 // old vd = all -2
+    li a1, 5                       // mask bits 0 and 2
+    vmv.v.x v0, a1
+    la a1, vec_buf
+    vle64.v v2, (a1), v0.t
+    la a1, vec_out
+    vse64.v v2, (a1)
+    la a1, vec_out
+    ld a0, 0(a1)
+    li a2, 0x0102030405060708
+    bne a0, a2, fail
+    ld a0, 8(a1)
+    li a2, -2
+    bne a0, a2, fail
+    ld a0, 16(a1)
+    li a2, 0x2122232425262728
+    bne a0, a2, fail
+
+    // 12: mid-instruction fault. PMP (locked, so last test):
+    // allow [0, buf+16), deny [buf+16, buf+64). The e64 load
+    // commits elements 0-1, faults at element 2, vstart=2.
+    li t0, 12
+    la a1, vec_buf
+    addi a2, a1, 16
+    srli a2, a2, 2
+    csrw pmpaddr0, a2
+    la a1, vec_buf
+    addi a2, a1, 64
+    srli a2, a2, 2
+    csrw pmpaddr1, a2
+    li a2, 0x888f                  // e0 TOR L RWX, e1 TOR L ---
+    csrw pmpcfg0, a2
+    li a1, 4
+    vsetvli a0, a1, e64, m1, ta, ma
+    vmv.v.i v2, 0
+    la a1, trap_cause
+    sd x0, 0(a1)
+    la a1, vec_buf
+    vle64.v v2, (a1)               // faults at element 2
+    la a1, trap_cause
+    ld a1, 0(a1)
+    li a2, 5
+    bne a1, a2, fail
+    csrr a1, vstart
+    li a2, 2
+    bne a1, a2, fail
+    vmv.x.s a0, v2                 // element 0 committed
+    li a2, 0x0102030405060708
+    bne a0, a2, fail
     j pass
 
 handler_m:
@@ -175,6 +263,12 @@ fail:
     .data
     .align 3
 trap_cause: .dword 0
+    .align 3
+vec_out:    .skip 512
+    .align 3
+vec_buf:    .dword 0x0102030405060708, 0x1112131415161718
+            .dword 0x2122232425262728, 0x3132333435363738
+            .skip 480
     .skip 512
 stack_top:
     .skip 512

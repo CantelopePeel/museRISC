@@ -80,6 +80,8 @@ module muserisc_csr (
     input  wire        vset_keep_vl_i, // rd==x0 && rs1==x0 form
     input  wire        vset_vlmax_i,  // rs1==x0 && rd!=x0 form
     input  wire        vec_dirty_i,   // a vector reg write commits
+    input  wire        vstart_we_i,   // faulting vector LS sets vstart
+    input  wire [63:0] vstart_wdata_i,
     // PMP checks (physical addresses, combinational)
     input  wire [63:0] pmp_addr_a_i,
     input  wire [1:0]  pmp_acc_a_i,   // 0 read 1 write 2 exec
@@ -345,7 +347,7 @@ module muserisc_csr (
       12'h680: csr_rdata = hgatp_q;                               // hgatp
       12'hE12: csr_rdata = 64'd0;                                 // hgeip
       12'h300: csr_rdata = mstatus_o;                             // mstatus
-      12'h301: csr_rdata = 64'h8000_0000_0014_11AF;               // misa: RV64 IMABC FDH SU
+      12'h301: csr_rdata = 64'h8000_0000_0034_11AF;               // misa: RV64 IMABC FDHV SU
       12'h302: csr_rdata = medeleg_q;                             // medeleg
       12'h303: csr_rdata = mideleg_q | 64'h444;  // VS ints always delegated                             // mideleg
       12'h304: csr_rdata = mie_q;                                 // mie
@@ -840,6 +842,7 @@ module muserisc_csr (
         mstatus_vs_q <= 2'b11;
         if (virt_q) vs_vs_q <= 2'b11;  // both VS fields go Dirty
       end
+      if (vstart_we_i) vstart_q <= vstart_wdata_i;
       // vsetvl* commit (EX). Setting vill zeroes vl and the
       // remaining vtype fields; vstart always clears.
       if (vset_en_i) begin
