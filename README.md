@@ -220,10 +220,10 @@ green and its log/report is committed under `docs/evidence/`.
    +0.039 ns, 95,431 µm², 20.16 mW; final metrics in
    `docs/evidence/b3-openroad-nangate45-2026-10-13.log` and the GDS
    published as the `b3-nangate45-2026-10-13` GitHub release.
-4. **Ara RVV integration ([#9](https://github.com/bubblebabyboi/museRISC/issues/9),
-   in progress).** Ara (VLEN 512, 2 lanes) on the CVA6
-   `cv64a6_imafdcv_sv39` target: toolchain bring-up, vector-kernel
-   smoke, then ACT vector suites against a new DUT config.
+4. **Ara RVV integration — superseded.** The exploratory CVA6+Ara
+   path is no longer the product direction; vector work now means
+   the in-house RVV unit in
+   [#23](https://github.com/bubblebabyboi/museRISC/issues/23).
 5. **In-house RV64GCV core ([#18](https://github.com/bubblebabyboi/museRISC/issues/18),
    stages 1–5 done, on `main`).** Clean-slate SystemVerilog
    core replacing CVA6+Ara: RV64 IMABC FD SU + Sv39/PMP
@@ -240,13 +240,28 @@ green and its log/report is committed under `docs/evidence/`.
    for single-level Linux;
    (c) **V vector unit** ([#23](https://github.com/bubblebabyboi/museRISC/issues/23)) —
    RVV 1.0 SIMD, unrelated to hypervisor/OS support.
-6. **B4 — SoC integration (deferred).** Put `muse_crypto` behind
-   the AXI crossbar at `0x2000_0000`, write the bare-metal driver,
-   and run an end-to-end Ed25519/secp256k1 verify on the simulated
-   core — after the core strategy above is settled.
-7. **Then:** hardware scalar-multiply sequencer (constant-time),
-   SHA-512/Keccak streaming into the accelerator top, full-SoC
-   OpenROAD closure, and only then a Caravel/MPW decision.
+6. **B4 — SoC integration (deferred,
+   [#4](https://github.com/bubblebabyboi/museRISC/issues/4)).**
+   Attach `muse_crypto` to the in-house core at `0x2000_0000`,
+   write the bare-metal driver, and run an end-to-end
+   Ed25519/secp256k1 verify on the simulated core — after the
+   core/software strategy above is settled.
+7. **Then:** crypto accelerator/security work under
+   [#25](https://github.com/bubblebabyboi/museRISC/issues/25),
+   full-SoC OpenROAD closure and a Caravel/MPW decision under
+   [#26](https://github.com/bubblebabyboi/museRISC/issues/26).
+
+### Roadmap epics
+
+All remaining open issues are grouped under four parent epics;
+each child is also linked as a native GitHub sub-issue.
+
+| Epic | Child issues, in dependency order | Current gate |
+|---|---|---|
+| [#18 Core + software platform](https://github.com/bubblebabyboi/museRISC/issues/18) | [#21 Linux](https://github.com/bubblebabyboi/museRISC/issues/21) → [#22 H](https://github.com/bubblebabyboi/museRISC/issues/22) → [#23 V](https://github.com/bubblebabyboi/museRISC/issues/23) | #21 active |
+| [#24 Verification + CI](https://github.com/bubblebabyboi/museRISC/issues/24) | [#20 ISA follow-ups](https://github.com/bubblebabyboi/museRISC/issues/20), [#8 riscv-dv/CI](https://github.com/bubblebabyboi/museRISC/issues/8), [#19 SV/cocotb port](https://github.com/bubblebabyboi/museRISC/issues/19) | Supports #18 |
+| [#25 Crypto + security](https://github.com/bubblebabyboi/museRISC/issues/25) | [#6 streaming](https://github.com/bubblebabyboi/museRISC/issues/6), [#5 scalar-mul](https://github.com/bubblebabyboi/museRISC/issues/5), [#12 security review](https://github.com/bubblebabyboi/museRISC/issues/12), [#10 benchmark](https://github.com/bubblebabyboi/museRISC/issues/10) | #12 gates key use |
+| [#26 SoC + physical + MPW](https://github.com/bubblebabyboi/museRISC/issues/26) | [#4 B4 integration](https://github.com/bubblebabyboi/museRISC/issues/4) → [#11 OpenROAD](https://github.com/bubblebabyboi/museRISC/issues/11) → [#13 MPW](https://github.com/bubblebabyboi/museRISC/issues/13) | Deferred/blocked |
 
 Full detail: [docs/ROADMAP.md](docs/ROADMAP.md) ·
 [docs/SPEC.md](docs/SPEC.md) · [docs/COMPLIANCE.md](docs/COMPLIANCE.md)
