@@ -433,9 +433,14 @@ module muserisc_core import muserisc_pkg::*; (
                        (idex_ctrl_q.funct3 == 3'b111) &&
                        (csr_frm > 3'd4));
   logic csr_fflags_we, fp_dirty_ex, fp_dirty_mem, fp_dirty;
+  // !mem_exc on every EX-committed side effect: an older
+  // instruction already carrying an exception in MEM must take
+  // its trap before this instruction writes architectural state
+  // (OpenSBI's mtvec restore right after a trapping CSR probe
+  // otherwise beats the in-flight trap to the vector).
   assign csr_fflags_we = idex_valid_q && idex_ctrl_q.fp_op &&
                          !idex_exc_q && !ex_illegal && !trap_fire &&
-                         !mem_stall;
+                         !mem_exc && !mem_stall;
   assign fp_dirty_ex = csr_fflags_we && idex_ctrl_q.fp_rd;
   assign fp_dirty_mem = exmem_valid_q && exmem_ctrl_q.fp_rd &&
                         exmem_ctrl_q.mem_read && !exmem_exc_q &&
@@ -471,7 +476,7 @@ module muserisc_core import muserisc_pkg::*; (
   // !mem_stall: a CSR write must not commit while an older
   // instruction is parked in MEM (it could still page-fault).
   assign csr_we = idex_valid_q && idex_ctrl_q.csr && !idex_exc_q &&
-                  !trap_fire && !mem_stall &&
+                  !trap_fire && !mem_exc && !mem_stall &&
                   ((idex_ctrl_q.funct3[1:0] == 2'b01) ||
                    (idex_rs1_addr_q != 5'd0));
   assign sfence_fire = idex_valid_q && idex_ctrl_q.sfence && !idex_exc_q &&
@@ -779,7 +784,7 @@ module muserisc_core import muserisc_pkg::*; (
       .wdata_i       (csr_wdata),
       .sys_illegal_o (sys_illegal),
       .sys_op_i      (sys_op),
-      .ret_en_i      (ex_ret && !trap_fire && !mem_stall),
+      .ret_en_i      (ex_ret && !trap_fire && !mem_exc && !mem_stall),
       .trap_take_i   (trap_take),
       .trap_cause_i  (memwb_cause_q),
       .trap_pc_i     (memwb_pc_q),

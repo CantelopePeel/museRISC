@@ -36,7 +36,7 @@ CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
 TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed rvc_directed pipeline_directed priv_directed \
             vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
-            trap_store_misalign trap_younger_store \
+            trap_store_misalign trap_younger_store trap_younger_csr \
             trap_pa_fetch trap_pa_load
 
 .PHONY: all alu muldiv decoder regfile csr mmu fpu bext rvc core sw coverage clean riscv-tests
@@ -146,6 +146,24 @@ $(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(CORE_RTL) | $(BUILD) $(OBJ)
 	  -o $(abspath $(BUILD)/core_tb) $(CORE_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/core_tb.cpp)
 
+## ---- SoC platform harness (Linux/OpenSBI boot, issue #21) --------------
+$(BUILD)/soc_tb: $(ROOT)/tb/cpp/soc_tb.cpp $(CORE_RTL) | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/soc --top-module muserisc_core \
+	  -o $(abspath $(BUILD)/soc_tb) $(CORE_RTL) \
+	  $(abspath $(ROOT)/tb/cpp/soc_tb.cpp)
+
+$(ROOT)/build/linux/boot_stub.bin: $(ROOT)/sw/linux/boot_stub.S
+	mkdir -p $(ROOT)/build/linux
+	$(RISCV_GCC) -march=rv64imac -mabi=lp64 -nostdlib -Wl,-Ttext=0x1000 $< -o $(ROOT)/build/linux/boot_stub.elf
+	$(RISCV_OBJCOPY) -O binary $(ROOT)/build/linux/boot_stub.elf $@
+
+$(ROOT)/build/linux/s_hello.bin: $(ROOT)/sw/linux/s_hello.S
+	mkdir -p $(ROOT)/build/linux
+	$(RISCV_GCC) -march=rv64imac -mabi=lp64 -nostdlib -Wl,-Ttext=0x80200000 $< -o $(ROOT)/build/linux/s_hello.elf
+	$(RISCV_OBJCOPY) -O binary $(ROOT)/build/linux/s_hello.elf $@
+
+soc: $(BUILD)/soc_tb $(ROOT)/build/linux/boot_stub.bin $(ROOT)/build/linux/s_hello.bin
+
 $(BUILD)/%.bin: $(ROOT)/sw/core-tests/%.S $(ROOT)/sw/core-tests/link.ld | $(BUILD)
 	$(RISCV_GCC) $(SWFLAGS) $< -o $(BUILD)/$*.elf
 	$(RISCV_OBJCOPY) -O binary $(BUILD)/$*.elf $@
@@ -166,6 +184,7 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_trap_ebreak.dat ./core_tb trap_ebreak.bin 100000 --expect-trap 3
 	cd $(BUILD) && COV_FILE=cov_trap_smisalign.dat ./core_tb trap_store_misalign.bin 100000 --expect-trap 6
 	cd $(BUILD) && COV_FILE=cov_trap_ystore.dat ./core_tb trap_younger_store.bin 100000 --expect-trap 4
+	cd $(BUILD) && COV_FILE=cov_trap_ycsr.dat ./core_tb trap_younger_csr.bin
 	cd $(BUILD) && COV_FILE=cov_trap_pa_fetch.dat ./core_tb trap_pa_fetch.bin 100000 --expect-trap 1
 	cd $(BUILD) && COV_FILE=cov_trap_pa_load.dat ./core_tb trap_pa_load.bin 100000 --expect-trap 5
 
@@ -187,6 +206,7 @@ COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
               $(BUILD)/cov_trap_illegal.dat $(BUILD)/cov_trap_misalign.dat \
               $(BUILD)/cov_trap_ecall.dat $(BUILD)/cov_trap_ebreak.dat \
               $(BUILD)/cov_trap_smisalign.dat $(BUILD)/cov_trap_ystore.dat \
+              $(BUILD)/cov_trap_ycsr.dat \
               $(BUILD)/cov_trap_pa_fetch.dat \
               $(BUILD)/cov_trap_pa_load.dat
 coverage:
