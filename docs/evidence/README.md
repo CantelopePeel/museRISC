@@ -742,3 +742,37 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
 - Caveat: translation exists but no upstream suite has
   judged it yet — riscv-tests (3c) and ACT + a Linux boot
   attempt (3d) are next. No compliance claim attaches yet.
+
+## In-house core stage 3c — riscv-tests gate (2026-10-13, #18)
+
+- Artifact: [`riscv-tests-core-2026-10-13.csv`](riscv-tests-core-2026-10-13.csv)
+  (per-test result and cycle count); reproduce with
+  `make riscv-tests` (runner:
+  [`sim/run_riscv_tests.sh`](../../sim/run_riscv_tests.sh)).
+- Result: **64/64 PASS** — every `rv64ui-p-*` (51) and
+  `rv64um-p-*` (13) test from the in-tree riscv-tests
+  sources, compiled with the upstream recipe and run on
+  the in-house core through the C++ harness's new ELF/HTIF
+  mode (PT_LOAD placement, `boot_pc_i` = ELF entry,
+  `tohost` exit). Cross-checks: three of the CVA6-built
+  ELFs pass with identical cycle counts, and a hand-made
+  HTIF failure probe is correctly reported as FAIL
+  (the harness cannot pass vacuously).
+- Core/harness changes: a `boot_pc_i` reset-PC input, and
+  paged memory + ELF64/HTIF support in `tb/cpp/core_tb.cpp`
+  (flat-binary directed mode unchanged). One toolchain
+  shim: this riscv-tests vintage writes `satp` via its
+  pre-1.10 alias `sptbr`, which modern binutils rejects;
+  the runner shadows `env/p/riscv_test.h` with a renamed
+  copy. No test logic is altered.
+- Coverage: every annotated `rtl/core/` source line executed
+  (1127/1127, one ELF run contributes to the merge);
+  `make core-test`, `make test`, and `make lint` also pass
+  at this commit.
+- Caveat: riscv-tests are a smoke-grade suite, not
+  architectural certification — ACT I/M (and a Linux boot
+  attempt) in stage 3d is the stricter judge. No
+  compliance claim attaches yet. Note this riscv-tests
+  vintage has no `ma_data`/misaligned or virtual-memory
+  (`-v-`) variants in the `rv64ui` directory; the `-p-`
+  set above is complete for that tree.

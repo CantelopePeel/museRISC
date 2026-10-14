@@ -28,7 +28,7 @@ take far longer — are stage gates, not per-commit checks.
 |---|---|---|---|
 | 1 | RV64I base integer, single-cycle, Harvard SRAM ports | unit TBs (ALU, decoder via directed asm), directed RV64I asm, coverage report | done |
 | 2 | M extension + 5-stage pipeline (hazards, forwarding) behind the stage-1 module boundaries | directed M asm (incl. div/rem edges), stage-1 directed suite still green on the pipelined core | done |
-| 3 | Privileged M/S/U, CSRs, traps/interrupts, Sv39+Svnapot MMU, PMP | riscv-tests `rv64ui/um` (needs CSR/trap state), ACT I/M + priv suites, Linux boot attempt | 3a+3b done (CSRs, traps/interrupts, PMP, MMU; upstream gates next) |
+| 3 | Privileged M/S/U, CSRs, traps/interrupts, Sv39+Svnapot MMU, PMP | riscv-tests `rv64ui/um` (needs CSR/trap state), ACT I/M + priv suites, Linux boot attempt | 3a–3c done (CSRs, traps, PMP, MMU, riscv-tests 64/64; ACT + Linux next) |
 | 4 | A, F/D (IEEE-754, all rounding modes), Zba/Zbb/Zbc/Zbs, Zcb, Zicond, Zkn | ACT suites per extension, TestFloat vectors (flow exists) |
 | 5 | C (Zca/Zcb/Zcd) — fetch realignment | ACT C suites, misaligned-fetch probes |
 | 6 | V (RVV 1.0), VLEN 512, lane-parallel unit | ACT vector with the `sw/act4-cva6v` flow retargeted |
@@ -73,7 +73,8 @@ both combinational-read (the TB SRAM responds in the same cycle):
 - `dmem_addr_o[63:0]`, `dmem_wdata_o[63:0]`, `dmem_be_o[7:0]`
   (byte enables, nonzero = write), `dmem_re_o`, `dmem_rdata_i[63:0]`
 
-Reset PC is `0x0000_0000`. Traps assert `trap_o` with
+Reset PC is the `boot_pc_i` input (`0x0000_0000` for the directed
+binaries, the ELF entry point in HTIF mode). Traps assert `trap_o` with
 `trap_cause_o` (RISC-V mcause encoding) and freeze the PC; full trap
 handling state arrives in stage 3. The core harness
 (`tb/cpp/core_tb.cpp`) maps RAM at 0 and treats a store to

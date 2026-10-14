@@ -30,6 +30,7 @@
 module muserisc_core import muserisc_pkg::*; (
     input  wire        clk_i,
     input  wire        rst_ni,
+    input  wire [63:0] boot_pc_i,     // reset PC (0 for directed TBs)
     // Instruction memory (combinational read)
     output wire [63:0] imem_addr_o,
     input  wire [31:0] imem_rdata_i,
@@ -567,7 +568,7 @@ module muserisc_core import muserisc_pkg::*; (
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      pc_q <= 64'd0;
+      pc_q <= boot_pc_i;
       ifid_valid_q <= 1'b0;
       idex_valid_q <= 1'b0;
       exmem_valid_q <= 1'b0;

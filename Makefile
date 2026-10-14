@@ -9,7 +9,7 @@ CORE_RTL := rtl/core/muserisc_pkg.sv rtl/core/muserisc_regfile.sv \
             rtl/core/muserisc_decoder.sv rtl/core/muserisc_csr.sv \
             rtl/core/muserisc_mmu.sv rtl/core/muserisc_core.sv
 
-.PHONY: test lint core-test openroad compliance clean
+.PHONY: test lint core-test riscv-tests openroad compliance clean
 test: ## Python golden self-check + iverilog KATs (needs python3, iverilog)
 	python3 sw/golden.py
 	python3 sw/ec_ops.py
@@ -36,6 +36,9 @@ lint: ## Verilator lint on all synthesizable RTL
 
 core-test: ## In-house core C++ Verilator TBs + directed asm + coverage (issue #18)
 	$(MAKE) -C sim
+
+riscv-tests: ## Stage gate: upstream riscv-tests rv64ui/um on the in-house core (#18)
+	$(MAKE) -C sim riscv-tests
 
 openroad: ## Dockerized OpenROAD-flow-scripts run on the crypto macro
 	./scripts/openroad_docker.sh

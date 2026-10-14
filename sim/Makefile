@@ -34,8 +34,12 @@ TESTS    := rv64i_directed rv64m_directed pipeline_directed priv_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
             trap_store_misalign trap_younger_store
 
-.PHONY: all alu muldiv decoder regfile csr mmu core sw coverage clean
+.PHONY: all alu muldiv decoder regfile csr mmu core sw coverage clean riscv-tests
 all: alu muldiv decoder regfile csr mmu core coverage
+
+## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
+riscv-tests: $(BUILD)/core_tb
+	bash $(ROOT)/sim/run_riscv_tests.sh
 
 $(BUILD) $(OBJ):
 	mkdir -p $@
@@ -121,7 +125,8 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 # Annotate from this directory: the .dat files record source paths
 # relative to sim/, where verilator was invoked. Inputs are listed
 # explicitly so a stale merged file can never feed back into a merge.
-COV_INPUTS := $(BUILD)/cov_alu.dat $(BUILD)/cov_muldiv.dat \
+COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
+              $(BUILD)/cov_alu.dat $(BUILD)/cov_muldiv.dat \
               $(BUILD)/cov_decoder.dat $(BUILD)/cov_regfile.dat \
               $(BUILD)/cov_csr.dat $(BUILD)/cov_mmu.dat \
               $(BUILD)/cov_rv64i.dat $(BUILD)/cov_rv64m.dat \
