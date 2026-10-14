@@ -17,6 +17,8 @@ extern "C" {
 }
 
 #include "verilated.h"
+#include "verilated_cov.h"
+#include <cstdlib>
 #include "Vmuserisc_fpu.h"
 
 static Vmuserisc_fpu* dut;
@@ -113,7 +115,8 @@ static uint64_t minmax_golden(bool d, int is_max, uint64_t av,
   bool nb = d ? is_nan64(bv) : is_nan32((uint32_t)bv);
   if (snan_bits(d, av) || snan_bits(d, bv))
     softfloat_exceptionFlags |= softfloat_flag_invalid;
-  if (na && nb) return to_reg(d, canon(d, 0x7FF8000000000000ULL & (d ? ~0ULL : 0xFFFFFFFFULL)) | (d ? 0 : 0));
+  if (na && nb)
+    return d ? 0x7FF8000000000000ULL : 0xFFFFFFFF7FC00000ULL;
   if (na) return to_reg(d, bv);
   if (nb) return to_reg(d, av);
   bool az = d ? ((av & 0x7FFFFFFFFFFFFFFFULL) == 0)
@@ -137,8 +140,10 @@ static uint64_t minmax_golden(bool d, int is_max, uint64_t av,
 }
 
 int main(int argc, char** argv) {
-  Verilated::commandArgs(argc, argv);
-  dut = new Vmuserisc_fpu;
+  VerilatedContext context;
+  context.commandArgs(argc, argv);
+  const char* cov_path = std::getenv("COV_FILE");
+  dut = new Vmuserisc_fpu{&context};
   softfloat_detectTininess = softfloat_tininess_afterRounding;
 
   std::mt19937_64 rng(0xF00D);
@@ -303,6 +308,129 @@ int main(int argc, char** argv) {
     }
   }
 
+  // Tininess-boundary regressions (from ACT D-fmadd.d-06):
+  // results just below 2^emin that round up to min-normal.
+  // UF depends on whether the jammed significand plus the
+  // rounding increment carries to 2^emin (Berkeley rule).
+  {
+    uint8_t fl;
+    auto fma_case = [&](uint64_t a, uint64_t b, uint64_t c,
+                        uint8_t rm, uint64_t want, uint8_t wf) {
+      uint64_t got = run(OP_FMA, 1, rm, a, b, c, 0, &fl);
+      cmp("tininess", got, want, fl, wf, a, b, c);
+    };
+    // largest subnormal + negligible -> min normal, UF|NX
+    fma_case(0x8010000000000000ULL, 0x91CF4D7110BEE879ULL,
+             0x000FFFFFFFFFFFFFULL, 3, 0x0010000000000000ULL, 3);
+    // min normal - negligible -> min normal, NX only
+    fma_case(0x0010000000000000ULL, 0x99A6BAAE71EB5A39ULL,
+             0x0010000000000000ULL, 3, 0x0010000000000000ULL, 1);
+    // and with RNE (stays min normal here), NX only
+    fma_case(0x0010000000000000ULL, 0x99A6BAAE71EB5A39ULL,
+             0x0010000000000000ULL, 0, 0x0010000000000000ULL, 1);
+  }
+
+  // Directed specials for branch coverage the random sweep
+  // hits too rarely: inf propagation in every op class,
+  // FMA inf-inf cancellation, min/max NaN and zero pairs,
+  // F2I of zero and of huge magnitudes, F2F inf.
+  {
+    uint8_t fl;
+    for (int d = 0; d <= 1; d++) {
+      set_rm(0);
+      uint64_t inf = d ? 0x7FF0000000000000ULL : 0x7F800000ULL;
+      uint64_t ninf = inf | (d ? (1ULL << 63) : (1ULL << 31));
+      uint64_t one = d ? 0x3FF0000000000000ULL : 0x3F800000ULL;
+      uint64_t qnan = d ? 0x7FF8000000000000ULL : 0x7FC00000ULL;
+      uint64_t big = d ? 0x7FEFFFFFFFFFFFFFULL : 0x7F7FFFFFULL;
+      auto R = [&](uint64_t v) { return to_reg(d, v); };
+      auto bin = [&](int op, uint64_t x, uint64_t y, uint64_t z,
+                     int aux, const char* nm) {
+        uint64_t got = run(op, d, 0, R(x), R(y), R(z), aux, &fl);
+        clear_flags();
+        float64_t fa{x}, fb{y}, fc{z};
+        float32_t f32a{(uint32_t)x}, f32b{(uint32_t)y},
+                  f32c{(uint32_t)z};
+        uint64_t want;
+        if (op >= OP_FMA) {
+          uint64_t na = (op == OP_FNMS || op == OP_FNMA)
+                        ? (x ^ (d ? (1ULL<<63) : (1ULL<<31))) : x;
+          uint64_t nc = (op == OP_FMS || op == OP_FNMA)
+                        ? (z ^ (d ? (1ULL<<63) : (1ULL<<31))) : z;
+          float64_t ga{na}, gc{nc};
+          float32_t g32a{(uint32_t)na}, g32c{(uint32_t)nc};
+          want = d ? canon(1, f64_mulAdd(ga, fb, gc).v)
+                   : to_reg(0, canon(0, f32_mulAdd(g32a, f32b, g32c).v));
+        } else if (op == OP_MINMAX) {
+          want = minmax_golden(d, aux, x, y);
+        } else if (op == OP_CMP) {
+          bool r = d ? (aux == 2 ? f64_eq(fa, fb) :
+                        aux == 1 ? f64_lt(fa, fb) : f64_le(fa, fb))
+                     : (aux == 2 ? f32_eq(f32a, f32b) :
+                        aux == 1 ? f32_lt(f32a, f32b) : f32_le(f32a, f32b));
+          want = r ? 1 : 0;
+        } else if (op == OP_F2I) {
+          if (d) want = aux == 0 ? (uint64_t)(int64_t)f64_to_i32(fa, 0, true)
+                      : aux == 1 ? (uint64_t)(int64_t)(int32_t)f64_to_ui32(fa, 0, true)
+                      : aux == 2 ? (uint64_t)f64_to_i64(fa, 0, true)
+                                 : f64_to_ui64(fa, 0, true);
+          else want = aux == 0 ? (uint64_t)(int64_t)f32_to_i32(f32a, 0, true)
+                      : aux == 1 ? (uint64_t)(int64_t)(int32_t)f32_to_ui32(f32a, 0, true)
+                      : aux == 2 ? (uint64_t)f32_to_i64(f32a, 0, true)
+                                 : f32_to_ui64(f32a, 0, true);
+        } else if (d) {
+          float64_t rd = op == OP_ADD ? f64_add(fa, fb) :
+                         op == OP_MUL ? f64_mul(fa, fb) :
+                                        f64_div(fa, fb);
+          want = canon(1, rd.v);
+        } else {
+          float32_t rs = op == OP_ADD ? f32_add(f32a, f32b) :
+                         op == OP_MUL ? f32_mul(f32a, f32b) :
+                                        f32_div(f32a, f32b);
+          want = to_reg(0, canon(0, rs.v));
+        }
+        cmp(nm, got, want, fl, read_flags(), x, y, z);
+      };
+      bin(OP_ADD, inf, one, 0, 0, "spc");       // inf + 1
+      bin(OP_ADD, inf, ninf, 0, 0, "spc");      // inf - inf
+      bin(OP_MUL, inf, one, 0, 0, "spc");       // inf * 1
+      bin(OP_MUL, inf, 0, 0, 0, "spc");         // inf * 0
+      bin(OP_DIV, one, inf, 0, 0, "spc");       // 1 / inf
+      bin(OP_FMA, inf, one, ninf, 0, "spc");    // inf*1 - inf
+      bin(OP_FMA, one, one, inf, 0, "spc");     // finite + inf
+      bin(OP_FMA, 0, 0, 0, 0, "spc");           // 0*0+0
+      bin(OP_FMA, inf, one, 0, 0, "spc");       // inf*1+0
+      bin(OP_MINMAX, qnan, qnan, 0, 0, "spc");
+      bin(OP_MINMAX, 0, d ? (1ULL<<63) : (1ULL<<31), 0, 0, "spc");
+      bin(OP_MINMAX, 0, d ? (1ULL<<63) : (1ULL<<31), 0, 1, "spc");
+      bin(OP_CMP, 0, d ? (1ULL<<63) : (1ULL<<31), 0, 2, "spc");
+      for (int aux = 0; aux <= 3; aux++) {
+        bin(OP_F2I, 0, 0, 0, aux, "spc");       // +0 -> int
+        bin(OP_F2I, big, 0, 0, aux, "spc");     // huge -> sat
+      }
+      // F2F of inf (source is the other format)
+      {
+        uint64_t src = d ? 0x7F800000ULL : 0x7FF0000000000000ULL;
+        uint64_t got = run(OP_F2F, d, 0, to_reg(!d, src), 0, 0, 0, &fl);
+        uint64_t want = d ? 0x7FF0000000000000ULL
+                          : 0xFFFFFFFF7F800000ULL;
+        cmp("spc-f2f", got, want, fl, 0, src, 0, 0);
+      }
+    }
+  }
+
+  // Exact FMA cancellation to zero: sign is +0 except RDN.
+  {
+    uint8_t fl;
+    uint64_t got;
+    got = run(OP_FMA, 1, 0, 0x3FF8000000000000ULL,
+              0x4000000000000000ULL, 0xC008000000000000ULL, 0, &fl);
+    cmp("fma-cancel", got, 0, fl, 0, 0, 0, 0);
+    got = run(OP_FMA, 1, 2, 0x3FF8000000000000ULL,
+              0x4000000000000000ULL, 0xC008000000000000ULL, 0, &fl);
+    cmp("fma-cancel", got, 0x8000000000000000ULL, fl, 0, 0, 0, 0);
+  }
+
   // SGNJ + CLASS directed
   for (int d = 0; d <= 1; d++) {
     uint8_t fl;
@@ -349,6 +477,7 @@ int main(int argc, char** argv) {
     std::printf("fails[%s] = %ld\n", kv.first.c_str(), kv.second);
   dut->final();
   delete dut;
+  if (cov_path != nullptr) context.coveragep()->write(cov_path);
   if (fails) { std::printf("FPU TB FAIL (%ld/%ld)\n", fails, checks);
     return 1; }
   std::printf("FPU TB PASS (%ld checks)\n", checks);

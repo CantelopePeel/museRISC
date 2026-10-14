@@ -114,8 +114,11 @@ module muserisc_fpu (
         s[pp-1] = 1'b1;
       end else begin
         // subnormal: exponent is emin, significand not yet
-        // normalized; normalize into the hidden bit.
+        // normalized; normalize into the hidden bit. True zero
+        // gets a below-range exponent so it always ranks as
+        // the smaller operand in magnitude comparisons.
         e = d ? -16'sd1022 : -16'sd126;
+        if (s == 0) e = -16'sd3000;
         if (s != 0) begin
           sh = 0;
           while (s[pp-1] == 1'b0 && sh < 60) begin
@@ -195,6 +198,31 @@ module muserisc_fpu (
         3'b100:  round_up = guard;                         // RMM
         default: round_up = 1'b0;
       endcase
+      // Tininess, Berkeley-style "after rounding" (matches
+      // Sail): only values headed subnormal can be tiny. With
+      // the significand kept to p+X bits (X=10 for D, 7 for
+      // S, jammed), the value is tiny iff its exponent is at
+      // least two binades down, or one binade down and adding
+      // the rounding increment does not carry it to 2^emin.
+      begin
+        logic [6:0] xb;
+        logic [63:0] sig_b, inc_b;
+        xb = fmt_d_i ? 7'd10 : 7'd7;
+        sig_b = 64'(rp_sig >> (8'd255 - (8'(p) + 8'(xb) - 8'd1)));
+        if (rp_sticky ||
+            ((rp_sig << (8'(p) + 8'(xb))) != 0))
+          sig_b[0] = 1'b1;
+        unique case (rm_i)
+          3'b000, 3'b100: inc_b = 64'b1 << (xb - 7'd1);
+          3'b010: inc_b = rp_sign ? ((64'b1 << xb) - 64'b1) : 64'b0;
+          3'b011: inc_b = rp_sign ? 64'b0 : ((64'b1 << xb) - 64'b1);
+          default: inc_b = 64'b0;
+        endcase
+        if (inexact && (e < emin) &&
+            ((e < emin - 16'sd1) ||
+             ((sig_b + inc_b) < (64'b1 << (p[5:0] + xb[5:0])))))
+          rp_flags[1] = 1'b1;                              // UF
+      end
       kept = kept + {63'b0, round_up};
       // rounding promoted into the next binade
       if (kept >= (64'b1 << p[5:0])) begin
@@ -205,9 +233,6 @@ module muserisc_fpu (
         e = emin;
       end
       if (inexact) rp_flags[0] = 1'b1;                     // NX
-      // underflow: inexact and the (rounded) result is tiny
-      if (inexact && (kept < (64'b1 << (p[5:0]-6'd1))))
-        rp_flags[1] = 1'b1;                                // UF
       if (e > emax) begin
         rp_flags[2] = 1'b1;                                // OF
         rp_flags[0] = 1'b1;                                // NX
@@ -651,8 +676,6 @@ module muserisc_fpu (
             f2i_sticky = ua.is_inf ? 1'b0 :
                       ((ua.exp == -16'sd1) ? (f2i_win[254:0] != 0)
                                            : (f2i_win != 0));
-          end else begin
-            f2i_ipart = {128{1'b1}}; f2i_guard = 0; f2i_sticky = 0;
           end
           f2i_inexact = f2i_guard | f2i_sticky;
           unique case (rm_i)

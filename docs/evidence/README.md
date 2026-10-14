@@ -862,6 +862,39 @@ with the B2.4 DUT config (`sw/act4-cva6/`).
   back-to-back LR→SC regression is test 8 of
   `amo_directed.S`.
 
+## In-house core stage 4b — F/D floating point (2026-10-13, #18)
+
+- New `rtl/core/muserisc_fpu.sv`: combinational IEEE-754
+  binary32/64 (add/sub/mul/div/sqrt/FMA×4, sign-inject,
+  min/max, compares, class, all conversions, FMV), one
+  shared round-and-pack stage, canonical-NaN results,
+  NaN-boxing on S ops. Verified by
+  [`tb/cpp/fpu_tb.cpp`](../../tb/cpp/fpu_tb.cpp) against
+  Berkeley SoftFloat 3: 690,071 checks (random sweep over
+  all ops × 5 rounding modes × both formats, plus directed
+  specials and tininess-boundary regressions).
+- Pipeline: separate 32×64 FP register file (3 read ports),
+  full EX forwarding for FP sources incl. FMA rs3, load-use
+  interlock for FLW/FLD, `mstatus.FS` with precise Dirty
+  tracking, `fflags` accumulation from EX, dynamic-`frm`
+  legality checked in EX, `misa` += F,D.
+- Gates: `fp_directed.S` + decoder/CSR/FPU unit TBs green;
+  [`riscv-tests-core-2026-10-13.csv`](riscv-tests-core-2026-10-13.csv)
+  now **122/122** (adds `rv64uf`+`rv64ud`, 23 tests);
+  [`act-core-impriv-2026-10-13.csv`](act-core-impriv-2026-10-13.csv)
+  now **414/415** (adds full ACT F and D suites; same
+  `tor_zero` waiver). Line coverage: everything except the
+  FPU at 100%; `muserisc_fpu.sv` 482/493 merged with ACT
+  runs (remainder: defensive default arms for op/rm codes
+  the decoder never emits).
+- Two real bugs found by ACT (both now regression-tested):
+  (1) unpacked ±0 carried exponent `emin`, out-ranking
+  tiny subnormals in add/FMA alignment and compares —
+  fixed with a below-range exponent for zero; (2) underflow
+  tininess must follow Berkeley's rule (jammed significand
+  + rounding increment vs 2^emin), not simply "rounded
+  result is subnormal".
+
 ### Linux/OpenSBI boot attempt — blocked on A (stage 4)
 
 - Log: [`core-stage3d-linux-attempt-2026-10-13.log`](core-stage3d-linux-attempt-2026-10-13.log).

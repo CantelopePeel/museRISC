@@ -24,7 +24,7 @@ description: museRISC in-house RV64IM core (5-stage, Sv39) in the C++ Verilator 
 implemented_extensions:
   # misa is a read mux constant (writes WARL-ignored):
   # rtl/core/muserisc_csr.sv "12'h301: csr_rdata =
-  # 64'h8000_0000_0014_1101"  (MXL=2, I, M, A, S, U).
+  # 64'h8000_0000_0014_1129"  (MXL=2, I, M, A, F, D, S, U).
   - { name: I, version: "= 2.1" }
   - { name: M, version: "= 2.0" }
   # A via MEM-stage RMW on the combinational memory port
@@ -33,6 +33,11 @@ implemented_extensions:
   - { name: Zaamo, version: "= 1.0.0" }
   - { name: Zalrsc, version: "= 1.0.0" }
   - { name: Zmmul, version: "= 1.0.0" }
+  # F/D via rtl/core/muserisc_fpu.sv (combinational IEEE-754,
+  # SoftFloat-checked in tb/cpp/fpu_tb.cpp); fcsr/frm/fflags
+  # in muserisc_csr.sv, mstatus.FS writable + dirty-tracked.
+  - { name: F, version: "= 2.2.0" }
+  - { name: D, version: "= 2.2.0" }
   - { name: Zicsr, version: "= 2.0" }
   - { name: Zifencei, version: "= 2.0.0" }
 
@@ -94,8 +99,13 @@ params:
   MUTABLE_MISA_M: false
   MUTABLE_MISA_U: false
   MUTABLE_MISA_S: false
-  # No vector or FP context: mstatus.VS/FS read zero, always Off.
-  MSTATUS_FS_LEGAL_VALUES: [0]
+  # FS fully writable, Dirty on FP-register writes (precise).
+  MSTATUS_FS_LEGAL_VALUES: [0, 1, 2, 3]
+  MUTABLE_MISA_F: false
+  MUTABLE_MISA_D: false
+  # Hardware sets FS to Dirty whenever an FP register is
+  # written (muserisc_core.sv fp_dirty).
+  HW_MSTATUS_FS_DIRTY_UPDATE: precise
   MSTATUS_VS_LEGAL_VALUES: [0]
   # The time CSR (0xC01) is readable (mirrors cycle).
   TIME_CSR_IMPLEMENTED: true
