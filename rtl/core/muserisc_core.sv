@@ -240,7 +240,8 @@ module muserisc_core import muserisc_pkg::*; (
                        (id_opcode == 7'b0100011) ||
                        (id_opcode == 7'b1100011) ||
                        (id_opcode == 7'b0101111) ||  // AMO/SC source
-                       (id_ctrl.hlv && id_ctrl.mem_write);  // HSV data
+                       (id_ctrl.hlv && id_ctrl.mem_write) ||  // HSV data
+                       (id_ctrl.vset && (id_ctrl.fpu_aux == 2'd2));  // vsetvl vtype
                        // (LR's rs2 field is x0; the rd!=0 guard covers it)
 
   // ID/EX register
@@ -458,6 +459,93 @@ module muserisc_core import muserisc_pkg::*; (
                         !mem_exc && !mem_stall;
   assign fp_dirty = fp_dirty_ex || fp_dirty_mem;
 
+  // Vector datapath (stage 8a): register groups are read in
+  // EX from the raw instruction fields, executed combinationally,
+  // and committed at the EX edge under the same !mem_exc /
+  // !mem_stall gating as CSR writes, keeping traps precise.
+  logic [1:0]    csr_vec_vs;
+  /* verilator lint_off UNUSEDSIGNAL */  // vtype[62:8] read zero
+  logic [63:0]   csr_vtype;
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic [63:0]   csr_vl, csr_vstart, csr_vset_vl;
+  logic [4095:0] vec_vs2, vec_vs1, vec_old_vd, vec_result;
+  logic [511:0]  vec_v0;
+  logic [63:0]   vec_scalar;
+  logic          vec_we, vec_illegal, vec_align_bad;
+  logic [2:0]    vec_lmul_eff;
+  logic [63:0]   vset_avl, vset_vtype_raw;
+  logic          vset_en;
+  // Effective LMUL for alignment/write width: fractional
+  // LMUL writes one register; LMUL 1/2/4/8 map to codes 0..3.
+  assign vec_lmul_eff = (csr_vtype[2:0] <= 3'd3) ? csr_vtype[2:0] : 3'd0;
+  // vmv.s.x / vmv.x.s touch one register (element 0), so
+  // group-alignment rules do not apply to them. The vs1
+  // field is a vector register only in VV form (it holds a
+  // scalar register or immediate otherwise).
+  assign vec_align_bad =
+      (idex_ctrl_q.bext_op != VOP_MVSX) &&
+      (idex_ctrl_q.bext_op != VOP_MVXS) &&
+      (((vec_lmul_eff == 3'd1) &&
+       (idex_rd_q[0] || idex_instr_q[20] ||
+        ((idex_ctrl_q.fpu_aux == VFORM_VV) && idex_instr_q[15]))) ||
+      ((vec_lmul_eff == 3'd2) &&
+       (|idex_rd_q[1:0] || |idex_instr_q[21:20] ||
+        ((idex_ctrl_q.fpu_aux == VFORM_VV) && |idex_instr_q[16:15]))) ||
+      ((vec_lmul_eff == 3'd3) &&
+       (|idex_rd_q[2:0] || |idex_instr_q[22:20] ||
+        ((idex_ctrl_q.fpu_aux == VFORM_VV) && |idex_instr_q[17:15]))) ||
+      // Masked destination may not overlap the v0 mask register.
+      (idex_ctrl_q.vec_rd && !idex_instr_q[25] &&
+       (idex_rd_q < (5'd1 << vec_lmul_eff))));
+  assign vec_illegal = idex_ctrl_q.vec &&
+      ((csr_vec_vs == 2'b00) ||
+       (!idex_ctrl_q.vset && csr_vtype[63]) ||
+       (!idex_ctrl_q.vset && vec_align_bad));
+  assign vset_avl = (idex_ctrl_q.fpu_aux == 2'd1)
+      ? {59'd0, idex_instr_q[19:15]} : ex_rs1;
+  assign vset_vtype_raw = (idex_ctrl_q.fpu_aux == 2'd0)
+      ? {53'd0, idex_instr_q[30:20]} :
+      (idex_ctrl_q.fpu_aux == 2'd1)
+      ? {54'd0, idex_instr_q[29:20]} : ex_rs2;
+  assign vset_en = idex_valid_q && idex_ctrl_q.vset && !idex_exc_q &&
+                   !vec_illegal && !trap_fire && !mem_exc && !mem_stall;
+  assign vec_we = idex_valid_q && idex_ctrl_q.vec_rd && !idex_exc_q &&
+                  !vec_illegal && !trap_fire && !mem_exc && !mem_stall;
+
+  muserisc_vregfile u_vregfile (
+      .clk_i     (clk_i),
+      .raddr_a_i (idex_instr_q[24:20]),
+      .rdata_a_o (vec_vs2),
+      .raddr_b_i (idex_instr_q[19:15]),
+      .rdata_b_o (vec_vs1),
+      .raddr_c_i (idex_rd_q),
+      .rdata_c_o (vec_old_vd),
+      .v0_o      (vec_v0),
+      .we_i      (vec_we),
+      .waddr_i   (idex_rd_q),
+      .wlmul_i   (vec_lmul_eff),
+      .wdata_i   (vec_result)
+  );
+
+  muserisc_vec u_vec (
+      .op_i      (idex_ctrl_q.bext_op),
+      .form_i    (idex_ctrl_q.fpu_aux),
+      .sew_i     (csr_vtype[5:3]),
+      .vl_i      (csr_vl),
+      .vstart_i  (csr_vstart),
+      .vta_i     (csr_vtype[6]),
+      .vma_i     (csr_vtype[7]),
+      .vm_i      (idex_instr_q[25]),
+      .mask_i    (vec_v0),
+      .vs2_i     (vec_vs2),
+      .vs1_i     (vec_vs1),
+      .old_vd_i  (vec_old_vd),
+      .scalar_i  (ex_rs1),
+      .imm_i     (idex_imm_q),
+      .result_o  (vec_result),
+      .scalar_o  (vec_scalar)
+  );
+
   logic [63:0] bext_result;
   muserisc_bext u_bext (
       .op_i      (idex_ctrl_q.bext_op),
@@ -510,10 +598,12 @@ module muserisc_core import muserisc_pkg::*; (
                       ((idex_ctrl_q.mret || idex_ctrl_q.sret ||
                         idex_ctrl_q.wfi || idex_ctrl_q.sfence ||
                         idex_ctrl_q.hfence || idex_ctrl_q.hlv) && sys_illegal)) ||
-                      fp_illegal;
+                      fp_illegal || vec_illegal;
 
   always_comb begin
     if (idex_ctrl_q.jal || idex_ctrl_q.jalr) ex_result = idex_pc_q + (idex_rvc_q ? 64'd2 : 64'd4);
+    else if (idex_ctrl_q.vset)               ex_result = csr_vset_vl;
+    else if (idex_ctrl_q.vec)                ex_result = vec_scalar;
     else if (idex_ctrl_q.csr)                ex_result = csr_rdata;
     else if (idex_ctrl_q.muldiv)             ex_result = muldiv_result;
     else if (idex_ctrl_q.fp_op)              ex_result = fpu_result;
@@ -826,6 +916,23 @@ module muserisc_core import muserisc_pkg::*; (
       .fflags_we_i   (csr_fflags_we),
       .fflags_i      (fpu_flags),
       .fp_dirty_i    (fp_dirty),
+      .vec_vs_o      (csr_vec_vs),
+      .vtype_o       (csr_vtype),
+      .vl_o          (csr_vl),
+      .vstart_o      (csr_vstart),
+      .vset_vl_o     (csr_vset_vl),
+      .vset_en_i     (vset_en),
+      .vset_avl_i    (vset_avl),
+      .vset_vtype_i  (vset_vtype_raw),
+      .vset_keep_vl_i(idex_ctrl_q.vset &&
+                      (idex_ctrl_q.fpu_aux != 2'd1) &&
+                      (idex_rd_q == 5'd0) &&
+                      (idex_rs1_addr_q == 5'd0)),
+      .vset_vlmax_i  (idex_ctrl_q.vset &&
+                      (idex_ctrl_q.fpu_aux != 2'd1) &&
+                      (idex_rd_q != 5'd0) &&
+                      (idex_rs1_addr_q == 5'd0)),
+      .vec_dirty_i   (vec_we),
       .wdata_i       (csr_wdata),
       .sys_illegal_o (sys_illegal),
       .sys_op_i      (sys_op),

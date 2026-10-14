@@ -22,6 +22,7 @@ struct Ctrl {
   bool csr = false, csr_imm = false, mret = false, sret = false;
   bool wfi = false, sfence = false;
   bool hlv = false, hlvx = false, hfence = false, hfence_gvma = false;
+  bool vec = false, vec_rd = false, vset = false;
   int funct3 = 0;
   bool amo = false, lr = false, sc = false;
   int amo_op = 0;
@@ -334,6 +335,54 @@ Ctrl Golden(uint32_t insn) {
     case 0x0f:  // FENCE / FENCE.I
       c.valid = true;
       break;
+    case 0x57: {  // OP-V (stage 8a subset)
+      c.imm = static_cast<uint64_t>(
+          static_cast<int64_t>(static_cast<int32_t>(insn << 12) >> 27));
+      const uint32_t f6 = insn >> 26;
+      if (f3 == 7) {
+        if ((insn >> 31) == 0) {
+          c.valid = c.vec = c.vset = c.reg_write = true;
+          c.fpu_aux = 0;
+        } else if (((insn >> 30) & 3) == 3) {
+          c.valid = c.vec = c.vset = c.reg_write = true;
+          c.fpu_aux = 1;
+        } else if (((insn >> 25) & 0x7f) == 0x40) {
+          c.valid = c.vec = c.vset = c.reg_write = true;
+          c.fpu_aux = 2;
+        }
+      } else if (f3 == 0 || f3 == 4 || f3 == 3) {
+        const int form = f3 == 0 ? 0 : f3 == 4 ? 1 : 2;
+        int vop = -1;
+        switch (f6) {
+          case 0x00: vop = 0; break;
+          case 0x02: vop = 1; break;
+          case 0x03: vop = 2; break;
+          case 0x09: vop = 3; break;
+          case 0x0a: vop = 4; break;
+          case 0x0b: vop = 5; break;
+          case 0x25: vop = 6; break;
+          case 0x28: vop = 7; break;
+          case 0x29: vop = 8; break;
+          case 0x17: vop = 9; break;
+          default: break;
+        }
+        if (vop >= 0 && !(vop == 2 && form == 0) &&
+            !(vop == 9 && ((insn >> 20) & 31) != 0)) {
+          c.valid = c.vec = c.vec_rd = true;
+          c.bext_op = vop;
+          c.fpu_aux = form;
+        }
+      } else if (f3 == 6 && f6 == 0x10 && ((insn >> 20) & 31) == 0) {
+        c.valid = c.vec = c.vec_rd = true;
+        c.bext_op = 10;
+        c.fpu_aux = 1;
+      } else if (f3 == 2 && f6 == 0x10 && ((insn >> 15) & 31) == 0) {
+        c.valid = c.vec = c.reg_write = true;
+        c.bext_op = 11;
+        c.fpu_aux = 0;
+      }
+      break;
+    }
     case 0x73:  // SYSTEM
       if (f3 == 0) {
         const uint32_t imm12 = insn >> 20;
@@ -410,7 +459,8 @@ int main(int argc, char** argv) {
               kAmo = 30, kLr = 31, kSc = 32, kAmoOp = 33,
               kFp = 38, kFpRs2 = 39, kFpRs1 = 40, kFpRd = 41,
               kFpRm = 42, kFpOp = 43, kFmtD = 44, kFpuAux = 45,
-              kFpuOp = 47, kBext = 52, kBextOp = 53;
+              kFpuOp = 47, kBext = 52, kBextOp = 53,
+              kVset = 59, kVecRd = 60, kVec = 61;
     const Field fields[] = {
         {"valid", bit(kValid), g.valid},
         {"reg_write", bit(kRegWrite), g.reg_write && g.valid},
@@ -441,6 +491,9 @@ int main(int argc, char** argv) {
         {"fp_op", bit(kFpOp), g.fp_op && g.valid},
         {"fmt_d", bit(kFmtD), g.fmt_d && g.valid},
         {"bext", bit(kBext), g.bext && g.valid},
+        {"vec", bit(kVec), g.vec && g.valid},
+        {"vec_rd", bit(kVecRd), g.vec_rd && g.valid},
+        {"vset", bit(kVset), g.vset && g.valid},
         {"ecall", bit(kEcall), g.ecall && g.valid},
         {"ebreak", bit(kEbreak), g.ebreak && g.valid},
     };
@@ -535,6 +588,18 @@ int main(int argc, char** argv) {
   if (!run_one(0x6ea5c073u)) return 1;  // HSV.D
   if (!run_one(0x22c58073u)) return 1;  // HFENCE.VVMA
   if (!run_one(0x62c58073u)) return 1;  // HFENCE.GVMA
+  // Vector encodings (assembler-generated).
+  if (!run_one(0x0db5f557u)) return 1;  // VSETVLI
+  if (!run_one(0xc113f557u)) return 1;  // VSETIVLI
+  if (!run_one(0x80c5f557u)) return 1;  // VSETVL
+  if (!run_one(0x02430157u)) return 1;  // VADD.VV
+  if (!run_one(0x0245c157u)) return 1;  // VADD.VX
+  if (!run_one(0x0241b157u)) return 1;  // VADD.VI
+  if (!run_one(0x0e45c157u)) return 1;  // VRSUB.VX
+  if (!run_one(0x5e05c157u)) return 1;  // VMV.V.X
+  if (!run_one(0x5e020157u)) return 1;  // VMV.V.V
+  if (!run_one(0x4205e157u)) return 1;  // VMV.S.X
+  if (!run_one(0x42202557u)) return 1;  // VMV.X.S
   if (!run_one(0x300010f3u)) return 1;  // CSRRW x2, mstatus, x0-ish fields
   // A extension: LR.W x13,(x9) / SC.W x13,x17,(x9) / AMOADD.D /
   // AMOMAXU.W with aq+rl / illegal funct5 / LR with rs2 != x0.

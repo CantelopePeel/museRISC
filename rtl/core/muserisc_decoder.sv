@@ -571,6 +571,68 @@ module muserisc_decoder import muserisc_pkg::*; (
           end
         end
       end
+      7'b1010111: begin  // OP-V (stage 8a subset)
+        // funct6 = instr[31:26], vm = instr[25]. Vector op is
+        // carried in bext_op (VOP_*), operand form in fpu_aux.
+        imm_o = {{59{instr_i[19]}}, instr_i[19:15]};  // imm5
+        if (funct3 == 3'b111) begin
+          // vsetvli (bit31=0), vsetivli (31:30=11), vsetvl
+          // (31:25=1000000). Form in fpu_aux: 0/1/2.
+          if (!instr_i[31] || (instr_i[31:30] == 2'b11) ||
+              (instr_i[31:25] == 7'b1000000)) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.vec = 1'b1;
+            ctrl_o.vset = 1'b1;
+            ctrl_o.reg_write = 1'b1;
+            ctrl_o.fpu_aux = !instr_i[31] ? 2'd0 :
+                             (instr_i[30] ? 2'd1 : 2'd2);
+          end
+        end else if ((funct3 == 3'b000) || (funct3 == 3'b100) ||
+                     (funct3 == 3'b011)) begin
+          ctrl_o.fpu_aux = (funct3 == 3'b000) ? VFORM_VV :
+                           (funct3 == 3'b100) ? VFORM_VX : VFORM_VI;
+          unique case (instr_i[31:26])
+            6'b000000: ctrl_o.bext_op = VOP_ADD;
+            6'b000010: ctrl_o.bext_op = VOP_SUB;
+            6'b000011: ctrl_o.bext_op = VOP_RSUB;
+            6'b001001: ctrl_o.bext_op = VOP_AND;
+            6'b001010: ctrl_o.bext_op = VOP_OR;
+            6'b001011: ctrl_o.bext_op = VOP_XOR;
+            6'b100101: ctrl_o.bext_op = VOP_SLL;
+            6'b101000: ctrl_o.bext_op = VOP_SRL;
+            6'b101001: ctrl_o.bext_op = VOP_SRA;
+            6'b010111: ctrl_o.bext_op = VOP_MV;
+            default:   ctrl_o.bext_op = 6'd63;
+          endcase
+          // vrsub has no VV form; vmv needs instr[24:20]==0
+          // unless it is the vs2 operand of an ALU op.
+          if ((ctrl_o.bext_op != 6'd63) &&
+              !((ctrl_o.bext_op == VOP_RSUB) &&
+                (ctrl_o.fpu_aux == VFORM_VV)) &&
+              !((ctrl_o.bext_op == VOP_MV) &&
+                (instr_i[24:20] != 5'd0))) begin
+            ctrl_o.valid = 1'b1;
+            ctrl_o.vec = 1'b1;
+            ctrl_o.vec_rd = 1'b1;
+          end
+        end else if ((funct3 == 3'b110) &&
+                     (instr_i[31:26] == 6'b010000) &&
+                     (instr_i[24:20] == 5'd0)) begin
+          ctrl_o.valid = 1'b1;             // vmv.s.x
+          ctrl_o.vec = 1'b1;
+          ctrl_o.vec_rd = 1'b1;
+          ctrl_o.bext_op = VOP_MVSX;
+          ctrl_o.fpu_aux = VFORM_VX;
+        end else if ((funct3 == 3'b010) &&
+                     (instr_i[31:26] == 6'b010000) &&
+                     (instr_i[19:15] == 5'd0)) begin
+          ctrl_o.valid = 1'b1;             // vmv.x.s
+          ctrl_o.vec = 1'b1;
+          ctrl_o.reg_write = 1'b1;
+          ctrl_o.bext_op = VOP_MVXS;
+          ctrl_o.fpu_aux = VFORM_VV;
+        end
+      end
       7'b1110011: begin  // SYSTEM
         if (funct3 == 3'b000) begin
           if (instr_i[31:20] == 12'd0) begin

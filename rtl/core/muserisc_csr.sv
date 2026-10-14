@@ -68,6 +68,18 @@ module muserisc_csr (
     input  wire        fflags_we_i,   // OR flags from the FPU
     input  wire [4:0]  fflags_i,
     input  wire        fp_dirty_i,    // an FP reg write commits
+    // Vector state (stage 8)
+    output logic [1:0] vec_vs_o,      // effective mstatus.VS
+    output logic [63:0] vtype_o,
+    output logic [63:0] vl_o,
+    output logic [63:0] vstart_o,
+    output logic [63:0] vset_vl_o,    // vl result of a vset in EX
+    input  wire        vset_en_i,     // a vset instruction commits
+    input  wire [63:0] vset_avl_i,
+    input  wire [63:0] vset_vtype_i,  // raw requested vtype value
+    input  wire        vset_keep_vl_i, // rd==x0 && rs1==x0 form
+    input  wire        vset_vlmax_i,  // rs1==x0 && rd!=x0 form
+    input  wire        vec_dirty_i,   // a vector reg write commits
     // PMP checks (physical addresses, combinational)
     input  wire [63:0] pmp_addr_a_i,
     input  wire [1:0]  pmp_acc_a_i,   // 0 read 1 write 2 exec
@@ -97,7 +109,13 @@ module muserisc_csr (
   logic [63:0] medeleg_q, mideleg_q, mie_q, mtvec_q, mcounteren_q;
   logic [4:0]  fflags_q;
   logic [2:0]  frm_q;
-  logic [1:0]  mstatus_fs_q;
+  logic [1:0]  mstatus_fs_q, mstatus_vs_q;
+  // Vector architectural state (single set, not HS/VS banked).
+  logic        vtype_vill_q, vtype_vma_q, vtype_vta_q;
+  logic [2:0]  vtype_vsew_q, vtype_vlmul_q;
+  logic [63:0] vl_q, vstart_q;
+  logic        vxsat_q;
+  logic [1:0]  vxrm_q;
   logic [63:0] mscratch_q, mepc_q, mcause_q, mtval_q;
   logic        mip_ssip_q, mip_seip_q, mip_stip_q;
   logic [63:0] menvcfg_q, mcountinhibit_q;
@@ -114,7 +132,7 @@ module muserisc_csr (
   logic [63:0] hcounteren_q, henvcfg_q, htval_q, htinst_q, hgatp_q;
   logic [63:0] mtval2_q, mtinst_q;
   logic        vs_sie_q, vs_spie_q, vs_spp_q, vs_sum_q, vs_mxr_q;
-  logic [1:0]  vs_fs_q;
+  logic [1:0]  vs_fs_q, vs_vs_q;
   logic [63:0] vstvec_q, vsscratch_q, vsepc_q, vscause_q;
   logic [63:0] vstval_q, vsatp_q;
   logic [7:0]  pmpcfg_q [0:15];
@@ -153,11 +171,12 @@ module muserisc_csr (
     vsstatus_val[1] = vs_sie_q;
     vsstatus_val[5] = vs_spie_q;
     vsstatus_val[8] = vs_spp_q;
+    vsstatus_val[10:9] = vs_vs_q;
     vsstatus_val[14:13] = vs_fs_q;
     vsstatus_val[18] = vs_sum_q;
     vsstatus_val[19] = vs_mxr_q;
     vsstatus_val[33:32] = 2'd2;  // UXL = 64
-    vsstatus_val[63] = (vs_fs_q == 2'b11);
+    vsstatus_val[63] = (vs_fs_q == 2'b11) || (vs_vs_q == 2'b11);
   end
 
   // mstatus assembly (unlisted fields read zero).
@@ -177,15 +196,17 @@ module muserisc_csr (
     mstatus_o[22]    = mstatus_tsr_q;
     mstatus_o[38]    = mstatus_gva_q;
     mstatus_o[39]    = mstatus_mpv_q;
+    mstatus_o[10:9]  = mstatus_vs_q;
     mstatus_o[14:13] = mstatus_fs_q;
-    mstatus_o[63]    = (mstatus_fs_q == 2'b11);  // SD (XS = 0)
+    mstatus_o[63]    = (mstatus_fs_q == 2'b11) ||
+                       (mstatus_vs_q == 2'b11);  // SD
     mstatus_o[35:34] = 2'b10;  // SXL = 64-bit
     mstatus_o[33:32] = 2'b10;  // UXL = 64-bit
   end
 
   localparam logic [63:0] SSTATUS_MASK =
       (64'd1 << 1) | (64'd1 << 5) | (64'd1 << 8) |
-      (64'd3 << 13) | (64'd1 << 18) | (64'd1 << 19) |
+      (64'd3 << 9) | (64'd3 << 13) | (64'd1 << 18) | (64'd1 << 19) |
       (64'd3 << 32) | (64'd1 << 63);
 
   assign frm_o = frm_q;
@@ -193,6 +214,44 @@ module muserisc_csr (
   assign fs_o = virt_q ? ((mstatus_fs_q == 2'd0 || vs_fs_q == 2'd0)
                               ? 2'd0 : vs_fs_q)
                        : mstatus_fs_q;
+  assign vec_vs_o = virt_q ? ((mstatus_vs_q == 2'd0 || vs_vs_q == 2'd0)
+                                  ? 2'd0 : vs_vs_q)
+                           : mstatus_vs_q;
+  assign vtype_o = {vtype_vill_q, 55'd0, vtype_vma_q, vtype_vta_q,
+                    vtype_vsew_q, vtype_vlmul_q};
+  assign vl_o = vl_q;
+  assign vstart_o = vstart_q;
+
+  // vsetvl* next-state computation (combinational; committed
+  // in EX like other CSR writes). VLEN=512, ELEN=64.
+  logic        vset_vill;
+  logic [63:0] vset_vlmax;
+  always_comb begin
+    logic [63:0] sew_bits;
+    sew_bits = 64'd8 << vset_vtype_i[5:3];
+    unique case (vset_vtype_i[2:0])
+      3'd0: vset_vlmax = 64'd512 / sew_bits;
+      3'd1: vset_vlmax = 64'd1024 / sew_bits;
+      3'd2: vset_vlmax = 64'd2048 / sew_bits;
+      3'd3: vset_vlmax = 64'd4096 / sew_bits;
+      3'd5: vset_vlmax = 64'd64 / sew_bits;
+      3'd6: vset_vlmax = 64'd128 / sew_bits;
+      3'd7: vset_vlmax = 64'd256 / sew_bits;
+      default: vset_vlmax = 64'd0;
+    endcase
+    vset_vill = (vset_vtype_i[5:3] > 3'd3) ||
+                (vset_vtype_i[2:0] == 3'd4) ||
+                (vset_vtype_i[63:8] != 56'd0) || (vset_vlmax == 64'd0);
+    if (vset_vill) begin
+      vset_vl_o = 64'd0;
+    end else if (vset_keep_vl_i) begin
+      vset_vl_o = (vl_q < vset_vlmax) ? vl_q : vset_vlmax;
+    end else if (vset_vlmax_i) begin
+      vset_vl_o = vset_vlmax;
+    end else begin
+      vset_vl_o = (vset_avl_i < vset_vlmax) ? vset_avl_i : vset_vlmax;
+    end
+  end
 
   // mip assembly: pin-driven fields plus software SSIP/SEIP.
   logic [63:0] mip_val;
@@ -244,6 +303,10 @@ module muserisc_csr (
       12'h001: csr_rdata = {59'd0, fflags_q};                     // fflags
       12'h002: csr_rdata = {61'd0, frm_q};                        // frm
       12'h003: csr_rdata = {56'd0, frm_q, fflags_q};              // fcsr
+      12'h008: csr_rdata = vstart_q;                              // vstart
+      12'h009: csr_rdata = {63'd0, vxsat_q};                      // vxsat
+      12'h00A: csr_rdata = {62'd0, vxrm_q};                       // vxrm
+      12'h00F: csr_rdata = {61'd0, vxrm_q, vxsat_q};              // vcsr
       12'h100: csr_rdata = virt_q ? vsstatus_val :
                            (mstatus_o & SSTATUS_MASK);          // sstatus
       12'h104: csr_rdata = virt_q ? vsie_val :
@@ -304,6 +367,9 @@ module muserisc_csr (
       12'hC00: csr_rdata = mcycle_q;                              // cycle
       12'hC01: csr_rdata = virt_q ? (mtime_q + htimedelta_q) : mtime_q;  // time
       12'hC02: csr_rdata = minstret_q;                            // instret
+      12'hC20: csr_rdata = vl_q;                                  // vl
+      12'hC21: csr_rdata = vtype_o;                               // vtype
+      12'hC22: csr_rdata = 64'd64;                                // vlenb
       12'hF11: csr_rdata = 64'd0;                                 // mvendorid
       12'hF12: csr_rdata = 64'h4D55_5345;                         // marchid "MUSE"
       12'hF13: csr_rdata = 64'h0003_0000;                         // mimpid
@@ -391,6 +457,10 @@ module muserisc_csr (
   assign illegal_o = !csr_exists || !csr_priv_ok || counter_blocked ||
                      (((addr_i == 12'h001) || (addr_i == 12'h002) ||
                        (addr_i == 12'h003)) && (fs_o == 2'b00)) ||
+                     (((addr_i == 12'h008) || (addr_i == 12'h009) ||
+                       (addr_i == 12'h00A) || (addr_i == 12'h00F) ||
+                       (addr_i == 12'hC20) || (addr_i == 12'hC21) ||
+                       (addr_i == 12'hC22)) && (vec_vs_o == 2'b00)) ||
                      ((addr_i == 12'h180) && (priv_q == PRIV_S) &&
                       !virt_q && mstatus_tvm_q) ||
                      ((addr_i == 12'h680) && (priv_q == PRIV_S) &&
@@ -681,6 +751,16 @@ module muserisc_csr (
       fflags_q <= 5'd0;
       frm_q <= 3'd0;
       mstatus_fs_q <= 2'd0;
+      mstatus_vs_q <= 2'd0;
+      vtype_vill_q <= 1'b1;
+      vtype_vma_q <= 1'b0;
+      vtype_vta_q <= 1'b0;
+      vtype_vsew_q <= 3'd0;
+      vtype_vlmul_q <= 3'd0;
+      vl_q <= 64'd0;
+      vstart_q <= 64'd0;
+      vxsat_q <= 1'b0;
+      vxrm_q <= 2'd0;
       mscratch_q <= 64'd0;
       mepc_q <= 64'd0;
       mcause_q <= 64'd0;
@@ -728,6 +808,7 @@ module muserisc_csr (
       vs_sum_q <= 1'b0;
       vs_mxr_q <= 1'b0;
       vs_fs_q <= 2'd0;
+      vs_vs_q <= 2'd0;
       vstvec_q <= 64'd0;
       vsscratch_q <= 64'd0;
       vsepc_q <= 64'd0;
@@ -754,6 +835,23 @@ module muserisc_csr (
       if (fp_dirty_i) begin
         mstatus_fs_q <= 2'b11;
         if (virt_q) vs_fs_q <= 2'b11;  // both FS fields go Dirty
+      end
+      if (vec_dirty_i) begin
+        mstatus_vs_q <= 2'b11;
+        if (virt_q) vs_vs_q <= 2'b11;  // both VS fields go Dirty
+      end
+      // vsetvl* commit (EX). Setting vill zeroes vl and the
+      // remaining vtype fields; vstart always clears.
+      if (vset_en_i) begin
+        vtype_vill_q <= vset_vill;
+        vtype_vma_q <= !vset_vill && vset_vtype_i[7];
+        vtype_vta_q <= !vset_vill && vset_vtype_i[6];
+        vtype_vsew_q <= vset_vill ? 3'd0 : vset_vtype_i[5:3];
+        vtype_vlmul_q <= vset_vill ? 3'd0 : vset_vtype_i[2:0];
+        vl_q <= vset_vl_o;
+        vstart_q <= 64'd0;
+        mstatus_vs_q <= 2'b11;
+        if (virt_q) vs_vs_q <= 2'b11;
       end
 
       if (trap_take_i) begin
@@ -833,6 +931,13 @@ module muserisc_csr (
             fflags_q <= wdata_i[4:0];
             frm_q <= wdata_i[7:5];
           end
+          12'h008: vstart_q <= wdata_i;
+          12'h009: vxsat_q <= wdata_i[0];
+          12'h00A: vxrm_q <= wdata_i[1:0];
+          12'h00F: begin
+            vxsat_q <= wdata_i[0];
+            vxrm_q <= wdata_i[2:1];
+          end
           12'h100: begin  // sstatus (vsstatus while V=1)
             if (virt_q) begin
               vs_sie_q <= wdata_i[1];
@@ -841,6 +946,7 @@ module muserisc_csr (
               vs_sum_q <= wdata_i[18];
               vs_mxr_q <= wdata_i[19];
               vs_fs_q <= wdata_i[14:13];
+              vs_vs_q <= wdata_i[10:9];
             end else begin
               mstatus_sie_q <= wdata_i[1];
               mstatus_spie_q <= wdata_i[5];
@@ -848,6 +954,7 @@ module muserisc_csr (
               mstatus_sum_q <= wdata_i[18];
               mstatus_mxr_q <= wdata_i[19];
               mstatus_fs_q <= wdata_i[14:13];
+              mstatus_vs_q <= wdata_i[10:9];
             end
           end
           12'h104: begin  // sie (vsie while V=1)
@@ -892,6 +999,7 @@ module muserisc_csr (
             vs_sum_q <= wdata_i[18];
             vs_mxr_q <= wdata_i[19];
             vs_fs_q <= wdata_i[14:13];
+            vs_vs_q <= wdata_i[10:9];
           end
           12'h204: begin  // vsie
             if (hideleg_q[2]) mie_q[2] <= wdata_i[1];
@@ -952,6 +1060,7 @@ module muserisc_csr (
             mstatus_tw_q <= wdata_i[21];
             mstatus_tsr_q <= wdata_i[22];
             mstatus_fs_q <= wdata_i[14:13];
+            mstatus_vs_q <= wdata_i[10:9];
             mstatus_gva_q <= wdata_i[38];
             mstatus_mpv_q <= wdata_i[39];
           end

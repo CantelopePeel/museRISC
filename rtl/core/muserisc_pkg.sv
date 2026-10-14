@@ -26,10 +26,13 @@ package muserisc_pkg;
   // Decoder output consumed by the datapath. One struct so stage 2
   // can register it verbatim between decode and execute.
   typedef struct packed {
-    logic [5:0] bext_op;   // B/crypto unit op (muserisc_bext BOP_*)
+    logic    vec;          // any vector instruction (incl. vset)
+    logic    vec_rd;       // destination is a vector register group
+    logic    vset;         // vsetvli/vsetivli/vsetvl (form in fpu_aux)
+    logic [5:0] bext_op;   // B/crypto op; vector op (VOP_*) if vec
     logic    bext;         // result comes from the B/crypto unit
     logic [4:0] fpu_op;    // FPU operation (muserisc_fpu FPU_*)
-    logic [1:0] fpu_aux;   // sgnj/min-max/cmp select, cvt size
+    logic [1:0] fpu_aux;   // sgnj/min-max/cmp, cvt size; vec form if vec
     logic    fmt_d;        // FP format: 1=binary64, 0=binary32
     logic    fp_op;        // result comes from the FPU in EX
     logic    fp_rm;        // op consumes a rounding mode
@@ -74,6 +77,27 @@ package muserisc_pkg;
   localparam logic [63:0] CAUSE_LOAD_MISALIGN = 64'd4;
   localparam logic [63:0] CAUSE_STORE_MISALIGN = 64'd6;
   localparam logic [63:0] CAUSE_ECALL_M       = 64'd11;
+
+  // Vector unit operations (stage 8, carried in bext_op) and
+  // operand forms (carried in fpu_aux). VLEN/ELEN are fixed
+  // for the in-house core's first vector configuration.
+  localparam int unsigned VLEN = 512;
+  localparam int unsigned ELEN = 64;
+  localparam logic [5:0] VOP_ADD  = 6'd0;
+  localparam logic [5:0] VOP_SUB  = 6'd1;
+  localparam logic [5:0] VOP_RSUB = 6'd2;
+  localparam logic [5:0] VOP_AND  = 6'd3;
+  localparam logic [5:0] VOP_OR   = 6'd4;
+  localparam logic [5:0] VOP_XOR  = 6'd5;
+  localparam logic [5:0] VOP_SLL  = 6'd6;
+  localparam logic [5:0] VOP_SRL  = 6'd7;
+  localparam logic [5:0] VOP_SRA  = 6'd8;
+  localparam logic [5:0] VOP_MV   = 6'd9;   // vmv.v.v/.x/.i
+  localparam logic [5:0] VOP_MVSX = 6'd10;  // vmv.s.x
+  localparam logic [5:0] VOP_MVXS = 6'd11;  // vmv.x.s
+  localparam logic [1:0] VFORM_VV = 2'd0;
+  localparam logic [1:0] VFORM_VX = 2'd1;
+  localparam logic [1:0] VFORM_VI = 2'd2;
   /* verilator lint_on UNUSEDPARAM */
 
 endpackage
