@@ -37,9 +37,10 @@ case "$TOP" in
        $RTL/muserisc_vec.sv $RTL/muserisc_rvc.sv $RTL/muserisc_decoder.sv \
        $RTL/muserisc_csr.sv $RTL/muserisc_mmu.sv $RTL/muserisc_core.sv" ;;
 esac
-# SKIP_SYNTH=1 re-runs only the STA on the existing netlist.
+# SKIP_SYNTH=1 re-runs only the STA on the existing netlist;
+# SV2V_FLAGS passes extra defines (e.g. -DMUSERISC_FPU_DS_BITS=1).
 # shellcheck disable=SC2086
-[ -n "${SKIP_SYNTH:-}" ] || "$SV2V" -DSYNTHESIS -I"$RTL" --top="$TOP" $SRCS -w "$OUT/$TOP.v"
+[ -n "${SKIP_SYNTH:-}" ] || "$SV2V" ${SV2V_FLAGS:-} -DSYNTHESIS -I"$RTL" --top="$TOP" $SRCS -w "$OUT/$TOP.v"
 
 LIB=/OpenROAD-flow-scripts/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib
 PS=$(python3 -c "print(int(float('$PERIOD') * 1000))")

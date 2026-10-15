@@ -1,4 +1,4 @@
-# fpu-multicycle evidence (2026-10-15), branch fpu-multicycle rebased on origin/main 1af0b3a
+# fpu-multicycle evidence (2026-10-15), branch fpu-multicycle rebased on origin/main ea057e8 (incl. #6 Linux IRQ fix)
 # Verilator 5.048, riscv64-unknown-elf GCC 16, host x86_64 (48 cores, shared)
 
 == make core-test (unit TBs + directed asm incl. fp_stall/fp_irq/vec) ==
@@ -6,7 +6,7 @@ ALU TB PASS (205642 checks)
 MULDIV TB PASS (165877 checks)
 DECODER TB PASS (12343 checks)
 REGFILE TB PASS (4194 checks)
-CSR TB PASS (207 checks)
+CSR TB PASS (214 checks)
 MMU TB PASS (74 checks)
 checks[arith] = 92456
 checks[class] = 23120
@@ -59,6 +59,57 @@ latency (cycles in EX) per op:
   undef.s   2:6
 cycles simulated: 2930169
 FPU TB PASS (476563 checks)
+checks[arith] = 92441
+checks[class] = 23123
+checks[cmp] = 23124
+checks[f2f] = 23114
+checks[f2i] = 23119
+checks[fma] = 92454
+checks[fma-cancel] = 2
+checks[fma-zero] = 500
+checks[i2f] = 27103
+checks[minmax] = 23102
+checks[mv] = 46237
+checks[pool] = 56004
+checks[sgnj] = 23118
+checks[sqrt] = 23105
+checks[tininess] = 3
+checks[undef] = 14
+latency (cycles in EX) per op:
+  add.d     2:1290 5:13868
+  add.s     2:1868 5:12591
+  class.d   2:11625
+  class.s   2:11612
+  cmp.d     2:15168
+  cmp.s     2:14472
+  div.d     2:1541 59:13612
+  div.s     2:2090 30:12383
+  fmadd.d   2:1214 7:12217
+  fmadd.s   2:2137 7:10947
+  fmsub.d   2:1202 7:12163
+  fmsub.s   2:2228 7:10908
+  fnmadd.d  2:1266 7:12184
+  fnmadd.s  2:2157 7:10871
+  fnmsub.d  2:1276 7:12160
+  fnmsub.s  2:2193 7:10868
+  minmax.d  2:15154
+  minmax.s  2:14464
+  mul.d     2:1297 5:13858
+  mul.s     2:1838 5:12639
+  mvfx.d    1:11571
+  mvfx.s    1:11576
+  mvxf.d    1:11552
+  mvxf.s    1:11538
+  sgnj.d    1:11732
+  sgnj.s    1:11728
+  sqrt.d    2:5354 59:6495
+  sqrt.s    2:5623 30:6203
+  sub.d     2:1270 5:13888
+  sub.s     2:1943 5:12529
+  undef.d   2:10
+  undef.s   2:4
+cycles simulated: 3716009
+FPU TB PASS (476563 checks)
 BEXT TB PASS (60866 checks)
 RVC TB PASS (49152 checks)
 VEC TB PASS (1014624 checks)
@@ -66,7 +117,7 @@ CORE TB PASS rv64i_directed.bin (315 cycles)
 CORE TB PASS rv64m_directed.bin (167 cycles)
 CORE TB PASS amo_directed.bin (413 cycles)
 CORE TB PASS fp_directed.bin (1013 cycles)
-CORE TB PASS fp_stall_directed.bin (560 cycles)
+CORE TB PASS fp_stall_directed.bin (741 cycles)
 done; echo "CORE TB PASS fp_irq_directed.bin (48/48 IRQ offsets 100..147)"
 CORE TB PASS fp_irq_directed.bin (48/48 IRQ offsets 100..147)
 CORE TB PASS bext_directed.bin (402 cycles)
@@ -81,54 +132,63 @@ CORE TB PASS trap_ebreak.bin (expected trap cause 3 at pc 0x4, 5 cycles)
 CORE TB PASS trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 6 cycles)
 CORE TB PASS trap_younger_store.bin (expected trap cause 4 at pc 0x4, 5 cycles)
 CORE TB PASS trap_younger_csr.bin (61 cycles)
+CORE TB PASS irq_seip_rmw.bin (167 cycles)
+CORE TB PASS irq_mip_rmw_variants.bin (179 cycles)
 CORE TB PASS counter_time_directed.bin (8423 cycles)
 CORE TB PASS hyp_directed.bin (810 cycles)
 CORE TB PASS vec_directed.bin (803 cycles)
 CORE TB PASS fpvec_directed.bin (267 cycles)
 CORE TB PASS trap_pa_fetch.bin (expected trap cause 1 at pc 0x100000000000000, 9 cycles)
 CORE TB PASS trap_pa_load.bin (expected trap cause 5 at pc 0x8, 6 cycles)
-  lines with all attached points covered : 41.00%  (2110/5099)
+CORE TB PASS fp_directed.bin (1417 cycles)
+CORE TB PASS fp_stall_directed.bin (903 cycles)
+CORE TB PASS fpvec_directed.bin (267 cycles)
+done; echo "CORE TB PASS fp_irq_directed.bin on FPU_DS_BITS=1 (25 IRQ offsets 100..172)"
+CORE TB PASS fp_irq_directed.bin on FPU_DS_BITS=1 (25 IRQ offsets 100..172)
+  lines with all attached points covered : 43.00%  (2004/4622)
 See lines with '%00' in ../build/sim/coverage
-EXIT=0 WALL=170s
+EXIT=0 WALL=445s
 
 == FPU coverage (merged build/sim/cov_merged.dat, scripts/coverage_summary.py) ==
-../rtl/core/muserisc_fpu.sv: line 39/39 (100.0%), branch 22/22 (100.0%), toggle 3680/3696 (99.6%)
-../rtl/core/muserisc_fpu_ops.svh: line 123/123 (100.0%), branch 146/146 (100.0%)
+../rtl/core/muserisc_fpu.sv: line 39/39 (100.0%), branch 22/22 (100.0%), toggle 3682/3698 (99.6%)
+../rtl/core/muserisc_fpu_ops.svh: line 123/123 (100.0%), branch 156/156 (100.0%)
+core-level runs only (unit TBs excluded; S_HOLD and done&&!ack covered by fp_stall_directed test 3):
+../rtl/core/muserisc_fpu.sv: line 39/39 (100.0%), branch 22/22 (100.0%), toggle 3309/3696 (89.5%)
 untoggled bits (structurally constant flag fields):
-  line 99: sp.flags[0]:0->1
-  line 99: sp.flags[0]:1->0
-  line 99: sp.flags[1]:0->1
-  line 99: sp.flags[1]:1->0
-  line 99: sp.flags[2]:0->1
-  line 99: sp.flags[2]:1->0
-  line 100: rnd_out.flags[3]:0->1
-  line 100: rnd_out.flags[3]:1->0
-  line 100: rnd_out.flags[4]:0->1
-  line 100: rnd_out.flags[4]:1->0
-  line 100: f2i_out.flags[1]:0->1
-  line 100: f2i_out.flags[1]:1->0
-  line 100: f2i_out.flags[2]:0->1
-  line 100: f2i_out.flags[2]:1->0
-  line 100: f2i_out.flags[3]:0->1
-  line 100: f2i_out.flags[3]:1->0
+  line 98: sp.flags[0]:0->1
+  line 98: sp.flags[0]:1->0
+  line 98: sp.flags[1]:0->1
+  line 98: sp.flags[1]:1->0
+  line 98: sp.flags[2]:0->1
+  line 98: sp.flags[2]:1->0
+  line 99: rnd_out.flags[3]:0->1
+  line 99: rnd_out.flags[3]:1->0
+  line 99: rnd_out.flags[4]:0->1
+  line 99: rnd_out.flags[4]:1->0
+  line 99: f2i_out.flags[1]:0->1
+  line 99: f2i_out.flags[1]:1->0
+  line 99: f2i_out.flags[2]:0->1
+  line 99: f2i_out.flags[2]:1->0
+  line 99: f2i_out.flags[3]:0->1
+  line 99: f2i_out.flags[3]:1->0
 
-== TestFloat (scripts/testfloat_fpu_vectors.sh; testfloat_gen a9c849f1 level 1 seed 42, 5 rounding modes; FPU RTL unchanged by the rebase) ==
+== TestFloat (scripts/testfloat_fpu_vectors.sh; testfloat_gen a9c849f1 level 1 seed 42, 5 rounding modes; re-run on the final RTL) ==
 vectors: 64648560
 checks[testfloat] = 64648560
 FPU TB PASS (64648560 checks)
-EXIT=0 WALL=1029s
+EXIT=0 WALL=1372s
 
 == make lint / make test / riscv-tests ==
-EXIT=0 WALL=2s
-ALL PHASE-0 KATs PASS
 EXIT=0 WALL=3s
+ALL PHASE-0 KATs PASS
+EXIT=0 WALL=8s
 riscv-tests rv64ui+um+ua+uf+ud+uc+mi+si: 123/123 PASS, 0 FAIL
-EXIT=0 WALL=18s
+EXIT=0 WALL=51s
 
 == ACT on the core (JOBS=32 sim/run_act_core.sh; CSV act-core-fpu-multicycle-2026-10-15.csv) ==
 FAIL PMPSm_cfg_A_tor_zero-00 (8020 cycles)
 ACT (muserisc-core): 2577/2578 PASS, 1 FAIL
-EXIT=1 WALL=314s
+EXIT=1 WALL=795s
 generation-time failures (Sail signature overflow, same 34 as act-vector-core-genfail-2026-10-14.csv):
   Vls16-vloxei32.v-00
   Vls16-vloxei64.v-00
@@ -166,23 +226,23 @@ generation-time failures (Sail signature overflow, same 34 as act-vector-core-ge
   Vls8-vsoxseg8ei64.v-00
 
 == Synthesis: scripts/synth_fpu.sh muserisc_fpu 2.0 (sv2v v0.0.13, Yosys + OpenROAD/OpenSTA from openroad/orfs:latest, Nangate45 typical) ==
-    35171 4.39E+04 cells
+    35546 4.44E+04 cells
         4    21.28   DFFR_X1
      1384 6.26E+03   DFF_X1
-   Chip area for module '\muserisc_fpu': 43891.862000
-     of which used for sequential elements: 6279.728000 (14.31%)
-Startpoint: _69487_ (rising edge-triggered flip-flop clocked by clk)
-Endpoint: _68479_ (rising edge-triggered flip-flop clocked by clk)
-tns max -741.60
-wns max -3.38
-clk period_min = 5.38 fmax = 185.88
-Design area 44626 um^2 100% utilization.
+   Chip area for module '\muserisc_fpu': 44416.148000
+     of which used for sequential elements: 6279.728000 (14.14%)
+Startpoint: _70158_ (rising edge-triggered flip-flop clocked by clk)
+Endpoint: _69112_ (rising edge-triggered flip-flop clocked by clk)
+tns max -598.51
+wns max -3.34
+clk period_min = 5.34 fmax = 187.31
+Design area 45847 um^2 100% utilization.
 (startpoint/endpoint flops are ds_q: the 2-step div/sqrt recurrence)
 
-== Same with FPU_DS_BITS=1 (RTL_DIR copy, OUT_TAG=_ds1) ==
-   Chip area for module '\muserisc_fpu': 43249.472000
+== Same with FPU_DS_BITS=1 (SV2V_FLAGS=-DMUSERISC_FPU_DS_BITS=1 OUT_TAG=_ds1; this configuration is simulated by make core-test targets fpu-ds1/core-ds1) ==
+   Chip area for module '\muserisc_fpu': 43325.282000
 wns max -1.73
-clk period_min = 3.73 fmax = 268.25
+clk period_min = 3.73 fmax = 267.99
 
 == Linux boot smoke (soc_tb; OpenSBI v1.9 cbf9f67 + Linux 6.6, sw/linux/README.md recipe) ==
 Pre-existing on main, not caused by this change: main's soc_tb boot livelocks in S-external
