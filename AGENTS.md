@@ -50,8 +50,7 @@ every level that applies (unit testbenches, integration/core-harness
 tests, end-to-end runs and simulations such as riscv-tests, ACT
 compliance suites, TestFloat and Linux boot), open a pull request.
 
-- Target `main` of the fork `CantelopePeel/museRISC`. Never open PRs on
-  the upstream `bubblebabyboi/museRISC` unless explicitly asked.
+- Target `main` of the fork `CantelopePeel/museRISC` first.
 - The PR description lists what changed, every gate that was run with
   its pass counts and wall-clock time, and anything not run or waived.
 - Do not open a PR for work whose tests are failing or not yet run;
@@ -76,3 +75,22 @@ blocking findings. If blocking findings remain after the third round,
 stop and escalate to the user with the outstanding issues instead of
 merging. Reviewers post their findings as PR comments so the history
 stays with the PR.
+
+## Upstreaming
+
+Once a PR has passed review and is merged into the fork's `main`, send
+it upstream to `bubblebabyboi/museRISC` without waiting for a separate
+decision:
+
+- Split it into well-scoped PRs, one coherent change each (e.g. a unit
+  and its tests; tooling separate from RTL). Leave out fork-only
+  material (references to the fork, fork workflow rules).
+- Branch from the latest upstream `main`, re-apply the change, and
+  re-run every affected gate there; the upstream PR description reports
+  those results, not the fork's.
+- Open it with `gh pr create -R bubblebabyboi/museRISC --base main
+  --head CantelopePeel:<branch>`, link the related upstream issue, and
+  link back to the fork PR and its review comments.
+- If upstream has already changed the same area so the change no
+  longer applies cleanly, rebase and re-test; if it is obsolete, skip
+  it and note that on the fork PR.

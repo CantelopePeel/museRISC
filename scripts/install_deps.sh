@@ -106,7 +106,7 @@ if [ "$want_gcc15" = 1 ]; then
        echo "warning: no toolchain build for ${ID:-?} ${VERSION_ID:-?}; trying the Ubuntu 24.04 one" >&2 ;;
   esac
   asset="riscv64-elf-ubuntu-${tc_os}-gcc.tar.xz"
-  if [ -x "$DEPS/riscv-toolchain/riscv/bin/riscv64-unknown-elf-gcc" ]; then
+  if [ "$(cat "$DEPS/riscv-toolchain/.tag" 2>/dev/null)" = "$RISCV_TOOLCHAIN_TAG-$asset" ]; then
     echo "== GCC 15+ toolchain already in deps/ =="
   else
     echo "== Downloading RISC-V toolchain $RISCV_TOOLCHAIN_TAG ($asset) into deps/ =="
@@ -118,6 +118,7 @@ if [ "$want_gcc15" = 1 ]; then
     mkdir -p "$tmp/out"
     tar -xJf "$tmp/tc.tar.xz" -C "$tmp/out"
     rm -rf "$DEPS/riscv-toolchain"
+    echo "$RISCV_TOOLCHAIN_TAG-$asset" > "$tmp/out/.tag"
     mv "$tmp/out" "$DEPS/riscv-toolchain"
   fi
 fi

@@ -39,9 +39,14 @@ for src in "$main"/third_party/*; do
   name=$(basename "$src")
   if [ "$name" = riscv-arch-test ]; then
     dst=$wt/third_party/riscv-arch-test
-    if [ ! -e "$dst/.git" ]; then
+    if [ -d "$dst/.git" ]; then
+      echo "warning: third_party/riscv-arch-test is an old standalone clone; delete it and re-run to get a git worktree" >&2
+    elif [ ! -e "$dst/.git" ]; then
+      git -C "$src" worktree prune   # drop stale registrations for reused paths
       git -C "$src" worktree add -q --detach "$dst" "$(git -C "$src" rev-parse HEAD)"
       echo "added   third_party/riscv-arch-test (git worktree of $src)"
+    elif [ -z "$(git -C "$dst" status --porcelain --untracked-files=no)" ]; then
+      git -C "$dst" -c advice.detachedHead=false checkout -q "$(git -C "$src" rev-parse HEAD)"
     fi
     if command -v mise >/dev/null; then mise_bin=mise; else mise_bin=$HOME/.local/bin/mise; fi
     if [ -x "$(command -v "$mise_bin")" ]; then
