@@ -298,6 +298,21 @@ This maps 1:1 onto AXI4 (AR/R; AW+W/B with RREADY=BREADY=1) or
 directly onto a BRAM controller; there is no error response
 yet (no bus-fault pin on the core, as before).
 
+### SoC integration
+
+`rtl/soc/muserisc_soc_top.sv` instantiates `muserisc_cpu`.
+`muserisc_soc_fabric` sends RAM-window requests (PA >=
+`0x8000_0000`, the only cacheable window) unchanged to the
+SoC's external memory-bus port and turns every other request
+into one device access: the access is presented to the
+selected device (boot ROM, CLINT, PLIC, UART, crypto bridge)
+for one cycle, or until the crypto bridge stops stalling,
+with the read-enable/byte-enables asserted exactly once, and
+the captured data is returned as a single response beat one
+cycle later. Boot-ROM instruction fetches use the same path
+without a read-enable. The core's former `dmem_stall_i` input
+is gone; the request/response data port covers it.
+
 ### Performance expectations
 
 Correctness first: both caches are blocking and the core issues

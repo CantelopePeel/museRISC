@@ -1,4 +1,4 @@
-# make core-test on branch l1-cache (2026-10-15), wall 65s
+# make core-test on branch l1-cache (2026-10-15), wall 81s
 # Verilator 5.048, GCC 16 riscv64-unknown-elf; every directed test runs twice:
 #   [rand]    caches on, --mem-lat 1:6 --mem-gap 2 --mem-ready 70, --mem-seed = run index
 #   [nocache] caches off (--no-cache), bus latency 1
@@ -74,6 +74,8 @@ CORE TB PASS amo_cache_directed.bin (3409 cycles)
 CORE TB PASS mmio_bypass_directed.bin (1757 cycles)
 [rand] core_tb vm_sfence_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 29
 CORE TB PASS vm_sfence_cache_directed.bin (23224 cycles)
+[rand] core_tb fp_hold_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 30
+CORE TB PASS fp_hold_cache_directed.bin (1485 cycles)
 [nocache] core_tb rv64i_directed.bin --no-cache --mem-seed 1
 CORE TB PASS rv64i_directed.bin (1450 cycles)
 [nocache] core_tb rv64m_directed.bin --no-cache --mem-seed 2
@@ -132,9 +134,11 @@ CORE TB PASS amo_cache_directed.bin (2493 cycles)
 CORE TB PASS mmio_bypass_directed.bin (1917 cycles)
 [nocache] core_tb vm_sfence_cache_directed.bin --no-cache --mem-seed 29
 CORE TB PASS vm_sfence_cache_directed.bin (28947 cycles)
+[nocache] core_tb fp_hold_cache_directed.bin --no-cache --mem-seed 30
+CORE TB PASS fp_hold_cache_directed.bin (1400 cycles)
 
 # verilator_coverage --annotate summary (all modules; a line counts only if every point on it is hit)
-  lines with all attached points covered : 50.00%  (2508/4978)
+  lines with all attached points covered : 50.00%  (2511/4978)
 
 # per-file coverage, all core-test runs merged (scripts/cov_report.py build/sim/cov_merged.dat)
 muserisc_bus_arb.sv          branch       16/16     100.00%
@@ -142,7 +146,7 @@ muserisc_bus_arb.sv          line          5/5      100.00%
 muserisc_bus_arb.sv          toggle      487/778     62.60%
 muserisc_core.sv             branch      259/276     93.84%
 muserisc_core.sv             line        165/174     94.83%
-muserisc_core.sv             toggle    11066/18080   61.21%
+muserisc_core.sv             toggle    11114/18080   61.47%
 muserisc_cpu.sv              toggle     1333/2310    57.71%
 muserisc_dcache.sv           branch       58/58     100.00%
 muserisc_dcache.sv           line         41/41     100.00%
