@@ -13,6 +13,12 @@ and `docs/evidence/`.
   Verilator and the GCC 15+ RISC-V toolchain first on `PATH`, sets
   `RISCV_TESTS_DIR`). With `--gcc15` that toolchain also builds the
   core tests, unlike CI (Ubuntu's GCC 13); all gates pass with both.
+- GitHub CI installs Ubuntu's apt Verilator 5.020, not the pinned
+  `deps/` one, and 5.020 rejects some constructs 5.048 accepts (e.g.
+  `%Error-IMPURE` on variable-index writes inside package functions).
+  Before opening a PR that touches RTL or testbenches, also lint and
+  build with 5.020 (e.g. in a `ubuntu:24.04` Docker container with
+  `apt-get install verilator`; never install it system-wide).
 - Baseline gates: `make test`, `make lint`, `make core-test`,
   `make riscv-tests`; ACT on the core via `scripts/build_act4_core.sh`
   then `sim/run_act_core.sh`.
@@ -55,6 +61,8 @@ compliance suites, TestFloat and Linux boot), open a pull request.
   its pass counts and wall-clock time, and anything not run or waived.
 - Do not open a PR for work whose tests are failing or not yet run;
   push the branch and report status instead.
+- A PR merges only when `gh pr checks` is green on its head commit,
+  in addition to the local gates and review.
 
 ## Review
 
