@@ -1238,3 +1238,36 @@ stages 4c/5:
   ends with `ALL PHASE-0 KATs PASS`. Icarus Verilog is
   no longer a host prerequisite for the fast gates.
 - No RTL changed in this step.
+
+## QEMU reference-boot oracle spike (2026-10-14, #30)
+
+- QEMU cannot execute RTL; it is used only as a fast
+  software oracle for the same Linux payload. The
+  Verilated `soc_tb` log above remains the only
+  "Linux on our RTL" evidence. Full note and decision:
+  [`docs/QEMU.md`](../QEMU.md).
+- System mode: `scripts/qemu_reference_boot.sh` boots
+  the exact `build/linux/Image` from the stage-6 gate
+  under `qemu-system-riscv64 -machine virt` (Docker,
+  QEMU 8.2.2, bundled OpenSBI v1.3) and diffs the
+  platform-independent markers (kernel banner,
+  `muserisc init`, `uname`, `/proc/version`,
+  `MUSERISC_LINUX_BOOT_OK`) against
+  `core-stage6-linux-boot-2026-10-14.log`: **match**
+  (`QEMU REFERENCE BOOT PASS`). Captured log:
+  [`qemu-virt-reference-boot-2026-10-14.log`](qemu-virt-reference-boot-2026-10-14.log)
+  (263 lines). All remaining deltas are platform/DT/
+  firmware/harness (virt DT, OpenSBI version, 256 MiB
+  vs 128 MiB RAM, PLIC interrupt count, baud reporting,
+  no cycle count); none is a core-behavior difference.
+- User mode: `scripts/qemu_user_oracle.sh` builds
+  `sw/qemu/user_oracle.c` as a static RISC-V binary
+  and runs it under `qemu-riscv64`, producing
+  `MUSERISC_QEMU_USER_OK x=655d5f49 sum=325770522
+  acc=17500.0`.
+- Decision: boot-log marker diffing plus the user-mode
+  smoke are sufficient. A lockstep trace-compare
+  harness is not worth building now, because QEMU
+  virt and `soc_tb` differ as platforms; ISA-level
+  differential coverage already comes from
+  riscv-tests, ACT vs Sail, and the unit TBs.
