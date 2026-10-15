@@ -9,8 +9,10 @@ and `docs/evidence/`.
 - First-time setup in the main checkout: `./scripts/install_deps.sh --gcc15`
   (builds pinned Verilator into `deps/`, fetches SoftFloat and
   riscv-tests), plus `./scripts/setup.sh --fetch-act` for ACT/Sail.
-- In every shell: `source deps/env.sh` (puts `deps/` Verilator and the
-  GCC 15+ RISC-V toolchain first on `PATH`, sets `RISCV_TESTS_DIR`).
+- In every shell: `source deps/env.sh` (bash or zsh; puts `deps/`
+  Verilator and the GCC 15+ RISC-V toolchain first on `PATH`, sets
+  `RISCV_TESTS_DIR`). With `--gcc15` that toolchain also builds the
+  core tests, unlike CI (Ubuntu's GCC 13); all gates pass with both.
 - Baseline gates: `make test`, `make lint`, `make core-test`,
   `make riscv-tests`; ACT on the core via `scripts/build_act4_core.sh`
   then `sim/run_act_core.sh`.
@@ -30,13 +32,16 @@ while it runs. Report wall-clock time with results.
 - Branch from the current `main`; name the branch after the feature
   (e.g. `fpu-multicycle`).
 - Do not copy or re-fetch dependencies into a worktree. Run
-  `scripts/worktree_setup.sh <main-checkout>` from inside the worktree:
-  it symlinks `deps/` and the `third_party/` sources to the main
-  checkout. `riscv-arch-test` is the one exception (the ACT flow writes
-  into it), so it gets a `git clone --shared`, which borrows git
-  objects instead of copying them.
+  `scripts/worktree_setup.sh` from inside the worktree: it symlinks
+  `deps/` and the `third_party/` sources to the main checkout.
+  `riscv-arch-test` is the one exception (the ACT flow writes into it),
+  so it gets its own detached `git worktree` of the main checkout's
+  clone, which shares git objects instead of copying them.
 - Never write into symlinked `deps/` or `third_party/` from a worktree.
-  `build/` is per-worktree.
+  `build/` is per-worktree. Flows that write into `third_party/` other
+  than ACT (e.g. `scripts/build_testfloat.sh` and the CVA6 scripts,
+  which write under `third_party/cva6/`) must run in the main checkout,
+  one at a time.
 
 ## Pull requests
 
