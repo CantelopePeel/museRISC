@@ -1528,4 +1528,9 @@ stages 4c/5:
   cycle-identical to origin/main for the first 12M cycles.
   Linux had not been re-run since `misa.V` landed (stage 8).
   This is treated as pre-existing and is not fixed here; the
-  same boot on origin/main RTL is BASE_STATUS
+  same boot on origin/main RTL (its unused vector unit and
+  VRF stubbed only for simulation speed, with the testbench
+  aborting if any vector instruction reaches EX — none did)
+  livelocks identically: all 37 PC/data-address samples
+  taken every 5M cycles from 450M to 630M match this
+  branch's run exactly. Pre-existing; to be fixed separately.

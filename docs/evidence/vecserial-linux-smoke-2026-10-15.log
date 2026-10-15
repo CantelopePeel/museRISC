@@ -9,6 +9,9 @@
 # vector logic never activates in this workload, and with it idle the scalar pipeline is
 # the same as origin/main. The M-level trap trace is cycle-identical to origin/main RTL
 # over the first 12M cycles. Linux had not been re-run since misa.V landed (stage 8).
+# origin/main RTL (vector unit + VRF stubbed for simulation speed; the TB aborts if a vector
+# instruction reaches EX, none did) reaches uname at ~500M cycles and livelocks identically:
+# all 37 fetch-PA/data-address samples (every 5M cycles, 450M..630M) match this branch exactly.
 
 VECCOUNT cy=0 starts=0 vls_cycles=0
 VECCOUNT cy=50000000 starts=0 vls_cycles=0
