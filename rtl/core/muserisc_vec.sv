@@ -259,9 +259,9 @@ module muserisc_vec
         a = get_el(vs2_i, i, sew_i) & ones_s;
         if ((64'(unsigned'(i)) >= vstart_i) &&
             (64'(unsigned'(i)) < vl_i) && (vm_i || mask_i[i])) begin
+          a_s = sext_el(a, sew_i);
           acc = acc + (imm_i[0]
-                       ? signed'({{64{sext_el(a, sew_i)[63]}},
-                                   sext_el(a, sew_i)})
+                       ? signed'({{64{a_s[63]}}, a_s})
                        : signed'({64'd0, a}));
         end
       end
@@ -384,29 +384,43 @@ module muserisc_vec
           VOP_AADD: begin
             prod = signed'({{64{a_s[63]}}, a_s}) +
                    signed'({{64{b_s[63]}}, b_s});
-            r = rnd_shift(128'(prod), 1, 1'b1, vxrm_i)[63:0];
+            wide_v = rnd_shift(128'(prod), 1, 1'b1, vxrm_i);
+            r = wide_v[63:0];
           end
-          VOP_AADDU: r = rnd_shift(
-              {64'd0, a & ones_v} + {64'd0, b & ones_v}, 1, 1'b0,
-              vxrm_i)[63:0];
+          VOP_AADDU: begin
+            wide_v = rnd_shift(
+                {64'd0, a & ones_v} + {64'd0, b & ones_v}, 1, 1'b0,
+                vxrm_i);
+            r = wide_v[63:0];
+          end
           VOP_ASUB: begin
             prod = signed'({{64{a_s[63]}}, a_s}) -
                    signed'({{64{b_s[63]}}, b_s});
-            r = rnd_shift(128'(prod), 1, 1'b1, vxrm_i)[63:0];
+            wide_v = rnd_shift(128'(prod), 1, 1'b1, vxrm_i);
+            r = wide_v[63:0];
           end
-          VOP_ASUBU: r = rnd_shift(
-              {64'd0, a & ones_v} - {64'd0, b & ones_v}, 1, 1'b0,
-              vxrm_i)[63:0];
+          VOP_ASUBU: begin
+            wide_v = rnd_shift(
+                {64'd0, a & ones_v} - {64'd0, b & ones_v}, 1, 1'b0,
+                vxrm_i);
+            r = wide_v[63:0];
+          end
           VOP_SMUL: begin
             prod = signed'(a_s) * signed'(b_s);
             r = sat_s(signed'(rnd_shift(128'(prod), (8 << sew_i) - 1,
                                         1'b1, vxrm_i)),
                       sew_i, sat_i);
           end
-          VOP_SSRL: r = rnd_shift({64'd0, a & ones_v},
-                                  int'(shamt), 1'b0, vxrm_i)[63:0];
-          VOP_SSRA: r = rnd_shift(128'(signed'(a_s)),
-                                  int'(shamt), 1'b1, vxrm_i)[63:0];
+          VOP_SSRL: begin
+            wide_v = rnd_shift({64'd0, a & ones_v}, int'(shamt),
+                               1'b0, vxrm_i);
+            r = wide_v[63:0];
+          end
+          VOP_SSRA: begin
+            wide_v = rnd_shift(128'(signed'(a_s)), int'(shamt),
+                               1'b1, vxrm_i);
+            r = wide_v[63:0];
+          end
           VOP_WADD: r = a_s + b_s;
           VOP_WADDW: r = a_s + b_s;
           VOP_WSUB: r = a_s - b_s;
@@ -441,7 +455,7 @@ module muserisc_vec
                 ? get_el(vs2_i, int'(idx64[9:0]), sew_i) : 64'd0;
           end
           VOP_GATHEREI16: begin
-            idx64 = {48'd0, get_el(vs1_i, i, 3'd1)[15:0]};
+            idx64 = get_el(vs1_i, i, 3'd1) & 64'hffff;
             r = (idx64 < vlmax_i)
                 ? get_el(vs2_i, int'(idx64[9:0]), sew_i) : 64'd0;
           end
