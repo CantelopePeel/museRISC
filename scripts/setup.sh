@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "== Host tools =="
-for t in verilator iverilog python3 docker make git yosys mise; do
+for t in verilator python3 docker make git yosys mise; do
   if command -v "$t" >/dev/null; then echo "  ok       $t"; else
     echo "  MISSING  $t"; fi
 done
@@ -22,8 +22,8 @@ else
 fi
 cat <<'EOF'
 Install on macOS (Linux: use your distro equivalents):
-  brew install verilator icarus-verilog yosys riscv64-elf-gcc mise z3 gh
-  # Ubuntu CI: apt-get install iverilog verilator yosys z3 \
+  brew install verilator yosys riscv64-elf-gcc mise z3 gh
+  # Ubuntu CI: apt-get install verilator yosys z3 \
   #   gcc-riscv64-unknown-elf curl git make python3
 
 Pinned third-party sources (Phase 1, not needed for `make test`):

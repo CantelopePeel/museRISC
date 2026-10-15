@@ -18,7 +18,7 @@ arch tests with a fixed VLEN (default 512 via Ara, configurable).
 
 Memory-mapped AXI-Lite slave (base `0x2000_0000` in SoC map, RTL in
 `rtl/crypto/muse_crypto_top.sv`, integration KAT in
-`tb/tb_muse_crypto_top.v` via `make test`). Register map (32-bit regs):
+`tb/cpp/crypto_top_tb.cpp` via `make test`). Register map (32-bit regs):
 
 | Offset | Name | Meaning |
 |---|---|---|
@@ -32,9 +32,9 @@ Memory-mapped AXI-Lite slave (base `0x2000_0000` in SoC map, RTL in
 Engines in this repo today:
 
 - **SHA-256** (FIPS 180-4): one 512-bit block per start, standard
-  padding done by driver/SW shim for messages; KATs in `tb/`.
+  padding done by driver/SW shim for messages; KATs in `tb/cpp/`.
 - **Keccak-f1600** permutation (FIPS 202): sponge wrapper in SW for
-  SHA3-256 / Keccak-256 rate=1088; permutation KATs in `tb/`.
+  SHA3-256 / Keccak-256 rate=1088; permutation KATs in `tb/cpp/`.
 - **EC field unit**: 256-bit add/sub/mul-mod with selectable modulus
   (secp256k1 `p = 2^256-2^32-977`; Curve25519 `p = 2^255-19`).
   Point add/double and scalar multiplication are firmware sequences

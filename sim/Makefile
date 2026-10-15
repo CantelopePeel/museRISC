@@ -8,10 +8,11 @@
 # Coverage .dat files from every run in this directory's build output
 # are merged; the annotated report lands in build/sim/coverage/.
 
-ROOT  := ..
-RTL   := $(ROOT)/rtl/core
-BUILD := $(ROOT)/build/sim
-OBJ   := $(BUILD)/obj
+ROOT   := ..
+RTL    := $(ROOT)/rtl/core
+CRYPTO := $(ROOT)/rtl/crypto
+BUILD  := $(ROOT)/build/sim
+OBJ    := $(BUILD)/obj
 
 VERILATOR ?= verilator
 VFLAGS    := --cc --exe --build -j 0 -Wall -Wno-DECLFILENAME \
@@ -40,7 +41,8 @@ TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed
             trap_store_misalign trap_younger_store trap_younger_csr \
             trap_pa_fetch trap_pa_load
 
-.PHONY: all alu muldiv decoder regfile csr mmu fpu bext rvc vec core sw coverage clean riscv-tests
+.PHONY: all alu muldiv decoder regfile csr mmu fpu bext rvc vec core sw coverage clean riscv-tests \
+        crypto sha256 sha512 keccak ecfield cryptotop
 all: alu muldiv decoder regfile csr mmu fpu bext rvc vec core coverage
 
 ## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
@@ -150,6 +152,53 @@ $(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(RTL)/muserisc_vec.sv | $(BUI
 vec: $(BUILD)/vec_tb
 	cd $(BUILD) && COV_FILE=cov_vec.dat ./vec_tb
 
+## ---- Crypto accelerator KATs (issue #19) --------------------------------
+$(BUILD)/sha256_tb: $(ROOT)/tb/cpp/sha256_tb.cpp $(CRYPTO)/sha256_block.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/sha256 --top-module sha256_block \
+	  -o $(abspath $(BUILD)/sha256_tb) $(CRYPTO)/sha256_block.sv \
+	  $(abspath $(ROOT)/tb/cpp/sha256_tb.cpp)
+
+sha256: $(BUILD)/sha256_tb
+	cd $(BUILD) && COV_FILE=cov_sha256.dat ./sha256_tb
+
+$(BUILD)/sha512_tb: $(ROOT)/tb/cpp/sha512_tb.cpp $(CRYPTO)/sha512_block.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/sha512 --top-module sha512_block \
+	  -o $(abspath $(BUILD)/sha512_tb) $(CRYPTO)/sha512_block.sv \
+	  $(abspath $(ROOT)/tb/cpp/sha512_tb.cpp)
+
+sha512: $(BUILD)/sha512_tb
+	cd $(BUILD) && COV_FILE=cov_sha512.dat ./sha512_tb
+
+$(BUILD)/keccak_tb: $(ROOT)/tb/cpp/keccak_tb.cpp $(CRYPTO)/keccak_f1600.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/keccak --top-module keccak_f1600 \
+	  -o $(abspath $(BUILD)/keccak_tb) $(CRYPTO)/keccak_f1600.sv \
+	  $(abspath $(ROOT)/tb/cpp/keccak_tb.cpp)
+
+keccak: $(BUILD)/keccak_tb
+	cd $(BUILD) && COV_FILE=cov_keccak.dat ./keccak_tb
+
+$(BUILD)/ec_field_tb: $(ROOT)/tb/cpp/ec_field_tb.cpp $(CRYPTO)/ec_field.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/ecfield --top-module ec_field \
+	  -o $(abspath $(BUILD)/ec_field_tb) $(CRYPTO)/ec_field.sv \
+	  $(abspath $(ROOT)/tb/cpp/ec_field_tb.cpp)
+
+ecfield: $(BUILD)/ec_field_tb
+	cd $(BUILD) && COV_FILE=cov_ecfield.dat ./ec_field_tb
+
+$(BUILD)/crypto_top_tb: $(ROOT)/tb/cpp/crypto_top_tb.cpp \
+                     $(CRYPTO)/sha256_block.sv $(CRYPTO)/ec_field.sv \
+                     $(CRYPTO)/muse_crypto_top.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/cryptotop --top-module muse_crypto_top \
+	  -o $(abspath $(BUILD)/crypto_top_tb) \
+	  $(CRYPTO)/sha256_block.sv $(CRYPTO)/ec_field.sv \
+	  $(CRYPTO)/muse_crypto_top.sv \
+	  $(abspath $(ROOT)/tb/cpp/crypto_top_tb.cpp)
+
+cryptotop: $(BUILD)/crypto_top_tb
+	cd $(BUILD) && COV_FILE=cov_cryptotop.dat ./crypto_top_tb
+
+crypto: sha256 sha512 keccak ecfield cryptotop
+
 ## ---- Core harness + directed software ---------------------------------
 $(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(CORE_RTL) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/core --top-module muserisc_core \
@@ -206,6 +255,11 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 # relative to sim/, where verilator was invoked. Inputs are listed
 # explicitly so a stale merged file can never feed back into a merge.
 COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
+              $(wildcard $(BUILD)/cov_sha256.dat) \
+              $(wildcard $(BUILD)/cov_sha512.dat) \
+              $(wildcard $(BUILD)/cov_keccak.dat) \
+              $(wildcard $(BUILD)/cov_ecfield.dat) \
+              $(wildcard $(BUILD)/cov_cryptotop.dat) \
               $(BUILD)/cov_alu.dat $(BUILD)/cov_muldiv.dat \
               $(BUILD)/cov_decoder.dat $(BUILD)/cov_regfile.dat \
               $(BUILD)/cov_csr.dat $(BUILD)/cov_mmu.dat \
