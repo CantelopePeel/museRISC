@@ -23,7 +23,9 @@ muserisc-core/` before generating ELFs, and
   `wfi_is_nop` and `wfi_available_to_user_mode` true, and
   extensions flipped off (A, F, D, B, Zaamo, Zalrsc,
   Zicond, Zihpm, Zca/Zcb/Zcd, Zba/Zbb/Zbs/Zbc, Zbkb/Zbkc,
-  Zknd/Zkne/Zknh, Svade) with Svadu flipped on. Everything
+  Zknd/Zkne/Zknh, Svade) with Svadu flipped on, and the V
+  `support_level` set to `Float_double` (Zve64d, stage 9;
+  was `Integer` for stages <= 8). Everything
   else (memory regions, misaligned policy, platform) is
   inherited unchanged.
 - `link.ld`, `rvmodel_macros.h` — copied from

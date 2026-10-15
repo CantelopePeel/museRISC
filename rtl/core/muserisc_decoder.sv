@@ -632,16 +632,125 @@ module muserisc_decoder import muserisc_pkg::*; (
                              (instr_i[30] ? 2'd1 : 2'd2);
           end
         end else begin
-          logic opm, ok;
+          logic opm, ok, vf;
           logic [6:0] vop;
           opm = (funct3 == 3'b010) || (funct3 == 3'b110);
+          vf = (funct3 == 3'b101);
           ctrl_o.fpu_aux = ((funct3 == 3'b000) ||
                             (funct3 == 3'b010)) ? VFORM_VV :
                            ((funct3 == 3'b100) ||
                             (funct3 == 3'b110)) ? VFORM_VX : VFORM_VI;
           vop = 7'd127;
           ok = 1'b1;
-          if (!opm) begin
+          if ((funct3 == 3'b001) || (funct3 == 3'b101)) begin
+            // OPFVV / OPFVF: floating-point vector (stage 9).
+            // The scalar FPU op rides in imm[4:0] (ADD=0,
+            // SUB=1, MUL=2, DIV=3, SGNJ=5, MINMAX=6), aux
+            // in imm[6:5], operand-swap/wide-vs2/madd-form
+            // in imm[7].
+            ctrl_o.fpu_aux = vf ? VFORM_VX : VFORM_VV;
+            imm_o = 64'd0;
+            unique case (instr_i[31:26])
+              6'd0: begin vop = VOP_FBIN; imm_o[4:0] = 5'd0; end
+              6'd2: begin vop = VOP_FBIN; imm_o[4:0] = 5'd1; end
+              6'd39: begin  // vfrsub.vf
+                vop = VOP_FBIN; imm_o[4:0] = 5'd1; imm_o[7] = 1'b1;
+                ok = vf;
+              end
+              6'd4: begin vop = VOP_FBIN; imm_o[4:0] = 5'd6; end
+              6'd6: begin
+                vop = VOP_FBIN; imm_o[4:0] = 5'd6; imm_o[5] = 1'b1;
+              end
+              6'd8, 6'd9, 6'd10: begin
+                vop = VOP_FBIN; imm_o[4:0] = 5'd5;
+                imm_o[6:5] = instr_i[27:26];  // sgnj/n/x aux
+              end
+              6'd32: begin vop = VOP_FBIN; imm_o[4:0] = 5'd3; end
+              6'd33: begin  // vfrdiv.vf
+                vop = VOP_FBIN; imm_o[4:0] = 5'd3; imm_o[7] = 1'b1;
+                ok = vf;
+              end
+              6'd36: begin vop = VOP_FBIN; imm_o[4:0] = 5'd2; end
+              6'd40, 6'd41, 6'd42, 6'd43: begin  // vfmadd family
+                vop = VOP_FMACC; imm_o[7] = 1'b1;
+                imm_o[6:5] = instr_i[27:26];
+              end
+              6'd44, 6'd45, 6'd46, 6'd47: begin  // vfmacc family
+                vop = VOP_FMACC; imm_o[6:5] = instr_i[27:26];
+              end
+              6'd48: begin vop = VOP_FBINW; imm_o[4:0] = 5'd0; end
+              6'd50: begin vop = VOP_FBINW; imm_o[4:0] = 5'd1; end
+              6'd52: begin
+                vop = VOP_FBINW; imm_o[4:0] = 5'd0; imm_o[7] = 1'b1;
+              end
+              6'd54: begin
+                vop = VOP_FBINW; imm_o[4:0] = 5'd1; imm_o[7] = 1'b1;
+              end
+              6'd56: begin vop = VOP_FBINW; imm_o[4:0] = 5'd2; end
+              6'd60, 6'd61, 6'd62, 6'd63: begin  // vfwmacc family
+                vop = VOP_FMACCW; imm_o[6:5] = instr_i[27:26];
+              end
+              6'd24: begin vop = VOP_FCMP; imm_o[2:0] = 3'd0; end
+              6'd28: begin vop = VOP_FCMP; imm_o[2:0] = 3'd1; end
+              6'd27: begin vop = VOP_FCMP; imm_o[2:0] = 3'd2; end
+              6'd25: begin vop = VOP_FCMP; imm_o[2:0] = 3'd3; end
+              6'd29: begin
+                vop = VOP_FCMP; imm_o[2:0] = 3'd4; ok = vf;
+              end
+              6'd31: begin
+                vop = VOP_FCMP; imm_o[2:0] = 3'd5; ok = vf;
+              end
+              6'd18: begin  // vfcvt / vfwcvt / vfncvt (.vv only)
+                vop = VOP_FCVT;
+                imm_o[4:0] = instr_i[19:15];
+                ok = !vf && (instr_i[19:15] < 5'd24) &&
+                     ((instr_i[17:15] != 3'd5) ||
+                      (instr_i[19:15] == 5'd21)) &&
+                     ((instr_i[17:15] != 3'd4) ||
+                      (instr_i[19:15] >= 5'd8));
+              end
+              6'd19: begin  // vfsqrt / vfrec7 / vfrsqrt7 / vfclass
+                vop = VOP_FUNARY;
+                ok = !vf && ((instr_i[19:15] == 5'd0) ||
+                             (instr_i[19:15] == 5'd4) ||
+                             (instr_i[19:15] == 5'd5) ||
+                             (instr_i[19:15] == 5'd16));
+                imm_o[1:0] = (instr_i[19:15] == 5'd16) ? 2'd1 :
+                             (instr_i[19:15] == 5'd4)  ? 2'd2 :
+                             (instr_i[19:15] == 5'd5)  ? 2'd3 : 2'd0;
+              end
+              6'd1, 6'd3, 6'd5, 6'd7: begin  // vfred* (.vs only)
+                vop = VOP_FRED;
+                imm_o[1:0] = instr_i[28:27];  // usu/osu/min/max
+                ok = !vf;
+              end
+              6'd49, 6'd51: begin  // vfwredusum/osum
+                vop = VOP_FWRED;
+                imm_o[1:0] = {1'b0, instr_i[27]};
+                ok = !vf;
+              end
+              6'd23: begin  // vfmerge.vfm / vfmv.v.f
+                ok = vf;
+                if (!instr_i[25]) vop = VOP_MERGE;
+                else begin
+                  vop = VOP_MV;
+                  ok = vf && (instr_i[24:20] == 5'd0);
+                end
+              end
+              6'd16: begin  // vfmv.s.f / vfmv.f.s
+                if (vf) begin
+                  vop = VOP_MVSX;
+                  ok = instr_i[24:20] == 5'd0;
+                end else begin
+                  vop = VOP_FMVFS;
+                  ok = instr_i[19:15] == 5'd0;
+                end
+              end
+              6'd14: begin vop = VOP_SLIDE1UP; ok = vf; end
+              6'd15: begin vop = VOP_SLIDE1DOWN; ok = vf; end
+              default: ok = 1'b0;
+            endcase
+          end else if (!opm) begin
             // OPIVV / OPIVX / OPIVI
             unique case (instr_i[31:26])
               6'd0: vop = VOP_ADD;
@@ -844,9 +953,12 @@ module muserisc_decoder import muserisc_pkg::*; (
             ctrl_o.valid = 1'b1;
             ctrl_o.vec = 1'b1;
             ctrl_o.bext_op = vop;
+            if (vf) ctrl_o.fp_rs1 = 1'b1;
             if ((vop == VOP_MVXS) || (vop == VOP_CPOP) ||
                 (vop == VOP_FIRST)) begin
               ctrl_o.reg_write = 1'b1;
+            end else if (vop == VOP_FMVFS) begin
+              ctrl_o.fp_rd = 1'b1;  // vfmv.f.s writes an FP reg
             end else begin
               ctrl_o.vec_rd = 1'b1;
             end

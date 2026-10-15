@@ -1151,6 +1151,53 @@ stages 4c/5:
   stage 7); scalar behavior is covered here by
   `make core-test` and the I/M ACT ELFs above.
 
+## In-house core stage 9 — floating-point V vector (2026-10-14, #29)
+
+- Scope: FP vector classes (Zve32f/Zve64f/Zve64d) in
+  `muserisc_decoder.sv` (OP-V funct3 001/101 carve-out),
+  `muserisc_vec.sv` (per-element execution through the
+  shared scalar `fp_eval`/`fp_estimate` in
+  `muserisc_fpu_pkg.sv`, extracted in stage 9a), and
+  `muserisc_core.sv` (FP scalar operand from the FP
+  regfile, accrued `fflags`, FS/SEW/frm legality).
+  Covers binary/widening arithmetic, FMA (incl. the
+  `vfwmacc` family), compares, sqrt/class,
+  `vfrec7`/`vfrsqrt7` estimates, all conversions
+  (incl. round-to-odd `vfncvt.rod`), ordered/unordered
+  reductions, and FP moves/slides. Full `V` and FP16
+  (the ACT Vf16 suite) are **not** claimed; `misa.V`
+  remains set on the integer+FP subsets above.
+- First-party gates: vector unit TB **1,014,624 checks**
+  (HOST-oracle FP section incl. estimates and ROD),
+  `fpvec_directed.S` + all suites inside
+  `make core-test`, `make lint` green, FPU TB unchanged
+  at **690,071 checks**. The `vfrec7`/`vfrsqrt7` tables
+  were extracted from the Sail reference with an
+  exponent/fraction/sign sweep probe and verified
+  bit-exact (results and flags) over 10,792
+  operand/result pairs, then re-verified on the DUT by
+  signature diff of the same probe programs.
+- ACT FP-vector result:
+  [`act-fpvector-stage9-2026-10-14.csv`](act-fpvector-stage9-2026-10-14.csv)
+  records all 162 generated self-checking ELFs run on
+  the core (100 Vf32 + 62 Vf64): **162/162 PASS**.
+  Generation: `EXTENSIONS=Vf32,Vf64
+  ./scripts/build_act4_core.sh` after declaring
+  Zve32f/Zve64f/Zve64d in `sw/act4-core/` and setting
+  the Sail `support_level` to `Float_double`.
+- Tests not run: the privileged `ExceptionsVf*` suites
+  are deselected by the ACT framework for this DUT
+  config because their test config requires `Zfhmin`
+  and full `V`; FP-vector illegality (FS off, reserved
+  `frm`, SEW<32) is covered by `fpvec_directed.S` and
+  Sail probes instead. 4 of the 66 Vf64 sources
+  (`vfmv.f.s`, `vfmv.s.f`, `vfslide1up.vf`,
+  `vfslide1down.vf`) generated no ELF because their
+  test config requires full `V`; the same instructions
+  are covered in Vf32 above and in `fpvec_directed.S`.
+  Integer ACT spot re-runs (Vx32, I) after the stage-9
+  changes are recorded in the issue.
+
 ## Crypto/SoC RTL SystemVerilog port (2026-10-14, #19)
 
 - `rtl/crypto/*.v` and `rtl/soc/muserisc_soc_top.v`

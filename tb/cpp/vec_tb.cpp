@@ -4,6 +4,7 @@
 // tail/mask-agnostic policies. The golden model is written
 // from the spec's element semantics directly (per-element
 // arrays), not by mirroring the RTL loop.
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -199,6 +200,7 @@ int main(int argc, char** argv) {
           d->sew_i = sew_code;
           d->vlmax_i = max_el;
           d->vxrm_i = 0;
+          d->frm_i = 0;
           d->vl_i = vl;
           d->vstart_i = vstart;
           d->vta_i = vta;
@@ -294,6 +296,7 @@ int main(int argc, char** argv) {
       d->vma_i = 1;
       d->vm_i = vm;
       d->vxrm_i = 0;
+          d->frm_i = 0;
       for (int i = 0; i < 16; ++i) {
         d->mask_i[i] =
             static_cast<uint32_t>(maskg.w[i / 2] >> (32 * (i % 2)));
@@ -436,6 +439,303 @@ int main(int argc, char** argv) {
     got = run(43, 0, vlmax, 0, true, 6, 0, ext2, vs1, old_vd, maskg);
     for (int i = 0; i < vlmax; ++i) {
       CHECK(GetEl(got, i, sew) == GetEl(ext2, i, 16));
+    }
+  }
+
+  // ---- FP vector directed checks (stage 9, issue #29) ----
+  // Host IEEE float/double is the oracle at RNE for value
+  // checks; special values use explicit expected constants.
+  {
+    auto fbits = [](float f) {
+      uint32_t u; std::memcpy(&u, &f, 4); return u;
+    };
+    auto dbits = [](double f) {
+      uint64_t u; std::memcpy(&u, &f, 8); return u;
+    };
+    auto asf = [](uint32_t u) {
+      float f; std::memcpy(&f, &u, 4); return f;
+    };
+    auto asd = [](uint64_t u) {
+      double f; std::memcpy(&f, &u, 8); return f;
+    };
+    int flast = 0;
+    auto frun = [&](int vop, int form, int sew_code, uint64_t vl,
+                    uint64_t vstart, bool vm, uint64_t imm,
+                    uint64_t scalar, const Group& vs2,
+                    const Group& vs1, const Group& old_vd,
+                    const Group& maskg) {
+      d->op_i = vop; d->form_i = form; d->sew_i = sew_code;
+      d->vl_i = vl; d->vstart_i = vstart; d->vlmax_i = 8;
+      d->vta_i = 0; d->vma_i = 0; d->vm_i = vm;
+      d->vxrm_i = 0; d->frm_i = 0;
+      for (int i = 0; i < 16; ++i) {
+        d->mask_i[i] =
+            static_cast<uint32_t>(maskg.w[i / 2] >> (32 * (i % 2)));
+      }
+      PutGroup(d->vs2_i, vs2); PutGroup(d->vs1_i, vs1);
+      PutGroup(d->old_vd_i, old_vd);
+      d->scalar_i = scalar; d->imm_i = imm;
+      d->eval();
+      flast = d->fflags_o;
+      return FetchGroup(d->result_o);
+    };
+    const int S32 = 2, D64 = 3;  // sew codes
+    // vfadd/sub/mul/div .vv single, masked with prestart.
+    for (int fop = 0; fop <= 3; ++fop) {
+      Group a, b, old, m;
+      const float av[8] = {1.5f, -2.25f, 0.5f, 100.0f,
+                           -0.0f, 3.25f, 1e10f, 7.0f};
+      const float bv[8] = {0.25f, 2.0f, -4.0f, 0.5f,
+                           1.0f, -3.25f, 3.0f, 0.0f};
+      for (int i = 0; i < 8; ++i) {
+        SetEl(a, i, 32, fbits(av[i])); SetEl(b, i, 32, fbits(bv[i]));
+        SetEl(old, i, 32, 0xeeee0000u + i);
+      }
+      m.w[0] = 0b11010110;
+      Group got = frun(88, 0, S32, 7, 1, false, fop, 0, a, b, old, m);
+      for (int i = 0; i < 8; ++i) {
+        const bool active = i >= 1 && i < 7 && ((m.w[0] >> i) & 1);
+        float want = 0;
+        if (fop == 0) want = av[i] + bv[i];
+        if (fop == 1) want = av[i] - bv[i];
+        if (fop == 2) want = av[i] * bv[i];
+        if (fop == 3) want = av[i] / bv[i];
+        CHECK(GetEl(got, i, 32) ==
+              (active ? fbits(want) : 0xeeee0000u + i));
+      }
+    }
+    // vfdiv.vv double incl. div-by-zero -> inf + DZ, 0/0 -> NV.
+    {
+      Group a, b, old, m;
+      const double av[4] = {1.0, 0.0, -5.0, 2.5};
+      const double bv[4] = {0.0, 0.0, 2.0, 0.5};
+      for (int i = 0; i < 4; ++i) {
+        SetEl(a, i, 64, dbits(av[i])); SetEl(b, i, 64, dbits(bv[i]));
+      }
+      m.w[0] = 0xf;
+      Group got = frun(88, 0, D64, 4, 0, true, 3, 0, a, b, old, m);
+      CHECK(GetEl(got, 0, 64) == 0x7ff0000000000000ull);
+      CHECK(GetEl(got, 1, 64) == 0x7ff8000000000000ull);
+      CHECK(GetEl(got, 2, 64) == dbits(-2.5));
+      CHECK(GetEl(got, 3, 64) == dbits(5.0));
+      CHECK((flast & 0x10) != 0);  // NV
+      CHECK((flast & 0x08) != 0);  // DZ
+    }
+    // vfmul.vf: scalar from FP reg (NaN-boxed single).
+    {
+      Group a, b, old, m;
+      for (int i = 0; i < 8; ++i) SetEl(a, i, 32, fbits(0.5f * i));
+      m.w[0] = 0xff;
+      Group got = frun(88, 1, S32, 8, 0, true, 2,
+                       (0xffffffffull << 32) | fbits(4.0f), a, b, old, m);
+      for (int i = 0; i < 8; ++i) {
+        CHECK(GetEl(got, i, 32) == fbits(0.5f * i * 4.0f));
+      }
+    }
+    // vfmacc.vv single and vfnmsac.vf double (host fma).
+    {
+      Group a, b, c, m;
+      for (int i = 0; i < 8; ++i) {
+        SetEl(a, i, 32, fbits(1.0f + 0.25f * i));
+        SetEl(b, i, 32, fbits(2.0f - 0.5f * i));
+        SetEl(c, i, 32, fbits(0.125f * i));
+      }
+      m.w[0] = 0xff;
+      Group got = frun(90, 0, S32, 8, 0, true, 0, 0, a, b, c, m);
+      for (int i = 0; i < 8; ++i) {
+        CHECK(GetEl(got, i, 32) ==
+              fbits(std::fma(asf(fbits(1.0f + 0.25f * i)),
+                             asf(fbits(2.0f - 0.5f * i)),
+                             asf(fbits(0.125f * i)))));
+      }
+      Group a2, c2;
+      for (int i = 0; i < 4; ++i) {
+        SetEl(a2, i, 64, dbits(1.5 + i));
+        SetEl(c2, i, 64, dbits(10.0 - i));
+      }
+      // vfnmsac (funct6 low bits 11): vd = -(vs2*rs) + vd.
+      got = frun(90, 1, D64, 4, 0, true, (3 << 5), dbits(0.5), a2, b,
+                 c2, m);
+      for (int i = 0; i < 4; ++i) {
+        CHECK(GetEl(got, i, 64) ==
+              dbits(std::fma(-asd(dbits(1.5 + i)), 0.5,
+                             asd(dbits(10.0 - i)))));
+      }
+      // vfnmacc (funct6 low bits 01): vd = -(vs2*rs) - vd.
+      got = frun(90, 1, D64, 4, 0, true, (1 << 5), dbits(0.5), a2, b,
+                 c2, m);
+      for (int i = 0; i < 4; ++i) {
+        CHECK(GetEl(got, i, 64) ==
+              dbits(std::fma(-asd(dbits(1.5 + i)), 0.5,
+                             -asd(dbits(10.0 - i)))));
+      }
+    }
+    // vmflt.vv + vmfeq.vf (mask dest; NaN: lt false + NV).
+    {
+      Group a, b, old, m;
+      const float av[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+      for (int i = 0; i < 8; ++i) {
+        SetEl(a, i, 32, fbits(av[i])); SetEl(b, i, 32, fbits(4.5f));
+        SetEl(old, i, 32, 0);
+      }
+      SetEl(a, 6, 32, 0x7fc00000u);  // qNaN element
+      m.w[0] = 0xff;
+      Group got = frun(92, 0, S32, 8, 0, true, 2, 0, a, b, old, m);
+      CHECK((got.w[0] & 0xff) == 0b00001111);
+      CHECK((flast & 0x10) != 0);  // signaling compare NV
+      got = frun(92, 1, S32, 8, 0, true, 0,
+                 (0xffffffffull << 32) | fbits(4.0f), a, b, old, m);
+      CHECK((got.w[0] & 0xff) == 0b00001000);
+      CHECK((flast & 0x10) == 0);  // qNaN quiet for feq
+    }
+    // vfsqrt.v / vfclass.v.
+    {
+      Group a, b, old, m;
+      const float av[8] = {4.0f, 2.0f, -1.0f, 0.0f,
+                           1.0f / 0.0f, -0.0f, 1e-42f, 9.0f};
+      for (int i = 0; i < 8; ++i) SetEl(a, i, 32, fbits(av[i]));
+      m.w[0] = 0xff;
+      Group got = frun(93, 0, S32, 8, 0, true, 0, 0, a, b, old, m);
+      CHECK(GetEl(got, 0, 32) == fbits(2.0f));
+      CHECK(GetEl(got, 1, 32) == fbits(std::sqrt(2.0f)));
+      CHECK(GetEl(got, 2, 32) == 0x7fc00000u);
+      CHECK((flast & 0x10) != 0);  // sqrt(-1) NV
+      got = frun(93, 0, S32, 8, 0, true, 1, 0, a, b, old, m);
+      const uint32_t cls[8] = {1u << 6, 1u << 6, 1u << 1, 1u << 4,
+                               1u << 7, 1u << 3, 1u << 5, 1u << 6};
+      for (int i = 0; i < 8; ++i) CHECK(GetEl(got, i, 32) == cls[i]);
+    }
+    // vfwadd.vv (S->D) and vfwadd.wv, vfwmacc.vf.
+    {
+      Group a, b, old, m;
+      const float av[4] = {0.1f, 1.5f, -2.5f, 100.0f};
+      const float bv[4] = {0.2f, 0.5f, 2.5f, 0.25f};
+      for (int i = 0; i < 4; ++i) {
+        SetEl(a, i, 32, fbits(av[i])); SetEl(b, i, 32, fbits(bv[i]));
+      }
+      m.w[0] = 0xf;
+      Group got = frun(89, 0, S32, 4, 0, true, 0, 0, a, b, old, m);
+      for (int i = 0; i < 4; ++i) {
+        CHECK(GetEl(got, i, 64) ==
+              dbits(static_cast<double>(av[i]) +
+                    static_cast<double>(bv[i])));
+      }
+      Group aw_;
+      const double ad[4] = {1.25, -0.5, 3.0, 7.5};
+      for (int i = 0; i < 4; ++i) SetEl(aw_, i, 64, dbits(ad[i]));
+      got = frun(89, 0, S32, 4, 0, true, (1 << 7) | 1, 0, aw_, b, old,
+                 m);  // vfwsub.wv
+      for (int i = 0; i < 4; ++i) {
+        CHECK(GetEl(got, i, 64) ==
+              dbits(ad[i] - static_cast<double>(bv[i])));
+      }
+      Group c;
+      for (int i = 0; i < 4; ++i) SetEl(c, i, 64, dbits(1.0 * i));
+      got = frun(91, 1, S32, 4, 0, true, 0,
+                 (0xffffffffull << 32) | fbits(2.0f), a, b, c, m);
+      for (int i = 0; i < 4; ++i) {
+        CHECK(GetEl(got, i, 64) ==
+              dbits(std::fma(static_cast<double>(av[i]), 2.0, 1.0 * i)));
+      }
+    }
+    // Conversions: f.xu, x.f, rtz x.f, f.f narrow, x.f.w narrow.
+    {
+      Group a, b, old, m;
+      const uint32_t iv[8] = {0, 1, 7, 100000, 0x80000000u,
+                              3, 17, 0xfffffff0u};
+      for (int i = 0; i < 8; ++i) SetEl(a, i, 32, iv[i]);
+      m.w[0] = 0xff;
+      Group got = frun(94, 0, S32, 8, 0, true, 2, 0, a, b, old, m);
+      for (int i = 0; i < 8; ++i) {
+        CHECK(GetEl(got, i, 32) ==
+              fbits(static_cast<float>(iv[i])));
+      }
+      const float fv[8] = {1.5f, -1.5f, 2.5f, -2.5f,
+                           0.5f, 100.75f, -0.25f, 3.5f};
+      Group fa_;
+      for (int i = 0; i < 8; ++i) SetEl(fa_, i, 32, fbits(fv[i]));
+      got = frun(94, 0, S32, 8, 0, true, 1, 0, fa_, b, old, m);
+      const int32_t xwant[8] = {2, -2, 2, -2, 0, 101, 0, 4};  // RNE
+      for (int i = 0; i < 8; ++i) {
+        CHECK(GetEl(got, i, 32) ==
+              static_cast<uint32_t>(xwant[i]));
+      }
+      got = frun(94, 0, S32, 8, 0, true, 7, 0, fa_, b, old, m);
+      const int32_t zwant[8] = {1, -1, 2, -2, 0, 100, 0, 3};  // RTZ
+      for (int i = 0; i < 8; ++i) {
+        CHECK(GetEl(got, i, 32) ==
+              static_cast<uint32_t>(zwant[i]));
+      }
+      Group da;
+      const double dv[4] = {0.1, -3.75, 1e300, 2.5};
+      for (int i = 0; i < 4; ++i) SetEl(da, i, 64, dbits(dv[i]));
+      got = frun(94, 0, S32, 4, 0, true, 20, 0, da, b, old, m);
+      for (int i = 0; i < 4; ++i) {
+        CHECK(GetEl(got, i, 32) ==
+              fbits(static_cast<float>(dv[i])));
+      }
+      got = frun(94, 0, S32, 4, 0, true, 17, 0, da, b, old, m);
+      const int32_t nwant[4] = {0, -4, INT32_MAX, 2};
+      for (int i = 0; i < 4; ++i) {
+        CHECK(GetEl(got, i, 32) ==
+              static_cast<uint32_t>(nwant[i]));
+      }
+    }
+    // vfredusum / vfredmax / vfwredusum (sequential fold).
+    {
+      Group a, seed, old, m;
+      const float av[8] = {1, 2, 4, 8, 16, 32, 64, 128};
+      for (int i = 0; i < 8; ++i) SetEl(a, i, 32, fbits(av[i]));
+      SetEl(seed, 0, 32, fbits(0.5f));
+      m.w[0] = 0b01111101;  // skip elements 1 and 7
+      Group got = frun(95, 0, S32, 8, 0, false, 0, 0, a, seed, old,
+                       m);
+      CHECK(GetEl(got, 0, 32) == fbits(0.5f + 1 + 4 + 8 + 16 + 32 + 64));
+      got = frun(95, 0, S32, 8, 0, false, 3, 0, a, seed, old, m);
+      CHECK(GetEl(got, 0, 32) == fbits(64.0f));
+      Group dseed;
+      SetEl(dseed, 0, 64, dbits(0.25));
+      got = frun(96, 0, S32, 8, 0, true, 0, 0, a, dseed, old, m);
+      CHECK(GetEl(got, 0, 64) == dbits(255.25));
+    }
+    // vfrec7 / vfrsqrt7 spot values (incl. specials; the
+    // full tables are Sail-verified by probe + ACT).
+    {
+      Group a, b, old, m;
+      const uint32_t in[8] = {0x3f800000, 0x40000000, 0x00000001,
+                              0x7f800000, 0x00000000, 0x80000000,
+                              0x7fc00000, 0xbf800000};
+      for (int i = 0; i < 8; ++i) SetEl(a, i, 32, in[i]);
+      m.w[0] = 0xff;
+      Group got = frun(93, 0, S32, 8, 0, true, 3, 0, a, b, old, m);
+      const uint32_t recw[8] = {0x3f7f0000, 0x3eff0000, 0x7f800000,
+                                0x00000000, 0x7f800000, 0xff800000,
+                                0x7fc00000, 0xbf7f0000};
+      for (int i = 0; i < 8; ++i) CHECK(GetEl(got, i, 32) == recw[i]);
+      CHECK((flast & 0x0d) == 0x0d);  // DZ + OF + NX accrued
+      got = frun(93, 0, S32, 8, 0, true, 2, 0, a, b, old, m);
+      const uint32_t rsqw[8] = {0x3f7f0000, 0x3f340000, 0x64b40000,
+                                0x00000000, 0x7f800000, 0xff800000,
+                                0x7fc00000, 0x7fc00000};
+      for (int i = 0; i < 8; ++i) CHECK(GetEl(got, i, 32) == rsqw[i]);
+      CHECK((flast & 0x18) == 0x18);  // NV + DZ accrued
+      // vfncvt.rod.f.f.w: inexact results get odd LSB, exact
+      // results unchanged, overflow saturates to max finite.
+      Group da;
+      const double dv[4] = {1.0 + 0x1p-30, 1.5, 1e300, -1e300};
+      for (int i = 0; i < 4; ++i) SetEl(da, i, 64, dbits(dv[i]));
+      got = frun(94, 0, S32, 4, 0, true, 21, 0, da, b, old, m);
+      CHECK(GetEl(got, 0, 32) == 0x3f800001u);  // 1.0 | 1 (odd)
+      CHECK(GetEl(got, 1, 32) == fbits(1.5f));
+      CHECK(GetEl(got, 2, 32) == 0x7f7fffffu);
+      CHECK(GetEl(got, 3, 32) == 0xff7fffffu);
+    }
+    // vfmv.f.s scalar result is NaN-boxed element 0.
+    {
+      Group a, b, old, m;
+      SetEl(a, 0, 32, 0x80000000u);
+      (void)frun(97, 0, S32, 4, 0, true, 0, 0, a, b, old, m);
+      CHECK(d->scalar_o == 0xffffffff80000000ull);
     }
   }
 

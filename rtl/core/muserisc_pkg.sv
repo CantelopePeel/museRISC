@@ -173,6 +173,20 @@ package muserisc_pkg;
   localparam logic [6:0] VOP_FIRST = 7'd85;  // scalar result
   localparam logic [6:0] VOP_MVR   = 7'd86;  // vmv<nr>r.v
   localparam logic [6:0] VOP_WRED  = 7'd87;  // vwredsum(u), imm[0]=sgn
+  // FP vector classes (stage 9): the scalar FPU operation
+  // rides in imm[4:0] (FPU_*), its aux in imm[6:5];
+  // imm[7] swaps operands (vfrsub/vfrdiv), selects the
+  // wide vs2 of vfwadd.w, or the madd FMA form.
+  localparam logic [6:0] VOP_FBIN   = 7'd88;  // vfadd/sub/mul/..
+  localparam logic [6:0] VOP_FBINW  = 7'd89;  // vfwadd/sub/mul(.w)
+  localparam logic [6:0] VOP_FMACC  = 7'd90;  // vfma family
+  localparam logic [6:0] VOP_FMACCW = 7'd91;  // vfwmacc family
+  localparam logic [6:0] VOP_FCMP   = 7'd92;  // vmfeq.., imm[2:0]
+  localparam logic [6:0] VOP_FUNARY = 7'd93;  // imm[1:0]: sqrt/class
+  localparam logic [6:0] VOP_FCVT   = 7'd94;  // imm[4:0] = vs1 sub-op
+  localparam logic [6:0] VOP_FRED   = 7'd95;  // imm[1:0]: usu/osu/min/max
+  localparam logic [6:0] VOP_FWRED  = 7'd96;  // vfwredusum/osum
+  localparam logic [6:0] VOP_FMVFS  = 7'd97;  // vfmv.f.s
   // Vector load/store classes (bext_op on vec mem ops).
   localparam logic [6:0] VLS_UNIT  = 7'd100;
   localparam logic [6:0] VLS_STRIDED = 7'd101;

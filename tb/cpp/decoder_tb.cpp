@@ -384,10 +384,74 @@ Ctrl Golden(uint32_t insn) {
         break;
       }
       const bool opm = (f3 == 2 || f3 == 6);
-      const int form = (f3 == 0 || f3 == 2) ? 0 : (f3 == 4 || f3 == 6) ? 1 : 2;
+      const bool vf = (f3 == 5);
+      const int form = (f3 == 0 || f3 == 2 || f3 == 1) ? 0
+                       : (f3 == 4 || f3 == 6 || f3 == 5) ? 1 : 2;
       int vop = -1;
       bool ok = true;
-      if (!opm) {
+      if (f3 == 1 || f3 == 5) {
+        // OPFVV/OPFVF (stage 9): FPU op in imm[4:0], aux in
+        // imm[6:5], swap/wide/madd in imm[7].
+        c.imm = 0;
+        switch (f6) {
+          case 0: vop = 88; c.imm = 0; break;
+          case 2: vop = 88; c.imm = 1; break;
+          case 39: vop = 88; c.imm = (1 << 7) | 1; ok = vf; break;
+          case 4: vop = 88; c.imm = 6; break;
+          case 6: vop = 88; c.imm = (1 << 5) | 6; break;
+          case 8: case 9: case 10:
+            vop = 88; c.imm = (((insn >> 26) & 3) << 5) | 5; break;
+          case 32: vop = 88; c.imm = 3; break;
+          case 33: vop = 88; c.imm = (1 << 7) | 3; ok = vf; break;
+          case 36: vop = 88; c.imm = 2; break;
+          case 40: case 41: case 42: case 43:
+            vop = 90; c.imm = (1 << 7) | (((insn >> 26) & 3) << 5);
+            break;
+          case 44: case 45: case 46: case 47:
+            vop = 90; c.imm = ((insn >> 26) & 3) << 5; break;
+          case 48: vop = 89; c.imm = 0; break;
+          case 50: vop = 89; c.imm = 1; break;
+          case 52: vop = 89; c.imm = (1 << 7) | 0; break;
+          case 54: vop = 89; c.imm = (1 << 7) | 1; break;
+          case 56: vop = 89; c.imm = 2; break;
+          case 60: case 61: case 62: case 63:
+            vop = 91; c.imm = ((insn >> 26) & 3) << 5; break;
+          case 24: vop = 92; c.imm = 0; break;
+          case 28: vop = 92; c.imm = 1; break;
+          case 27: vop = 92; c.imm = 2; break;
+          case 25: vop = 92; c.imm = 3; break;
+          case 29: vop = 92; c.imm = 4; ok = vf; break;
+          case 31: vop = 92; c.imm = 5; ok = vf; break;
+          case 18:
+            vop = 94; c.imm = vs1f;
+            ok = !vf && vs1f < 24 &&
+                 ((vs1f & 7) != 5 || vs1f == 21) &&
+                 ((vs1f & 7) != 4 || vs1f >= 8);
+            break;
+          case 19:
+            vop = 93;
+            ok = !vf && (vs1f == 0 || vs1f == 4 || vs1f == 5 ||
+                         vs1f == 16);
+            c.imm = vs1f == 16 ? 1 : vs1f == 4 ? 2 : vs1f == 5 ? 3 : 0;
+            break;
+          case 1: case 3: case 5: case 7:
+            vop = 95; c.imm = (insn >> 27) & 3; ok = !vf; break;
+          case 49: case 51:
+            vop = 96; c.imm = (insn >> 27) & 1; ok = !vf; break;
+          case 23:
+            ok = vf;
+            if (!vm) vop = 32;
+            else { vop = 9; ok = vf && vs2f == 0; }
+            break;
+          case 16:
+            if (vf) { vop = 10; ok = vs2f == 0; }
+            else { vop = 97; ok = vs1f == 0; }
+            break;
+          case 14: vop = 76; ok = vf; break;
+          case 15: vop = 77; ok = vf; break;
+          default: ok = false; break;
+        }
+      } else if (!opm) {
         switch (f6) {
           case 0: vop = 0; break;
           case 2: vop = 1; break;
@@ -510,7 +574,9 @@ Ctrl Golden(uint32_t insn) {
         c.valid = c.vec = true;
         c.bext_op = vop;
         c.fpu_aux = form;
+        if (vf) c.fp_rs1 = true;
         if (vop == 11 || vop == 84 || vop == 85) c.reg_write = true;
+        else if (vop == 97) c.fp_rd = true;
         else c.vec_rd = true;
       }
       break;

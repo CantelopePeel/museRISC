@@ -37,7 +37,7 @@ CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
             $(RTL)/muserisc_decoder.sv \
             $(RTL)/muserisc_csr.sv $(RTL)/muserisc_mmu.sv \
             $(RTL)/muserisc_core.sv
-TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed vec_directed \
+TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed vec_directed fpvec_directed \
             vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
             trap_store_misalign trap_younger_store trap_younger_csr \
@@ -151,10 +151,12 @@ rvc: $(BUILD)/rvc_tb
 
 ## ---- Vector unit test ------------------------------------------------------
 $(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) \
-                 $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_vec.sv | $(BUILD) $(OBJ)
+                 $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
+                 $(RTL)/muserisc_vec.sv | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/vec --top-module muserisc_vec \
 	  -o $(abspath $(BUILD)/vec_tb) $(PKG) \
-	  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_vec.sv \
+	  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
+	  $(RTL)/muserisc_vec.sv \
 	  $(abspath $(ROOT)/tb/cpp/vec_tb.cpp)
 
 vec: $(BUILD)/vec_tb
@@ -255,6 +257,7 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_counter_time.dat ./core_tb counter_time_directed.bin
 	cd $(BUILD) && COV_FILE=cov_hyp.dat ./core_tb hyp_directed.bin
 	cd $(BUILD) && COV_FILE=cov_vecsw.dat ./core_tb vec_directed.bin
+	cd $(BUILD) && COV_FILE=cov_fpvecsw.dat ./core_tb fpvec_directed.bin
 	cd $(BUILD) && COV_FILE=cov_trap_pa_fetch.dat ./core_tb trap_pa_fetch.bin 100000 --expect-trap 1
 	cd $(BUILD) && COV_FILE=cov_trap_pa_load.dat ./core_tb trap_pa_load.bin 100000 --expect-trap 5
 
