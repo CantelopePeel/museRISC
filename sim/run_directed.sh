@@ -22,6 +22,17 @@ run rv64i rv64i_directed.bin
 run rv64m rv64m_directed.bin
 run amo amo_directed.bin
 run fp fp_directed.bin
+run fpstall fp_stall_directed.bin
+# Timer IRQ at every offset across a window wider than the
+# longest multi-cycle FP op (as the pre-cache core target).
+for o in $(seq 100 147); do
+  echo "[$TAG] core_tb fp_irq_directed.bin --irq-timer-after $o ${EXTRA[*]} --mem-seed $seed"
+  COV_FILE="cov_fpirq_${o}_${TAG}.dat" ./core_tb fp_irq_directed.bin \
+    --irq-timer-after "$o" "${EXTRA[@]}" --mem-seed "$seed" > "fp_irq_${o}_${TAG}.log" 2>&1 ||
+    { cat "fp_irq_${o}_${TAG}.log"; exit 1; }
+done
+echo "CORE TB PASS fp_irq_directed.bin [$TAG] (48/48 IRQ offsets 100..147)"
+seed=$((seed + 1))
 run bextsw bext_directed.bin
 run rvcsw rvc_directed.bin
 run pipeline pipeline_directed.bin
