@@ -1,0 +1,50 @@
+#!/bin/bash
+# Run every directed core test (sw/core-tests/) on build/sim/core_tb
+# in one memory-system configuration. Called by `make -C sim core`
+# once per configuration; each run writes its own coverage file
+# cov_<test>_<TAG>.dat.
+#
+# Usage: run_directed.sh TAG [core_tb options...]
+#   e.g. run_directed.sh rand --mem-lat 1:6 --mem-gap 2 --mem-ready 70
+#        run_directed.sh nocache --no-cache
+set -euo pipefail
+TAG=$1; shift
+EXTRA=("$@")
+cd "$(dirname "$0")/../build/sim"
+seed=1
+run() {
+  local cov=$1; shift
+  echo "[$TAG] core_tb $* ${EXTRA[*]} --mem-seed $seed"
+  COV_FILE="cov_${cov}_${TAG}.dat" ./core_tb "$@" "${EXTRA[@]}" --mem-seed "$seed"
+  seed=$((seed + 1))
+}
+run rv64i rv64i_directed.bin
+run rv64m rv64m_directed.bin
+run amo amo_directed.bin
+run fp fp_directed.bin
+run bextsw bext_directed.bin
+run rvcsw rvc_directed.bin
+run pipeline pipeline_directed.bin
+run priv priv_directed.bin 6000000 --irq-timer-after 2000
+run vm vm_directed.bin
+run trap_illegal trap_illegal.bin 100000 --expect-trap 2
+run trap_misalign trap_misalign.bin 100000 --expect-trap 4
+run trap_ecall trap_ecall.bin 100000 --expect-trap 11
+run trap_ebreak trap_ebreak.bin 100000 --expect-trap 3
+run trap_smisalign trap_store_misalign.bin 100000 --expect-trap 6
+run trap_ystore trap_younger_store.bin 100000 --expect-trap 4
+run trap_ycsr trap_younger_csr.bin
+run irq_seip_rmw irq_seip_rmw.bin
+run irq_mip_rmw_variants irq_mip_rmw_variants.bin
+run counter_time counter_time_directed.bin
+run hyp hyp_directed.bin
+run vecsw vec_directed.bin 4000000
+run fpvecsw fpvec_directed.bin 4000000
+run vectrap vec_trap_directed.bin 4000000 --irq-timer-after 2000
+run trap_pa_fetch trap_pa_fetch.bin 100000 --expect-trap 1
+run trap_pa_load trap_pa_load.bin 100000 --expect-trap 5
+# L1 cache / memory-interface directed tests
+run smc_fencei smc_fencei_directed.bin
+run amo_cache amo_cache_directed.bin
+run mmio_bypass mmio_bypass_directed.bin
+run vm_sfence_cache vm_sfence_cache_directed.bin

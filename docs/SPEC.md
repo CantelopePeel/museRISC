@@ -61,6 +61,20 @@ transaction); RAM is external at block level (simulation
 model, ASIC SRAM wrapper, or FPGA BRAM/DDR behind the
 `mem_*` ports).
 
+Platform map the in-house core boots Linux on (`soc_tb`,
+`sw/linux/muserisc.dts`): `0x0000_1000` boot ROM ·
+`0x0200_0000` CLINT · `0x0C00_0000` PLIC · `0x1000_0000` UART ·
+`0x8000_0000` DRAM (128 MiB modeled).
+
+Cacheability (PMA): the CPU's L1 I$/D$ (`muserisc_cpu`) cache
+only the configured windows — by default `0x8000_0000..
+0xFFFF_FFFF` (DRAM); everything else (ROM, CLINT, PLIC, UART,
+crypto) is I/O, accessed uncached as single in-order bus beats
+so device side effects happen exactly once. The CPU presents
+one memory-bus master (valid/ready request, burst responses;
+AXI4-mappable, see `docs/CORE.md`) for the SoC fabric (#4) and
+FPGA BRAM/DDR (#32).
+
 ## 5. Physical targets (v1, non-binding)
 
 Nangate45 @ 100 MHz for `muse_crypto` macro closure in ORFS;

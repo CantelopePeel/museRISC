@@ -17,7 +17,13 @@ CORE_RTL := rtl/core/muserisc_pkg.sv rtl/core/muserisc_regfile.sv \
             rtl/core/muserisc_vec_pkg.sv rtl/core/muserisc_vec.sv \
             rtl/core/muserisc_rvc.sv \
             rtl/core/muserisc_decoder.sv rtl/core/muserisc_csr.sv \
-            rtl/core/muserisc_mmu.sv rtl/core/muserisc_core.sv
+            rtl/core/muserisc_mmu.sv rtl/core/muserisc_cache_pkg.sv \
+            rtl/core/muserisc_core.sv
+# L1 caches + CPU wrapper (top: muserisc_cpu); the cache package
+# is already in CORE_RTL.
+CACHE_RTL := rtl/core/muserisc_sram_sp.sv \
+             rtl/core/muserisc_icache.sv rtl/core/muserisc_dcache.sv \
+             rtl/core/muserisc_bus_arb.sv rtl/core/muserisc_cpu.sv
 
 .PHONY: test lint core-test riscv-tests openroad compliance clean
 test: ## Python golden self-check + Verilator C++ crypto KATs (needs python3, verilator)
@@ -33,6 +39,7 @@ lint: ## Verilator lint on all synthesizable RTL
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_core $(CORE_RTL)
 	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module muserisc_muldiv_mc rtl/core/muserisc_muldiv.sv rtl/core/muserisc_muldiv_mc.sv
 	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module muserisc_muldiv_mc -GCOMB=1 rtl/core/muserisc_muldiv.sv rtl/core/muserisc_muldiv_mc.sv
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_cpu $(CORE_RTL) $(CACHE_RTL)
 
 core-test: ## In-house core C++ Verilator TBs + directed asm + coverage (issue #18)
 	$(MAKE) -C sim
