@@ -40,6 +40,13 @@ module muserisc_core import muserisc_pkg::*; (
     output logic [7:0]  dmem_be_o,
     output wire        dmem_re_o,
     input  wire [63:0] dmem_rdata_i,
+    // External scalar data stall: while asserted for a data
+    // access in MEM, the whole pipeline holds exactly as for a
+    // translation miss and the access completes in the cycle
+    // this drops (SoC fabric uses it for AXI/handshaked MMIO;
+    // tie to 0 for plain combinational SRAM). Vector LS and
+    // walker accesses do not consume it.
+    input  wire        dmem_stall_i,
     // Trap observability: pulses the cycle a trap is taken.
     output wire        trap_o,
     output wire [63:0] trap_cause_o,
@@ -93,6 +100,12 @@ module muserisc_core import muserisc_pkg::*; (
   logic [1:0]  walk_acc;
   logic        mem_stall;     // data translation miss: hold all regs
   logic        sfence_fire;   // SFENCE.VMA commits this cycle
+  // Forward declarations for signals driven in later
+  // stages but read in EX/ID gating (slang synthesis
+  // requires declaration before use; Verilator did not).
+  logic        vec_wb_stall, vls_vrf_we, vec_fflags_we, mem_exc;
+  logic signed [3:0] vls_emul_log2;
+  logic [63:0] load_shifted;
 
   // ------------------------------------------------------------
   // IF stage
@@ -325,7 +338,6 @@ module muserisc_core import muserisc_pkg::*; (
   // MEM the cycle before; a vector op in EX in either cycle
   // would read or write stale state, so EX holds across both
   // (bubbles into EX/MEM, front stages frozen).
-  logic        vec_wb_stall;
   assign vec_wb_stall = (memwb_vec_we_q || vls_vrf_we) &&
                         idex_valid_q && idex_ctrl_q.vec && !idex_exc_q;
   assign wb_write = memwb_valid_q && memwb_reg_write_q && !memwb_exc_q;
@@ -491,13 +503,12 @@ module muserisc_core import muserisc_pkg::*; (
   logic [4095:0] vec_vs2, vec_vs1, vec_old_vd, vec_result;
   logic [511:0]  vec_v0;
   logic [63:0]   vec_scalar;
-  logic          vec_we, vec_illegal, vec_align_bad, vls_vrf_we;
+  logic          vec_we, vec_illegal, vec_align_bad;
   logic [2:0]    vec_wlmul;
   logic [63:0]   vset_avl, vset_vtype_raw, vec_vlmax;
   logic [1:0]    csr_vxrm;
   logic          vset_en, vec_sat;
   logic [4:0]    vec_fflags;
-  logic          vec_fflags_we;
   // FP vector ops accrue fflags and dirty FS on commit,
   // under the same precise-trap gating as vxsat.
   assign vec_fflags_we = idex_valid_q && idex_ctrl_q.vec &&
@@ -973,7 +984,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] mem_result;
   logic        data_access, mem_uses_port;
   logic        mem_pmp_fault, mem_trans_fault;
-  logic        mem_exc, mem_gva;
+  logic        mem_gva;
   logic [63:0] mem_cause, mem_tval, mem_gpa;
   // Effective data-translation context in MEM. HLV/HSV run
   // as VS/VU (hstatus.SPVP) under vsatp + hgatp regardless of
@@ -1169,7 +1180,6 @@ module muserisc_core import muserisc_pkg::*; (
   // EMUL for the destination group: (EEW/SEW)*LMUL. The
   // write count is the register span (fields * group size
   // for segments, nf+1 for whole-register transfers).
-  logic signed [3:0] vls_emul_log2;
   logic [3:0] vls_wnum;
   always_comb begin
     logic signed [3:0] lmul_log2;
@@ -1227,7 +1237,9 @@ module muserisc_core import muserisc_pkg::*; (
                        (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write) &&
                        (!vls_is || vls_has_cur);
   assign mem_stall = (data_access && !mmu_d_ok && !mmu_d_fault) ||
-                     (vls_is && !vls_done && !vls_fault);
+                     (vls_is && !vls_done && !vls_fault) ||
+                     (data_access && mmu_d_ok && !vls_is &&
+                      dmem_stall_i);
   assign mem_trans_fault = data_access && mmu_d_fault;
   // PMP denial, or a physical address outside the 56-bit map.
   assign mem_pmp_fault = data_access && mmu_d_ok &&
@@ -1239,7 +1251,6 @@ module muserisc_core import muserisc_pkg::*; (
   assign dmem_addr_o = walk_grant ? walk_addr : mmu_d_pa;
   assign dmem_re_o = mem_uses_port && exmem_ctrl_q.mem_read;
 
-  logic [63:0] load_shifted;
   logic        res_valid_q;
   logic [63:0] res_pa_q;
   logic        res_is_d_q;  // reserved access size: 1 = 8B, 0 = 4B

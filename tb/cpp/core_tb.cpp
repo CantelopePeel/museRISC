@@ -184,6 +184,7 @@ int main(int argc, char** argv) {
   dut->boot_pc_i = boot_pc;
   dut->imem_rdata_i = 0;
   dut->dmem_rdata_i = 0;
+  dut->dmem_stall_i = 0;
   // Legacy --expect-trap runs freeze at the first trap; normal
   // runs let the core take traps to its handlers.
   dut->trap_halt_i = (expect_trap >= 0) ? 1 : 0;
