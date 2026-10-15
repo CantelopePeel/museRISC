@@ -1383,3 +1383,51 @@ stages 4c/5:
   `EXTENSIONS=Zba,Zbb,Zbc,Zbs,Zbkb,Zbkc,Zbkx,Zicond,Zkne,Zknd,Zknh`
   then `EXTENSIONS=Zcb` via `scripts/build_act4_core.sh`
   (17 s + cached), then `sim/run_act_core.sh` (48 s).
+
+## Linux S-external interrupt livelock fix (2026-10-15, #3)
+
+- Symptom: the soc_tb boot (OpenSBI v1.9 + Linux 6.6) reached
+  `/init`'s `uname` line and then took S-external interrupts
+  back to back until the 1e9-cycle limit
+  ([`vecserial-linux-smoke-2026-10-15.log`](vecserial-linux-smoke-2026-10-15.log)
+  on branch `vec-serial`).
+- Root cause (core, not PLIC/UART/misa.V): CSRRS/CSRRC
+  computed the new `mip` value from the read value, which ORs
+  the `irq_s_ext_i` pin into SEIP (and `irq_s_timer_i` into
+  STIP). OpenSBI does `csr_set/csr_clear(mip, MIP_STIP)` on
+  every timer event; if the PLIC S-context line was high at
+  that moment, the pin value was written into the software
+  SEIP bit. With the UART interrupt-driven tty active after
+  `/init` starts, this stuck `mip.SEIP` at 1: every PLIC
+  claim returned 0 and Linux re-entered the handler forever.
+  The privileged spec requires the RMW to use only the
+  software SEIP bit.
+- Fix: `muserisc_csr` exports `rmw_rdata_o` (= `rdata_o`
+  except `mip` SEIP/STIP are the software bits) and the core
+  uses it for CSRRS(I)/CSRRC(I). The rd value still reads
+  pin | software bit.
+- Regression: `sw/core-tests/irq_seip_rmw.S` in
+  `make core-test`, using a new `core_tb` IRQ_CTL store
+  (0x10000008) that drives the interrupt pins. It fails
+  subtest 4 (SEIP latched after the pin drops) on the old
+  RTL and passes with the fix. `irq_mip_rmw_variants.S` (from
+  review) adds CSRRSI/CSRRCI and CSRRW on `mip` with the pins
+  high and the `sip` alias from S-mode; `csr_tb` checks
+  `rmw_rdata_o` directly.
+- Gates: `make lint` clean (7 s); `make test`
+  `ALL PHASE-0 KATs PASS` (35 s); `make core-test` all PASS (re-run after review: CSR TB 214 checks incl. `rmw_rdata_o`, 24 directed binaries incl. `irq_mip_rmw_variants`, 119 s; riscv-tests 123/123, 30 s); first run:
+  23 directed binaries (244 s); `make riscv-tests`
+  **123/123** (59 s); full ACT regenerated in this worktree
+  (2,578 ELFs; same set as vec-serial)
+  [`act-core-irqfix-2026-10-15.csv`](act-core-irqfix-2026-10-15.csv)
+  **2,577/2,578**, the single `PMPSm_cfg_A_tor_zero-00` PA0
+  waiver, verdicts identical to
+  `act-core-vecserial-2026-10-15.csv` (869 s, 24 jobs).
+- Linux: the same Image/fw_jump/dtb that livelocked reach
+  `SOC TB PASS` at 508,685,709 cycles (`/proc/version` and
+  `MUSERISC_LINUX_BOOT_OK` printed; 1,648 s wall) on
+  vec-serial RTL + this fix, -O3 non-coverage soc_tb
+  ([`irqfix-linux-boot-2026-10-15.log`](irqfix-linux-boot-2026-10-15.log)).
+  The vector unit is idle for the whole boot. The same boot
+  on this branch's own RTL was still running when this was
+  written; its result will be posted on the PR.
