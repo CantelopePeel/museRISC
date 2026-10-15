@@ -16,6 +16,14 @@
 // one-cycle write bypass (write-first semantics), so the
 // replicas' own collision behavior never matters.
 //
+// Consumer contract: read data is valid the cycle after re
+// and is then held while re stays low, but a held word does
+// NOT reflect writes that land after it was sampled. A
+// consumer may hold read data across a write only if that
+// write cannot touch bytes it still uses (true for the
+// vector unit's in-order element pipeline and the MEM
+// sequencer's RD/ACC phases; see docs/CORE.md).
+//
 // v0 is additionally mirrored in a 512-bit shadow so the
 // mask bit of any element is available without a read port.
 `default_nettype none

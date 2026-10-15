@@ -280,6 +280,89 @@ irq_after_vmacc:
     li a3, 0x30                      // untouched segment data
     bne a2, a3, fail
     csrw vstart, x0
+
+    // ---- 9: fault-only-first with element 0 masked off: a
+    // fault on element 1 trims vl to 1 (RVV 7.7), no trap ----
+    li t0, 9
+    la t1, pbuf
+    addi t1, t1, 4
+    srli t1, t1, 2
+    csrw pmpaddr0, t1                // TOR [0, pbuf+4)
+    vsetivli x0, 3, e32, m1, tu, mu
+    li a2, 0x5a5a5a5a
+    vmv.v.x v8, a2
+    vmv.v.i v0, 2                    // element 0 off, 1 on
+    la a1, trap_cause
+    sd x0, 0(a1)
+    li t1, (1 << 17)
+    csrs mstatus, t1
+    la a1, pbuf
+    vle32ff.v v8, (a1), v0.t         // element 1 faults
+    csrr a4, vl
+    li t1, (1 << 17)
+    csrc mstatus, t1
+    li a3, 1
+    bne a4, a3, fail
+    la a1, trap_cause
+    ld a2, 0(a1)
+    bnez a2, fail                    // no trap
+    vmv.x.s a2, v8
+    li a3, 0x5a5a5a5a
+    bne a2, a3, fail                 // masked element 0 kept
+
+    // ---- 10: whole-register load honors vstart (EEW=32) ----
+    li t0, 10
+    vsetivli x0, 4, e32, m1, tu, mu
+    vmv.v.i v12, 7
+    csrwi vstart, 2
+    la a1, ldata
+    vl1re32.v v12, (a1)
+    csrr a2, vstart
+    bnez a2, fail
+    vmv.x.s a2, v12
+    li a3, 7
+    bne a2, a3, fail                 // element 0 kept
+    vslidedown.vi v6, v12, 1
+    vmv.x.s a2, v6
+    bne a2, a3, fail                 // element 1 kept
+    vslidedown.vi v6, v12, 2
+    vmv.x.s a2, v6
+    li a3, 0x33333333
+    bne a2, a3, fail                 // element 2 loaded
+
+    // ---- 11: whole-register store honors vstart (EEW=8) ----
+    li t0, 11
+    la a1, pbuf
+    li a2, -1
+    sd a2, 0(a1)
+    sd a2, 8(a1)
+    li t1, (1 << 17)                 // (PMP off for M: MPRV clear)
+    vmv.v.i v13, 0
+    csrwi vstart, 4
+    vs1r.v v13, (a1)
+    ld a2, 0(a1)
+    li a3, 0x00000000ffffffff
+    bne a2, a3, fail                 // bytes 0-3 untouched
+    ld a2, 8(a1)
+    bnez a2, fail
+
+    // ---- 12: vmv1r.v honors vstart (EEW=SEW=16) ----
+    li t0, 12
+    vsetivli x0, 8, e16, m1, tu, mu
+    vid.v v14
+    vmv.v.i v15, -1
+    csrwi vstart, 3
+    vmv1r.v v15, v14
+    csrr a2, vstart
+    bnez a2, fail
+    vslidedown.vi v6, v15, 2
+    vmv.x.s a2, v6
+    li a3, -1
+    bne a2, a3, fail                 // element 2 kept (sext -1)
+    vslidedown.vi v6, v15, 3
+    vmv.x.s a2, v6
+    li a3, 3
+    bne a2, a3, fail                 // element 3 copied
     j pass
 
 // Exceptions: record mcause/mtval/vstart, then either skip the

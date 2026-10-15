@@ -504,9 +504,11 @@ module muserisc_core import muserisc_pkg::*; (
                        !idex_exc_q && !vec_illegal;
   assign vec_start = vec_unit_op && !vec_busy && !trap_fire &&
                      !mem_exc && !mem_stall && !vls_is;
-  // A CSR access or vset in EX waits out the final cycle of
-  // a vector load/store in MEM, whose vstart/vl updates
-  // commit on that cycle's edge.
+  // A CSR access or vset in EX is held for as long as a
+  // vector load/store occupies MEM (the whole pipeline is
+  // frozen by mem_stall until its last cycle anyway; this
+  // adds that last cycle), so it observes the vstart/vl
+  // updates that commit on the load/store's final edge.
   assign vec_ex_stall = (vec_unit_op && !vec_done) ||
                         (idex_valid_q && !idex_exc_q && vls_is &&
                          (idex_ctrl_q.csr || idex_ctrl_q.vset));
@@ -1048,17 +1050,18 @@ module muserisc_core import muserisc_pkg::*; (
   // without an access. On a fault the elements before it
   // are committed and vstart is set to the faulting index
   // (resumable traps); fault-only-first loads instead trim
-  // vl and do not trap unless the first accessed element
-  // faults.
+  // vl and do not trap unless element 0 itself faults
+  // (RVV 1.0 7.7). Whole-register transfers iterate bytes;
+  // their vstart (in encoded-EEW elements) is scaled to
+  // bytes on entry and back to elements on a fault.
   localparam logic [1:0] VLS_RD = 2'd0, VLS_ACC = 2'd1, VLS_WO = 2'd2;
   logic        vls_done, vls_elem_done;
   logic        vls_whole, vls_strided, vls_indexed, vls_ff, vls_maskls;
-  logic        vls_started_q, vls_any_done_q;
+  logic        vls_started_q;
   logic [1:0]  vls_ph_q, vls_ph;
   logic [9:0]  vls_i_q, vls_i, vls_vl10, vls_start10;
   logic [2:0]  vls_f_q, vls_f;
   logic [63:0] vls_ea_q, vls_ea;
-  logic        vls_any;
   logic [63:0] vls_cur, vls_addr, vls_index, vls_sdata, vls_step;
   logic [63:0] vls_vl_eff, vls_start_eff;
   logic        vls_vm_eff, vls_misalign, vls_ff_trim;
@@ -1081,7 +1084,10 @@ module muserisc_core import muserisc_pkg::*; (
   assign vls_vl_eff = vls_whole
       ? {54'd0, ({1'b0, exmem_vec_nf_q} + 4'd1), 6'd0}
       : vls_maskls ? ((csr_vl + 64'd7) >> 3) : csr_vl;
-  assign vls_start_eff = vls_whole ? 64'd0 : csr_vstart;
+  // Whole-register transfers iterate bytes; vstart counts
+  // elements of the encoded EEW, so it is scaled to bytes.
+  assign vls_start_eff = !vls_whole ? csr_vstart :
+      (csr_vstart >= 64'd512) ? 64'd512 : (csr_vstart << vls_idx_eew);
   assign vls_vm_eff = (vls_whole || vls_maskls) ? 1'b1 : exmem_vm_q;
   assign vls_vl10 = (vls_vl_eff > 64'd512) ? 10'd512 : vls_vl_eff[9:0];
   assign vls_start10 = (vls_start_eff > 64'd512) ? 10'd512
@@ -1092,7 +1098,6 @@ module muserisc_core import muserisc_pkg::*; (
   assign vls_i = vls_started_q ? vls_i_q : 10'd0;
   assign vls_f = vls_started_q ? vls_f_q : 3'd0;
   assign vls_ea = vls_started_q ? vls_ea_q : exmem_addr_q;
-  assign vls_any = vls_started_q && vls_any_done_q;
   assign vls_cur = {54'd0, vls_i};
   assign vls_in_range = vls_i < vls_vl10;
   assign vls_act = vls_in_range && (vls_i >= vls_start10) &&
@@ -1178,8 +1183,10 @@ module muserisc_core import muserisc_pkg::*; (
   logic vls_fault_raw;
   assign vls_fault_raw = vls_is &&
       (mem_trans_fault || mem_pmp_fault || vls_misalign);
-  assign vls_ff_trim = vls_ff && vls_fault_raw && vls_any &&
-                       (!vls_seg || (vls_cur > vls_start_eff));
+  // RVV 1.0 7.7: only a fault on element 0 traps; a fault on
+  // any later element (even if element 0 was masked off or
+  // below vstart) trims vl to that index.
+  assign vls_ff_trim = vls_ff && vls_fault_raw && (vls_cur != 64'd0);
   assign vls_done = vls_is &&
                     (vls_ff_trim || ((vls_ph == VLS_RD) && !vls_in_range));
   logic vls_fault;
@@ -1212,19 +1219,16 @@ module muserisc_core import muserisc_pkg::*; (
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       vls_started_q <= 1'b0;
-      vls_any_done_q <= 1'b0;
       vls_ph_q <= VLS_RD;
       vls_f_q <= 3'd0;
       vls_i_q <= 10'd0;
       vls_ea_q <= 64'd0;
     end else if (!vls_is || vls_done || vls_fault || trap_fire) begin
       vls_started_q <= 1'b0;
-      vls_any_done_q <= 1'b0;
       vls_ph_q <= VLS_RD;
       vls_f_q <= 3'd0;
     end else begin
       vls_started_q <= 1'b1;
-      vls_any_done_q <= vls_any || vls_elem_done;
       vls_ph_q <= vls_ph;
       vls_f_q <= vls_f;
       vls_i_q <= vls_i;
@@ -1512,7 +1516,8 @@ module muserisc_core import muserisc_pkg::*; (
                       (idex_ctrl_q.fpu_aux != 2'd1) &&
                       (idex_rd_q != 5'd0) &&
                       (idex_rs1_addr_q == 5'd0)),
-      .vec_dirty_i   ((vec_commit && idex_ctrl_q.vec_rd) ||
+      .vec_dirty_i   ((vec_commit && (idex_ctrl_q.vec_rd ||
+                                     (csr_vstart != 64'd0))) ||
                       (vls_is && exmem_ctrl_q.mem_read && !trap_fire &&
                        (vls_done || vls_fault))),
       // Every vector instruction resets vstart when it
@@ -1520,7 +1525,8 @@ module muserisc_core import muserisc_pkg::*; (
       // the faulting element index.
       .vstart_we_i   (vec_commit ||
                       (vls_is && !trap_fire && (vls_done || vls_fault))),
-      .vstart_wdata_i(vls_fault ? vls_cur : 64'd0),
+      .vstart_wdata_i(!vls_fault ? 64'd0 :
+                      vls_whole ? (vls_cur >> vls_idx_eew) : vls_cur),
       .vl_we_i       (vls_ff_trim && !trap_fire),
       .vl_wdata_i    (vls_cur),
       .vxrm_o        (csr_vxrm),

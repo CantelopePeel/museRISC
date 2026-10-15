@@ -1,6 +1,7 @@
 # Vector unit synthesis snapshot (scripts/synth_vec.sh), 2026-10-15
 # Yosys + OpenROAD STA in openroad/orfs:latest, Nangate45 typical, PERIOD=10ns,
 # Kogge-Stone carry networks, ORFS abc_speed.script (buffering/sizing), no wire load.
+# sv2v v0.0.13. Timing: worst path with inputs at 0 delay (set_input_delay 0), not strictly reg-to-reg.
 # fp_eval/fp_estimate stubbed (flow/vec-synth/fpu_stub_pkg.sv); VRF RAM replicas black-boxed.
 
 == after AFTER (vec-serial) muserisc_vec

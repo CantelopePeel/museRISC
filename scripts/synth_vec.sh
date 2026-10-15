@@ -19,6 +19,14 @@ TOPS=${*:-muserisc_vec muserisc_vregfile}
 SV2V=${SV2V:-sv2v}
 PERIOD=${PERIOD:-10.0}
 mkdir -p "$OUT"; OUT=$(readlink -f "$OUT")
+# Pinned sv2v (results in docs/evidence were produced with v0.0.13;
+# v0.0.12 reproduces within ~1%). Override with SV2V_VERSION=any.
+SV2V_PIN=${SV2V_VERSION:-v0.0.13}
+SV2V_HAVE=$("$SV2V" --version | awk '{print $2}')
+if [ "$SV2V_PIN" != any ] && [ "$SV2V_HAVE" != "$SV2V_PIN" ]; then
+  echo "sv2v $SV2V_HAVE found, $SV2V_PIN required (SV2V_VERSION=any to override)"; exit 1
+fi
+echo "sv2v $SV2V_HAVE" > "$OUT/tool-versions.txt"
 LIB=/OpenROAD-flow-scripts/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib
 "$SV2V" rtl/core/muserisc_pkg.sv rtl/core/muserisc_vec_pkg.sv \
   flow/vec-synth/fpu_stub_pkg.sv "$RTL/muserisc_vec.sv" > "$OUT/muserisc_vec.v"

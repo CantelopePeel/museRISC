@@ -156,7 +156,10 @@ Out Golden(const Cfg& c, const VRF& in) {
 
   switch (op) {
     case MVR:
-      for (int r = 0; r < c.nreg; ++r) std::memcpy(f.b[(c.vd + r) & 31], in.b[(c.vs2 + r) & 31], 64);
+      // EEW = SEW, EMUL = nreg: elements [vstart, nreg*VLEN/SEW).
+      for (int byte = static_cast<int>(vstart * eb); byte < c.nreg * 64; ++byte) {
+        f.b[(c.vd + byte / 64) & 31][byte % 64] = in.b[(c.vs2 + byte / 64) & 31][byte % 64];
+      }
       return o;
     case MVXS:
       o.scalar = static_cast<uint64_t>(Sx(Get(in, c.vs2, 0, eb), sew));
@@ -503,8 +506,7 @@ bool Configure(Cfg& c, std::mt19937_64& rng) {
   }
   if (c.vl > static_cast<uint64_t>(vlmax)) c.vl = vlmax;
   const bool vstart_zero = op == RED || op == WRED || op == COMPRESS || op == IOTA ||
-                           op == MSBIT || op == CPOP || op == FIRST || op == MVR ||
-                           op == MVSX;
+                           op == MSBIT || op == CPOP || op == FIRST || op == MVSX;
   c.vstart = (!vstart_zero && rng() % 4 == 0) ? rng() % (vlmax + 2) : 0;
   c.vm = (rng() % 3) != 0;
   if (op == MLOG || op == COMPRESS || op == MVR || op == ADC || op == SBC || op == MERGE) {
@@ -600,7 +602,10 @@ int main(int argc, char** argv) {
   Dut dut;
   dut.d = new Vmuserisc_vec_harness;
   auto* d = dut.d;
-  std::mt19937_64 rng(0x5eed8a);
+  // Seed: VEC_TB_SEED env (decimal or 0x hex), default 0x5eed8a.
+  const uint64_t seed = getenv("VEC_TB_SEED")
+      ? std::strtoull(getenv("VEC_TB_SEED"), nullptr, 0) : 0x5eed8aull;
+  std::mt19937_64 rng(seed);
   long trials = 0;
   long op_trials[98] = {};
   long op_cycles[98] = {};
@@ -1025,10 +1030,10 @@ int main(int argc, char** argv) {
   VerilatedCov::write(getenv("COV_FILE") ? getenv("COV_FILE") : "cov_vec.dat");
   delete d;
   if (failures == 0) {
-    std::printf("VEC TB PASS (%ld checks, %ld random trials, %llu cycles)\n", checks, trials,
-                (unsigned long long)dut.cycles);
+    std::printf("VEC TB PASS (%ld checks, %ld random trials, %llu cycles, seed 0x%llx)\n", checks,
+                trials, (unsigned long long)dut.cycles, (unsigned long long)seed);
     return 0;
   }
-  std::printf("VEC TB FAIL (%ld failures)\n", failures);
+  std::printf("VEC TB FAIL (%ld failures, seed 0x%llx)\n", failures, (unsigned long long)seed);
   return 1;
 }

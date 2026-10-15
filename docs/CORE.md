@@ -163,9 +163,24 @@ misses), load elements written to the VRF as they complete
 fields and write them after the last field, so a fault never
 leaves a partial segment. A fault sets `vstart` to the
 element index (earlier elements committed); fault-only-first
-trims `vl`. A CSR access or vset in EX waits one cycle while
-a vector load/store finishes in MEM so it observes that
-instruction's `vstart`/`vl` updates.
+trims `vl` for a fault on any element other than element 0
+(only an element-0 fault traps). Whole-register loads/stores
+and `vmv<nr>r.v` honor `vstart` (in elements of the encoded
+EEW, resp. SEW). A CSR access or vset in EX is held for as
+long as a vector load/store is in MEM (the pipeline is
+frozen by `mem_stall` for all but its last cycle anyway), so
+it observes that instruction's `vstart`/`vl` updates.
+
+Interrupt latency: a vector arithmetic op delays an
+interrupt by at most its own cycle count (max 5,124 cycles,
+`vdiv` e8 m8 vl=512). A vector load/store in MEM also blocks
+interrupt injection while it runs: 2 cycles per active
+element or segment field, 1 per skipped element, *nf* per
+segment element for write-out, plus page-table walks on TLB
+misses. Without misses the worst case is 1,537 cycles (a
+segment load moving 512 fields: 2 cycles per field plus 1
+write-out cycle per field, plus the final cycle); an
+unmasked `vle8.v` with vl=512 takes 1,025.
 
 **Cycle counts** (vector unit, from `start` to `done`
 inclusive; `vec_tb` prints these probes; N = elements in

@@ -1452,6 +1452,11 @@ stages 4c/5:
   wrap; segment loads never leave a partially written
   segment on a fault; a CSR access or vset right behind a
   vector load/store observes its `vstart`/`vl` update.
+  Round-1 review fixes (pre-existing deviations on `main`):
+  fault-only-first now traps only on an element-0 fault
+  (trims `vl` for any later element, even with element 0
+  masked off); `vmv<nr>r.v` and whole-register loads/stores
+  now honor `vstart`.
 - Unit TB (`tb/cpp/vec_tb.cpp` on
   `tb/sv/muserisc_vec_harness.sv` = unit + VRF): randomized
   against an independent C++ RVV golden model over all 88
@@ -1476,7 +1481,9 @@ stages 4c/5:
   with no partial segment, then handler-assisted resume from
   `vstart`; fault-only-first segment `vl` trim observed by a
   back-to-back `csrr vl` and `vsetvli x0,x0`; `vstart>0`
-  arithmetic; strided store fault.
+  arithmetic; strided store fault; FOF with element 0 masked
+  off (trim, no trap); `vstart>0` on `vl1re32.v`, `vs1r.v`
+  and `vmv1r.v`.
 - Gates (all on the final RTL; wall-clock in parentheses):
   `make lint` clean (1 s); `make test` `ALL PHASE-0 KATs PASS`
   (22 s); `make core-test` all PASS (78 s);
@@ -1503,12 +1510,12 @@ stages 4c/5:
   carry networks, ORFS `abc_speed` with buffering/sizing at
   10 ns, no wire load; `fp_eval`/`fp_estimate` black-boxed by
   `flow/vec-synth/fpu_stub_pkg.sv` in both designs, VRF RAM
-  replicas black-boxed as SRAM macros):
+  replicas black-boxed as SRAM macros; sv2v v0.0.13, now pinned in the script):
 
   | Block | Before (origin/main) | After (vec-serial) |
   |---|---|---|
   | `muserisc_vec` std-cell area | Yosys could not finish elaboration (killed by a host-memory guard at 141 GiB after ~4 h) | **53,252 um^2** (42,567 cells, 1,357 flops) |
-  | `muserisc_vec` logic depth / STA | n/a (512-way unrolled element loops: 22 `*`/`/`/`%` and 15 `fp_eval`/`fp_estimate` sites per element) | **78** generic gates (ltp); worst reg-to-reg **3.18 ns** at Nangate45 typical |
+  | `muserisc_vec` logic depth / STA | n/a (512-way unrolled element loops: 22 `*`/`/`/`%` and 15 `fp_eval`/`fp_estimate` sites per element) | **78** generic gates (ltp); worst path **3.18 ns** (inputs at 0 delay) at Nangate45 typical |
   | `muserisc_vregfile` | **603,640 um^2** (16,384 flops + 3x4096-bit group muxes), depth 18 | **5,254 um^2** logic (731 flops: v0 shadow + bypass) + 3x 256x64 1R1W SRAM (black-boxed; fakeram45_512x64 is 17,302 um^2 as an upper bound each), depth 6 |
   | Multipliers / dividers / `fp_eval` calls | per element (up to 512 lanes unrolled) | 1x 64x16 multiplier, 0 dividers (iterative), 1 `fp_eval` + 1 `fp_estimate` |
 

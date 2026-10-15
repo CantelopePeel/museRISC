@@ -190,11 +190,18 @@ module muserisc_vec
     end
   end
   assign vl10_i = (vl_i > 64'd512) ? 10'd512 : vl_i[9:0];
+  // vmv<nr>r.v prestart byte offset (vstart in SEW elements).
+  logic [12:0] mvr_boff_i;
+  assign mvr_boff_i = 13'(vstart10_i) << sew_i;
   assign vstart10_i = (vstart_i > 64'd512) ? 10'd512 : vstart_i[9:0];
   always_comb begin
     if (op_i == VOP_MVR) begin
-      beg_i = 10'd0;
+      // Whole-register move: EEW = SEW, elements [vstart, evl)
+      // copied a word at a time; prestart bytes of the first
+      // word are masked off (mvr_be0_q).
       end_i = {3'b000, nreg_i, 3'b000};          // words to copy
+      beg_i = (mvr_boff_i >= {3'b000, nreg_i, 6'd0}) ? end_i
+                                              : {3'b000, mvr_boff_i[9:3]};
     end else if ((op_i == VOP_MVXS) || (op_i == VOP_FMVFS)) begin
       beg_i = 10'd0;                     // element 0 regardless of vl
       end_i = 10'd1;
@@ -283,6 +290,7 @@ module muserisc_vec
   // ------------------------------------------------------------
   logic        s2_done;    // element (slot) completes this cycle
   logic        s2_we, s2_wfull;
+  logic [7:0]  s2_wfbe, w_fbe_q, mvr_be0_q;  // full-word byte mask
   logic [7:0]  s2_waddr;
   logic [2:0]  s2_ww, s2_woff;
   logic [63:0] s2_wdata;
@@ -704,6 +712,7 @@ module muserisc_vec
     s2_we = 1'b0;
     s2_waddr = 8'd0;
     s2_wfull = 1'b0;
+    s2_wfbe = 8'hff;
     s2_ww = dw_q;
     s2_woff = 3'd0;
     s2_wdata = 64'd0;
@@ -731,6 +740,7 @@ module muserisc_vec
             s2_we = 1'b1;
             s2_waddr = {vd_q, 3'b000} + 8'(s2_i_q);
             s2_wfull = 1'b1;
+            s2_wfbe = s2_first_q ? mvr_be0_q : 8'hff;
             s2_wdata = a;
           end else if (is_scalar_op || is_red) begin
             // Scalar results and reduction folds write nothing
@@ -889,7 +899,7 @@ module muserisc_vec
                   !w_v_q;
   assign we_o = w_v_q;
   assign waddr_o = w_addr_q;
-  assign wbe_o = w_full_q ? 8'hff : (be_w(w_w_q) << w_off_q);
+  assign wbe_o = w_full_q ? w_fbe_q : (be_w(w_w_q) << w_off_q);
   assign wdata_o = w_full_q ? w_d_q
                             : ((w_d_q & ones_w(w_w_q)) << {w_off_q, 3'b000});
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -903,6 +913,7 @@ module muserisc_vec
     if (s2_we) begin
       w_addr_q <= s2_waddr;
       w_full_q <= s2_wfull;
+      w_fbe_q <= s2_wfbe;
       w_w_q <= s2_ww;
       w_off_q <= s2_woff;
       w_d_q <= s2_wdata;
@@ -963,6 +974,7 @@ module muserisc_vec
       vl10_q <= vl10_i;
       vlmax10_q <= (vlmax_i > 64'd512) ? 10'd512 : vlmax_i[9:0];
       beg_q <= beg_i;
+      mvr_be0_q <= 8'hff << mvr_boff_i[2:0];
       end_q <= end_i;
       i0_q <= beg_i;
       // Slides: vslideup needs offset < 512 to place anything;
