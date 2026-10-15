@@ -1574,3 +1574,77 @@ stages 4c/5:
   not a Linux boot on the RTL SoC — Linux evidence
   remains the `soc_tb` C++ platform above; ASIC
   timing is #11, FPGA hardware is #32.
+
+## Multi-cycle synthesizable FPU + EX stall protocol (2026-10-15, branch `fpu-multicycle`, #32)
+
+- `rtl/core/muserisc_fpu.sv` is now a multi-cycle F/D unit
+  (FSM over registered stages; div/sqrt radix-2 restoring
+  recurrence at 2 steps/cycle; log-depth leading-zero
+  normalisers; separate round stage; no data-dependent
+  loops). The arithmetic lives in
+  `rtl/core/muserisc_fpu_ops.svh`, `include`d by the module
+  and by `muserisc_fpu_pkg.sv`, whose `fp_eval` chains the
+  same functions combinationally for the (still
+  combinational) vector FP path. Latencies and the generic
+  EX-stage req/done/ack/kill handshake are in
+  [`docs/CORE.md`](../CORE.md) ("EX-stage multi-cycle
+  units"). All numbers below:
+  [`fpu-multicycle-2026-10-15.log`](fpu-multicycle-2026-10-15.log).
+- FPU unit TB vs SoftFloat: **476,563 checks** (random sweep
+  of every op × both formats × 5 IEEE modes, round-to-odd
+  and rm 6/7, special/boundary pools, NaN-boxing, FMA
+  cancellation, exact div/sqrt, undefined op codes) with
+  randomized ack delays (HOLD), operand scrambling while
+  busy, back-to-back issue, 2,000 mid-op kills/request drops,
+  40 resets in flight, and every op's latency checked.
+  TestFloat (`scripts/testfloat_fpu_vectors.sh`,
+  berkeley-testfloat-3 a9c849f1, level 1, seed 42, all 36
+  F/D operations × 5 rounding modes): **64,648,560/64,648,560
+  vectors PASS** (1,029 s).
+- Coverage (merged `make core-test`): `muserisc_fpu.sv` line
+  39/39, branch 22/22, toggle 3,680/3,696 (the 16 untoggled
+  points are flag bits that are constant by construction);
+  `muserisc_fpu_ops.svh` line 123/123, branch 146/146. Note:
+  Verilator collects no line coverage inside *package*
+  functions, so the pre-existing package-based FPU logic had
+  been invisible to coverage since stage 9a; the module-local
+  `include` fixes that. The FPU/BEXT/RVC TBs also wrote
+  coverage after freeing the model (garbage counts); fixed.
+- Directed: `fp_directed.S` tests 11–16 (dependent chains
+  through multi-cycle ops, back-to-back issue, int/store/branch
+  consumers, FP load-use into long ops, fflags ordering vs
+  CSR accesses, dynamic rm sampled at issue),
+  `fp_stall_directed.S` (older trap/vector-load fault kills an
+  in-flight fdiv which replays cleanly, FP ops completing
+  during a 64-element vector-load mem_stall, branch/jump
+  shadows, precise ecall/illegal after long ops, FS dirtying,
+  held-EX operand refresh) and `fp_irq_directed.S` (machine
+  timer IRQ at 48 consecutive offsets across in-flight
+  fdiv/fsqrt/FMA; results identical to an IRQ-free run).
+  `fp_stall_directed.S` test 4 **fails on the previous core**
+  (stale scalar operand of an instruction held by
+  `vec_wb_stall` after its producer retired) and passes with
+  the held-EX operand refresh.
+- Gates: `make core-test` green (133 s), `make lint` clean,
+  `make test` `ALL PHASE-0 KATs PASS`,
+  [`riscv-tests-core-fpu-multicycle-2026-10-15.csv`](riscv-tests-core-fpu-multicycle-2026-10-15.csv)
+  **123/123**,
+  [`act-core-fpu-multicycle-2026-10-15.csv`](act-core-fpu-multicycle-2026-10-15.csv)
+  **2,577/2,578**: the stage-7 scalar set 543/544 (only the
+  known `PMPSm_cfg_A_tor_zero-00` PA0 waiver; F 84/84, D
+  116/116) plus the stage-8/9 vector sets 2,034/2,034 (1,872
+  Vx/Vls + 162 Vf32/Vf64), regenerated in this tree with the
+  same 34 Sail-side generation failures and 9 deselected
+  tests as before.
+- Synthesis (`scripts/synth_fpu.sh`, sv2v v0.0.13 → Yosys →
+  OpenROAD repair_design/repair_timing + OpenSTA, Nangate45
+  typical, no wire parasitics, Yosys ripple-carry adders):
+  **43,892 µm²** cell area (35,171 cells, 1,388 flops = 14%
+  of area); min period **5.38 ns (186 MHz)**, critical path =
+  the 2-step div/sqrt recurrence. With `FPU_DS_BITS = 1`
+  (div/sqrt 30/59 cycles instead of 17/32): 43,249 µm², 3.73 ns
+  (268 MHz). A Kogge-Stone carry mapping was attempted but ABC
+  did not finish within an hour and was abandoned. The full
+  core does not yet synthesize in Yosys: after sv2v, Yosys
+  stops in `muserisc_bext` (constant-function call of
+  `gf_inv` with a non-constant argument), outside this change.

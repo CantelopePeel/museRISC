@@ -18,10 +18,16 @@ cd "$(dirname "$0")/.."
 TOP="${1:-muserisc_fpu}"
 PERIOD="${2:-2.0}"
 SV2V="${SV2V:-sv2v}"
-OUT="build/synth/$TOP"
+# ADDER=ripple (default, Yosys carry chains: conservative and fast)
+# or ks (Kogge-Stone; ABC runtime grows to hours); ABC_DELAY=1 maps with ABC -D <period> (slow on large
+# designs), 0 maps for area and leaves timing to OpenROAD
+# repair_design/repair_timing (default).
+ADDER="${ADDER:-ripple}"
+ABC_DELAY="${ABC_DELAY:-0}"
+OUT="build/synth/$TOP${OUT_TAG:-}"
 mkdir -p "$OUT"
 
-RTL=rtl/core
+RTL="${RTL_DIR:-rtl/core}"
 case "$TOP" in
   muserisc_fpu) SRCS="$RTL/muserisc_fpu_pkg.sv $RTL/muserisc_fpu.sv" ;;
   *) SRCS="$RTL/muserisc_pkg.sv $RTL/muserisc_regfile.sv \
@@ -37,16 +43,18 @@ esac
 
 LIB=/OpenROAD-flow-scripts/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib
 PS=$(python3 -c "print(int(float('$PERIOD') * 1000))")
+ABCD=""; [ "$ABC_DELAY" = 1 ] && ABCD="-D $PS"
+# parallel-prefix (Kogge-Stone) carry logic instead of Yosys's
+# default ripple \$lcu, as a production adder generator would give
+KS=""; [ "$ADDER" = ks ] && KS="techmap -map +/techmap.v -map +/choices/kogge-stone.v"
 cat > "$OUT/synth.ys" <<EOF
 read_verilog -sv /work/$OUT/$TOP.v
 synth -top $TOP -flatten -run :fine
-# parallel-prefix (Kogge-Stone) carry logic instead of Yosys's
-# default ripple \$lcu, as a production adder generator would give
-techmap -map +/techmap.v -map +/choices/kogge-stone.v
-synth -top $TOP -flatten -run fine:
+$KS
+synth -top $TOP -flatten -run fine: -noabc
 opt_clean -purge
 dfflibmap -liberty $LIB
-abc -D $PS -liberty $LIB
+abc $ABCD -liberty $LIB
 opt_clean -purge
 hilomap -hicell LOGIC1_X1 Z -locell LOGIC0_X1 Z
 tee -o /work/$OUT/stat.txt stat -liberty $LIB
@@ -66,7 +74,7 @@ source /OpenROAD-flow-scripts/flow/platforms/nangate45/setRC.tcl
 # parasitics are not modelled.
 repair_design
 repair_timing -setup
-report_checks -path_delay max -group_path_count 3 -format full -digits 3
+report_checks -path_delay max -group_path_count 3 -format full -fields {net fanout} -digits 3
 report_tns
 report_wns
 report_clock_min_period
