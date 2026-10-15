@@ -75,24 +75,51 @@ _start:
     bne a1, a2, fail
 
     // ---- 3: FP ops complete while an older 64-element vector
-    //      load holds MEM; the result is parked until EX can
-    //      advance, then forwarded to a dependent op.
+    //      load holds MEM (mem_stall): the FPU parks the result in
+    //      HOLD until EX can advance. The load targets v16: its rd
+    //      must not alias an FP source index (the load-use check
+    //      compares the vector rd with scalar rs1/rs2), or the FP op
+    //      would wait in ID instead of EX. Sub-cases (from the
+    //      round-1 audit): forwarded to a dependent op; fflags
+    //      accrued exactly once; int result feeding an int
+    //      consumer; a fast op (fsgnjn) parked from IDLE.
     li t0, 3
     li a1, 64
     vsetvli a0, a1, e64, m8, ta, ma
     la a3, vbuf
-    vle64.v v8, (a3)
+    fsflags zero
+    vle64.v v16, (a3)
     fadd.d ft6, fs0, fs1          // 4.0, done during the stall
     fmul.d ft7, ft6, fs1          // 12.0
-    fdiv.d ft8, ft7, fs1          // 4.0
     fmv.x.d a1, ft7
     li a2, 0x4028000000000000
     bne a1, a2, fail
-    fmv.x.d a1, ft8
-    li a2, 0x4010000000000000
-    bne a1, a2, fail
-    vmv.x.s a1, v8
+    frflags a1
+    bnez a1, fail
+    vmv.x.s a1, v16
     li a2, 0x1111
+    bne a1, a2, fail
+    li t0, 10
+    fsflags zero
+    vle64.v v16, (a3)
+    fdiv.d ft8, fs4, fs1          // 7/3, NX, parked
+    frflags a1
+    li a2, 1
+    bne a1, a2, fail
+    fmv.x.d a1, ft8
+    li a2, 0x4002AAAAAAAAAAAB
+    bne a1, a2, fail
+    li t0, 11
+    vle64.v v16, (a3)
+    fcvt.w.d a4, fs4              // 7, parked
+    addi a5, a4, 1
+    li a2, 8
+    bne a5, a2, fail
+    li t0, 12
+    vle64.v v16, (a3)
+    fneg.d ft9, fs1               // fast op, parked from IDLE
+    fmv.x.d a1, ft9
+    li a2, 0xC008000000000000
     bne a1, a2, fail
 
     // ---- 4: operands of an instruction held in EX by
@@ -214,6 +241,6 @@ handler:
     .balign 8
 buf:    .dword 0, 0
 vbuf:   .dword 0x1111
-        .skip 504
+        .skip 1024
 vbuf2:  .dword 0x4000000000000000  // 2.0
         .skip 504

@@ -62,7 +62,12 @@ package muserisc_fpu_pkg;
   // covers p+2 quotient/root bits (p, guard, and one more for
   // the quotient's possible leading zero), rounded up to a
   // whole number of cycles.
-  localparam int FPU_DS_BITS = 2;
+  // Overridable for exploration/verification builds
+  // (+define+MUSERISC_FPU_DS_BITS=1 in `make -C sim fpu-ds1`).
+`ifndef MUSERISC_FPU_DS_BITS
+`define MUSERISC_FPU_DS_BITS 2
+`endif
+  localparam int FPU_DS_BITS = `MUSERISC_FPU_DS_BITS;
   localparam int FPU_DS_N_D  = ((55 + FPU_DS_BITS - 1) / FPU_DS_BITS) * FPU_DS_BITS;
   localparam int FPU_DS_N_S  = ((26 + FPU_DS_BITS - 1) / FPU_DS_BITS) * FPU_DS_BITS;
 

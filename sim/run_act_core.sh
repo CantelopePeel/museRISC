@@ -48,4 +48,10 @@ done < <(find "$ELF_DIR" -type f -name '*.elf' | sort |
          xargs -P "$JOBS" -I{} bash -c 'run_one "$1"' _ {} |
          { if [ "$JOBS" -gt 1 ]; then sort -t$'\t' -k2,2 -s; else cat; fi; })
 echo "ACT (muserisc-core): $pass/$total PASS, $fail FAIL"
+# A worker that died without reporting would leave a row out.
+nelf=$(find "$ELF_DIR" -type f -name '*.elf' | wc -l)
+if [ "$total" -ne "$nelf" ]; then
+  echo "ERROR: $total results for $nelf ELFs"
+  exit 1
+fi
 [ "$fail" -eq 0 ]

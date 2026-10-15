@@ -287,6 +287,17 @@ Res golden(int op, bool d, int rm, uint64_t a, uint64_t b, uint64_t c,
   return Res{v, read_flags()};
 }
 
+// Divide/sqrt latency: IDLE + EX1 + ITER x ceil-to-steps(p+2)/BITS
+// + DSFIN + ROUND. FPU_DS_BITS must match the RTL build
+// (+define+MUSERISC_FPU_DS_BITS; see `make -C sim fpu-ds1`).
+#ifndef FPU_DS_BITS
+#define FPU_DS_BITS 2
+#endif
+constexpr int kStepsD = ((55 + FPU_DS_BITS - 1) / FPU_DS_BITS);
+constexpr int kStepsS = ((26 + FPU_DS_BITS - 1) / FPU_DS_BITS);
+constexpr int kDivLatD = 4 + kStepsD;
+constexpr int kDivLatS = 4 + kStepsS;
+
 // Expected FPU latency (cycles the op occupies EX).
 int expected_latency(int op, bool d, uint64_t a, uint64_t b, uint64_t c) {
   uint64_t ea = boxchk(d, a), eb = boxchk(d, b), ec = boxchk(d, c);
@@ -305,9 +316,9 @@ int expected_latency(int op, bool d, uint64_t a, uint64_t b, uint64_t c) {
       return (nan_a || nan_b || inf_a || inf_b) ? 2 : 5;
     case OP_DIV:
       return (nan_a || nan_b || inf_a || inf_b || z_a || z_b) ? 2
-             : (d ? 32 : 17);
+             : (d ? kDivLatD : kDivLatS);
     case OP_SQRT:
-      return (nan_a || inf_a || z_a || sign_of(d, ea)) ? 2 : (d ? 32 : 17);
+      return (nan_a || inf_a || z_a || sign_of(d, ea)) ? 2 : (d ? kDivLatD : kDivLatS);
     case OP_FMA: case OP_FMS: case OP_FNMS: case OP_FNMA:
       return (nan_a || nan_b || nan_c || inf_a || inf_b || inf_c) ? 2 : 7;
     default: return 2;  // undefined op codes

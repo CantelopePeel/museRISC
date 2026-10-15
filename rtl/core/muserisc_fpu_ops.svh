@@ -169,12 +169,13 @@
       blt = ua.sign ? (ua.sig > ub.sig) : (ua.sig < ub.sig);
       beq = (ua.sig == ub.sig);
     end
-    cls = 10'd0;
-    if (ua.is_inf)       cls[ua.sign ? 0 : 7] = 1'b1;
-    else if (ua.is_nan)  cls[ua.is_snan ? 8 : 9] = 1'b1;
-    else if (ua.is_zero) cls[ua.sign ? 3 : 4] = 1'b1;
-    else if (ua.is_sub)  cls[ua.sign ? 2 : 5] = 1'b1;
-    else                 cls[ua.sign ? 1 : 6] = 1'b1;
+    // (whole-vector assignments: Verilator 5.020 rejects a
+    // variable-index write to a local of a non-inlined function)
+    if (ua.is_inf)       cls = ua.sign ? 10'h001 : 10'h080;
+    else if (ua.is_nan)  cls = ua.is_snan ? 10'h100 : 10'h200;
+    else if (ua.is_zero) cls = ua.sign ? 10'h008 : 10'h010;
+    else if (ua.is_sub)  cls = ua.sign ? 10'h004 : 10'h020;
+    else                 cls = ua.sign ? 10'h002 : 10'h040;
 
     unique case (op)
       FPU_ADD, FPU_SUB: begin
@@ -570,7 +571,7 @@
       e = ri.exp;
       // subnormal right-shift amount on top of the 64-p drop
       shift = (e < emin) ? 16'(emin - e) : 16'd0;
-      total = 16'(7'd64 - p) + shift;
+      total = (16'd64 - {9'd0, p}) + shift;
       if (total > 16'd64) begin
         kept = 64'd0;
         guard = 1'b0;

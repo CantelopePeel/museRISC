@@ -91,7 +91,6 @@ module muserisc_fpu import muserisc_fpu_pkg::*; (
   fp_rnd_t     rnd_q;
   fp_ds_t      ds_q, ds_next;
   fp_f2i_t     f2i_q;
-  logic [4:0]  cnt_q;
   logic        ds_last;
   logic [63:0] res_q;
   logic [4:0]  flg_q;
@@ -109,7 +108,16 @@ module muserisc_fpu import muserisc_fpu_pkg::*; (
                      sig: sum_q.mag[125:20]};
   localparam int DsCycD = FPU_DS_N_D / FPU_DS_BITS;  // cycles in ITER
   localparam int DsCycS = FPU_DS_N_S / FPU_DS_BITS;
-  assign ds_last = (cnt_q == (d_q ? 5'(DsCycD - 1) : 5'(DsCycS - 1)));
+  // ITER cycle counter, sized for the longest (binary64) count.
+  localparam int CntW = (DsCycD > 1) ? $clog2(DsCycD) : 1;
+  logic [CntW-1:0] cnt_q;
+  assign ds_last = (cnt_q == (d_q ? CntW'(DsCycD - 1) : CntW'(DsCycS - 1)));
+  // Elaboration-time guards: the counter holds every step count
+  // and the step count covers the p+2 recurrence bits.
+  if ((DsCycD - 1) >= (1 << CntW) || DsCycS > DsCycD ||
+      FPU_DS_N_D < 55 || FPU_DS_N_S < 26 || FPU_DS_BITS < 1) begin : gen_bad_ds_cfg
+    $error("muserisc_fpu: bad div/sqrt iteration configuration");
+  end
 
   always_comb begin
     ds_next = ds_q;
@@ -202,7 +210,7 @@ module muserisc_fpu import muserisc_fpu_pkg::*; (
         al_q  <= fp_align(fop_unp(ua_q, 1'b0), fop_unp(ub_q, op_q == FPU_SUB));
         pp_q  <= mul_pp(ua_q.sig, ub_q.sig);
         ds_q  <= ds_init(op_q == FPU_SQRT, ua_q, ub_q);
-        cnt_q <= 5'd0;
+        cnt_q <= '0;
         f2i_q <= f2i_s1(ua_q, rm_q);
         rnd_q <= f2f_rnd(ua_q);
       end
@@ -212,7 +220,7 @@ module muserisc_fpu import muserisc_fpu_pkg::*; (
       S_NORM:  rnd_q <= fp_norm(sum_q);
       S_ITER: begin
         ds_q  <= ds_next;
-        cnt_q <= cnt_q + 5'd1;
+        cnt_q <= cnt_q + 1'b1;
       end
       S_DSFIN: rnd_q <= ds_fin(ds_q, d_q);
       default: ;
