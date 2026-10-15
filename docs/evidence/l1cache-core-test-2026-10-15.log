@@ -1,4 +1,4 @@
-# make core-test on branch l1-cache (2026-10-15), wall 84s
+# make core-test on branch l1-cache (2026-10-15), wall 122s
 # Verilator 5.048, GCC 16 riscv64-unknown-elf; every directed test runs twice:
 #   [rand]    caches on, --mem-lat 1:6 --mem-gap 2 --mem-ready 70, --mem-seed = run index
 #   [nocache] caches off (--no-cache), bus latency 1
@@ -9,7 +9,7 @@ REGFILE TB PASS (4194 checks)
 CSR TB PASS (207 checks)
 MMU TB PASS (74 checks)
 FPU TB PASS (690071 checks)
-BEXT TB PASS (54980 checks)
+BEXT TB PASS (60866 checks)
 RVC TB PASS (49152 checks)
 VEC TB PASS (1014624 checks)
 icache_tb: 30000 checks, 30000 fetches, 2167 invals (1770 during a miss), 5263 I/O, 0 errors
@@ -122,7 +122,7 @@ CORE TB PASS mmio_bypass_directed.bin (1581 cycles)
 CORE TB PASS vm_sfence_cache_directed.bin (28947 cycles)
 
 # verilator_coverage --annotate summary (all modules; a line counts only if every point on it is hit)
-  lines with all attached points covered : 46.00%  (2123/4605)
+  lines with all attached points covered : 46.00%  (2143/4605)
 
 # per-file coverage, all core-test runs merged (scripts/cov_report.py build/sim/cov_merged.dat)
 muserisc_bus_arb.sv          branch       16/16     100.00%

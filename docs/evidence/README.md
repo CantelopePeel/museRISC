@@ -1727,7 +1727,7 @@ stages 4c/5:
   AMO/LR/SC go through the D$; DRAM-only PMA keeps
   ROM/CLINT/PLIC/UART uncached. Design, protocol and
   parameters: [`docs/CORE.md`](../CORE.md#memory-interface-and-l1-caches).
-- `make core-test` (84 s wall):
+- `make core-test` (122 s wall):
   [`l1cache-core-test-2026-10-15.log`](l1cache-core-test-2026-10-15.log).
   All 26 directed tests (22 existing + 4 new:
   `smc_fencei_directed`, `amo_cache_directed`,
@@ -1763,21 +1763,34 @@ stages 4c/5:
   pre-existing (vector LS corner cases, guest-fault causes).
 - riscv-tests: **123/123** with caches + random latency
   ([`riscv-tests-core-l1cache-2026-10-15.csv`](riscv-tests-core-l1cache-2026-10-15.csv),
-  `make riscv-tests`, 16 s) and **123/123** uncached
+  `make riscv-tests`, 30 s) and **123/123** uncached
   ([`riscv-tests-core-l1cache-nocache-2026-10-15.csv`](riscv-tests-core-l1cache-nocache-2026-10-15.csv),
-  16 s).
+  36 s).
 - ACT (all 2,578 generated self-checking ELFs: 544 scalar/
   priv + 1,872 Vx/Vls + 162 Vf, regenerated in this
   worktree with the recorded `EXTENSIONS` lists):
   **2,577/2,578** with caches + random latency (seed 3,
   [`act-core-l1cache-2026-10-15.csv`](act-core-l1cache-2026-10-15.csv),
-  291 s with 20 jobs via `sim/run_act_parallel.sh`) and
+  660 s with 20 jobs via `sim/run_act_parallel.sh`) and
   **2,577/2,578** uncached
   ([`act-core-l1cache-nocache-2026-10-15.csv`](act-core-l1cache-nocache-2026-10-15.csv),
-  469 s). The only failure is the known
+  1,044 s). The only failure is the known
   `PMPSm_cfg_A_tor_zero-00` PA-0 waiver; the pre-change core
   gives the same 2,577/2,578 on the same ELFs. No regression
   vs 543/544 + 1,872/1,872 + 162/162.
+- Stress (not a make target; `core_tb` directly): all 123
+  riscv-tests ELFs and all 26 directed binaries under 8 seeds x
+  3 harsher bus profiles (latency 1-20 + gaps 0-5 + 30 % ready;
+  latency 1-3 + 50 % ready; fixed latency 8), with a timer IRQ
+  asserted at cycle 2000: **3,360 runs, 0 failures** (659 s;
+  run before the rebase onto the AES S-box change, cache/core
+  memory-port RTL identical).
+- GitHub-CI toolchain reproduction (Docker `ubuntu:24.04`, apt
+  Verilator 5.020 + `gcc-riscv64-unknown-elf` 13, clean export
+  of the branch): `make lint` clean; `make -C sim alu muldiv
+  decoder regfile csr mmu fpu bext rvc vec icache dcache crypto`
+  all PASS; `make -C sim core` 52/52 `CORE TB PASS`; riscv-tests
+  smoke 26/26.
 - Cycle cost (blocking caches, two cycles per hit, correctness
   first): riscv-tests take 2.76x the stage-7 cycles with
   caches + random latency (median 3.15x), 3.70x uncached
