@@ -45,9 +45,9 @@ TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed fp_stall_dire
             trap_store_misalign trap_younger_store trap_younger_csr irq_seip_rmw irq_mip_rmw_variants \
             trap_pa_fetch trap_pa_load
 
-.PHONY: all alu muldiv decoder regfile csr mmu fpu fpu-ds1 bext rvc vec core core-ds1 sw coverage clean riscv-tests \
+.PHONY: all alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec core core-ds1 sw coverage clean riscv-tests \
         crypto sha256 sha512 keccak ecfield cryptotop
-all: alu muldiv decoder regfile csr mmu fpu fpu-ds1 bext rvc vec core core-ds1 coverage
+all: alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec core core-ds1 coverage
 
 ## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
 riscv-tests: $(BUILD)/core_tb
@@ -66,13 +66,32 @@ alu: $(BUILD)/alu_tb
 	cd $(BUILD) && COV_FILE=cov_alu.dat ./alu_tb
 
 ## ---- Muldiv unit test ---------------------------------------------------
-$(BUILD)/muldiv_tb: $(ROOT)/tb/cpp/muldiv_tb.cpp $(RTL)/muserisc_muldiv.sv | $(BUILD) $(OBJ)
+$(BUILD)/muldiv_tb: $(ROOT)/tb/cpp/muldiv_tb.cpp $(ROOT)/tb/cpp/muldiv_golden.h \
+                    $(RTL)/muserisc_muldiv.sv | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/muldiv --top-module muserisc_muldiv \
 	  -o $(abspath $(BUILD)/muldiv_tb) $(RTL)/muserisc_muldiv.sv \
 	  $(abspath $(ROOT)/tb/cpp/muldiv_tb.cpp)
 
 muldiv: $(BUILD)/muldiv_tb
 	cd $(BUILD) && COV_FILE=cov_muldiv.dat ./muldiv_tb
+
+## ---- Multi-cycle muldiv unit test (COMB=0 and the COMB=1 legacy mode) ----
+MULDIV_MC_SRC := $(RTL)/muserisc_muldiv.sv $(RTL)/muserisc_muldiv_mc.sv
+MULDIV_MC_DEP := $(ROOT)/tb/cpp/muldiv_mc_tb.cpp $(ROOT)/tb/cpp/muldiv_golden.h $(MULDIV_MC_SRC)
+$(BUILD)/muldiv_mc_tb: $(MULDIV_MC_DEP) | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/muldiv_mc --top-module muserisc_muldiv_mc \
+	  -o $(abspath $(BUILD)/muldiv_mc_tb) $(MULDIV_MC_SRC) \
+	  $(abspath $(ROOT)/tb/cpp/muldiv_mc_tb.cpp)
+
+$(BUILD)/muldiv_mc_comb_tb: $(MULDIV_MC_DEP) | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/muldiv_mc_comb --top-module muserisc_muldiv_mc \
+	  -GCOMB=1 -CFLAGS -DMDU_COMB \
+	  -o $(abspath $(BUILD)/muldiv_mc_comb_tb) $(MULDIV_MC_SRC) \
+	  $(abspath $(ROOT)/tb/cpp/muldiv_mc_tb.cpp)
+
+muldiv_mc: $(BUILD)/muldiv_mc_tb $(BUILD)/muldiv_mc_comb_tb
+	cd $(BUILD) && COV_FILE=cov_muldiv_mc.dat ./muldiv_mc_tb
+	cd $(BUILD) && COV_FILE=cov_muldiv_mc_comb.dat ./muldiv_mc_comb_tb 100000
 
 ## ---- Decoder unit test -------------------------------------------------
 $(BUILD)/decoder_tb: $(ROOT)/tb/cpp/decoder_tb.cpp $(PKG) $(RTL)/muserisc_decoder.sv | $(BUILD) $(OBJ)
@@ -352,6 +371,7 @@ COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
               $(wildcard $(BUILD)/cov_ecfield.dat) \
               $(wildcard $(BUILD)/cov_cryptotop.dat) \
               $(BUILD)/cov_alu.dat $(BUILD)/cov_muldiv.dat \
+              $(BUILD)/cov_muldiv_mc.dat $(BUILD)/cov_muldiv_mc_comb.dat \
               $(BUILD)/cov_decoder.dat $(BUILD)/cov_regfile.dat \
               $(BUILD)/cov_csr.dat $(BUILD)/cov_mmu.dat \
               $(BUILD)/cov_fpu.dat $(BUILD)/cov_fpu_ds1.dat \

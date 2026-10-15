@@ -1,0 +1,41 @@
+# muserisc_muldiv_mc (multi-cycle RV64M unit) vs muserisc_muldiv
+# (combinational) — block synthesis and unit-TB evidence, 2026-10-15.
+# Branch muldiv-multicycle (phase 1: standalone unit, core unchanged).
+
+## Synthesis: scripts/synth_unit_nangate45.sh (openroad/orfs:latest,
+## Yosys 0.68+post synth -flatten -booth, abc -D 10000, Nangate45
+## typical; OpenROAD/OpenSTA, 10 ns clock, zero I/O delays, ideal
+## clock, no placement/buffering/wire load)
+
+muserisc_muldiv     (combinational)
+  cells 41447, chip area 49786.954 um^2, flops 0
+  worst path in->out  b_i[31] -> result_o[61]: 115.824 ns
+                      (1758 cells), slack -105.824 ns @ 10 ns
+  yosys+sta wall: 122 s
+
+muserisc_muldiv_mc  (COMB=0)
+  cells 23016, chip area 28566.006 um^2, flops 274 (3 DFFR state)
+  reg->reg worst  4.693 ns (70 cells; MUL1 33x33 partial products)
+  reg->out worst  4.249 ns (result_o via MUL2 128-bit sum)
+  in->reg  worst  ~2.24 ns (IDLE capture: W extension, |a|,|b|, special result)
+  divider ITER step (from 3d register to remainder) 3.295 ns (75 cells)
+  done_o arrival  ~0.79 ns (registered state only)
+  worst setup slack 5.247 ns @ 10 ns
+  yosys+sta wall: 19 s
+
+## Unit TB: make -C sim muldiv_mc (Verilator 5.048, wall 25-34 s incl. build)
+MULDIV_MC TB PASS (985873 checks, 125137 squashes, 6393441 cycles)
+MULDIV_MC (COMB=1) TB PASS (203248 checks, 0 squashes, 265043 cycles)
+Coverage, muserisc_muldiv_mc.sv (COMB=0 + COMB=1 runs merged,
+verilator_coverage --annotate-min 1): line 100%, toggle 100%.
+(The only partially toggled signal in the merged report is
+muserisc_muldiv.sv most_neg — a constant in the legacy reference
+module, instantiated by COMB=1 and the sim-only cross-check.)
+Mutation sanity: ignoring ack in the done state -> "FAIL hold";
+3d compare off by one -> "FAIL result" (3/1).
+
+## Baseline gates on the branch (core unchanged in phase 1)
+make lint          rc=0  7 s
+make test          rc=0  32 s   ALL PHASE-0 KATs PASS
+make core-test     rc=0  245 s  12 unit TB runs (incl. muldiv_mc COMB=0/1) + 22 directed core programs PASS
+make riscv-tests   rc=0  22 s   rv64ui+um+ua+uf+ud+uc+mi+si: 123/123 PASS

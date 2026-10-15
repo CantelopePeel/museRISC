@@ -52,7 +52,9 @@ one load-use bubble, all control transfers resolved in EX
 WB so a trapping instruction and everything younger perform no
 writes. The M-unit divider is combinational in stage 2 (a
 correctness vehicle; an iterative divider with an EX stall
-replaces it before any synthesis target). Pipeline performance
+replaces it before any synthesis target — the multi-cycle
+replacement `muserisc_muldiv_mc` exists, see "M unit" below).
+Pipeline performance
 beyond correctness is not yet a goal at this stage.
 
 ## EX-stage multi-cycle units (fpu-multicycle)
@@ -278,3 +280,53 @@ exactly these cycles. MEM vector loads/stores take 2 cycles
 per active element (or field), 1 per skipped (masked-off or
 below `vstart`) element, plus *nf* write-out cycles per
 element for segment loads and 1 final cycle.
+
+## M unit: `muserisc_muldiv_mc` (multi-cycle)
+
+`rtl/core/muserisc_muldiv_mc.sv` is the synthesis-target RV64M unit
+that replaces the combinational `muserisc_muldiv` in EX. Phase 1
+(this module, its unit TB and block synthesis) is standalone; the
+core still instantiates `muserisc_muldiv` until it is wired to the
+generic EX multi-cycle handshake (`req`/`done`/`ack`/`kill`, the
+same protocol as `muserisc_fpu`: the core stalls EX while
+`req && !done`, a done result is held until `ack`, `kill` or a
+dropped `req` squashes it). Operands are sampled in the issue cycle,
+so later forwarding changes are ignored; `done_o`/`result_o` come
+only from unit registers.
+
+| op | cycles to `done` (issue = 0) |
+|----|------------------------------|
+| MUL, MULH, MULHSU, MULHU, MULW | 2 |
+| DIV/REM(U)(W) by zero, signed overflow | 1 |
+| other DIV/REM(U)(W) | 2 + n, n = max(0, ceil((clz\|b\| − clz\|a\| + 1)/2)) |
+
+n is 0..32 (0..16 for W forms): |a| < |b| with a different MSB
+position takes 2 cycles, a full 64-bit quotient 34. Multiplier: 65×65
+signed (per-op sign/zero extension) as four 33×33 signed partial
+products registered in MUL1 (2×2 DSP48 tiles on FPGA, Booth arrays on
+ASIC), summed in MUL2. Divider: radix-4 restoring recurrence on
+magnitudes (compare against d, 2d, 3d in parallel), normalized by
+leading-zero counts so only significant quotient digits iterate;
+FIX applies signs and the W sign extension. `COMB=1` keeps the legacy
+single-cycle behaviour behind the same handshake (`done_o = req_i`).
+Simulation builds cross-check every completion against
+`muserisc_muldiv`.
+
+Verification (`make -C sim muldiv_mc`, `tb/cpp/muldiv_mc_tb.cpp`,
+golden `tb/cpp/muldiv_golden.h`): edge-operand cross product and
+exhaustive −20..20 operands for every op and W form, every divider
+step count, and 1M randomized ops with handshake stress (done held
+without ack, operands scrambled while busy, ack noise, back-to-back
+issue, kill / req drop / asynchronous reset at every cycle of an
+operation including the done hold); exact latency is checked on
+every op. Verilator line and toggle coverage of
+`muserisc_muldiv_mc.sv` is 100% (COMB=0 and COMB=1 builds merged).
+
+Block synthesis (`scripts/synth_unit_nangate45.sh`, Yosys `synth
+-booth` + ABC, OpenSTA at 10 ns, no placement/buffering; evidence in
+`docs/evidence/muldiv-mc-nangate45-2026-10-15.log`):
+
+| unit | cell area | flops | worst path |
+|------|-----------|-------|------------|
+| `muserisc_muldiv` (combinational) | 49,787 µm² | 0 | 115.8 ns in→out (1,758 cells) |
+| `muserisc_muldiv_mc` | 28,566 µm² | 274 | 4.69 ns reg→reg (MUL1 partial products, 70 cells); 4.25 ns reg→`result_o` (MUL2 sum); divider ITER step 3.3 ns |
