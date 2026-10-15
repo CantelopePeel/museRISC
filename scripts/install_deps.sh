@@ -2,6 +2,7 @@
 # Install the host tools museRISC needs (see scripts/setup.sh for the
 # list and `make test` / `make lint` / `make core-test` for users).
 #   ./scripts/install_deps.sh              # packages + Verilator + SoftFloat
+#                                          # + riscv-tests sources
 #   ./scripts/install_deps.sh --gcc15      # also the pinned GCC 15+ RISC-V
 #                                          # toolchain ACT4 needs (Linux x86_64)
 # Project-local tools are built into deps/ (git-ignored); load them with
@@ -20,8 +21,9 @@ DEPS=$ROOT/deps
 VERILATOR_TAG="v5.048"
 # Same pin as .github/workflows/compliance.yml.
 RISCV_TOOLCHAIN_TAG="2026.08.27"
-# Same pin as docs/COMPLIANCE.md; sim/Makefile's FPU TB links it.
-SOFTFLOAT_COMMIT="a0c6494c"
+# Same pins as .github/workflows/core-regression.yml.
+SOFTFLOAT_COMMIT="a0c6494cdc11865811dec815d5c0049fba9d82a8"
+RISCV_TESTS_COMMIT="eeacd5507db7a0f50ca8c4f27aff220fcbb60bdf"
 
 want_gcc15=0
 case "${1:-}" in
@@ -44,7 +46,7 @@ case "$os" in
     echo "== Installing apt packages =="
     sudo_cmd apt-get update
     # Second line: Verilator build dependencies.
-    sudo_cmd apt-get install -y iverilog yosys z3 gcc-riscv64-unknown-elf \
+    sudo_cmd apt-get install -y yosys z3 gcc-riscv64-unknown-elf \
       curl git make python3 xz-utils \
       autoconf g++ flex bison help2man perl libfl-dev zlib1g-dev
     ;;
@@ -55,7 +57,7 @@ case "$os" in
     fi
     echo "== Installing Homebrew packages =="
     # Homebrew's Verilator is current, so it is not built from source.
-    brew install verilator icarus-verilog yosys riscv64-elf-gcc mise z3
+    brew install verilator yosys riscv64-elf-gcc mise z3
     ;;
   *)
     echo "unsupported OS: $os" >&2
@@ -105,19 +107,21 @@ if [ "$want_gcc15" = 1 ]; then
   fi
 fi
 
-# sim/Makefile expects SoftFloat in third_party/ with the HostRISCV build
-# directory that scripts/build_testfloat.sh creates.
-sf=third_party/berkeley-softfloat-3
-if [ ! -f "$sf/build/HostRISCV/Makefile" ]; then
-  echo "== Fetching Berkeley SoftFloat $SOFTFLOAT_COMMIT =="
-  mkdir -p third_party
-  [ -d "$sf/.git" ] || git clone https://github.com/ucb-bar/berkeley-softfloat-3.git "$sf"
-  git -C "$sf" -c advice.detachedHead=false checkout -q "$SOFTFLOAT_COMMIT"
-  mkdir -p "$sf/build/HostRISCV"
-  sed -e 's/^==> *//' -e 's/SPECIALIZE_TYPE ?= 8086/SPECIALIZE_TYPE ?= RISCV/' \
-    "$sf/build/template-FAST_INT64/Makefile" > "$sf/build/HostRISCV/Makefile"
-  cp "$sf/build/Linux-RISCV64-GCC/platform.h" "$sf/build/HostRISCV/"
-fi
+clone_pin() { # dir url commit
+  [ -d "$1/.git" ] || git clone "$2" "$1"
+  git -C "$1" -c advice.detachedHead=false checkout -q "$3"
+}
+mkdir -p third_party
+# FPU TB oracle; sim/softfloat-host/ supplies its build config.
+echo "== Fetching Berkeley SoftFloat ${SOFTFLOAT_COMMIT:0:8} =="
+clone_pin third_party/berkeley-softfloat-3 \
+  https://github.com/ucb-bar/berkeley-softfloat-3.git "$SOFTFLOAT_COMMIT"
+# `make riscv-tests`: point sim/run_riscv_tests.sh here with
+# RISCV_TESTS_DIR (deps/env.sh exports it).
+echo "== Fetching riscv-tests ${RISCV_TESTS_COMMIT:0:8} =="
+clone_pin third_party/riscv-tests \
+  https://github.com/riscv-software-src/riscv-tests.git "$RISCV_TESTS_COMMIT"
+git -C third_party/riscv-tests submodule update --init --recursive -q
 
 if ! command -v mise >/dev/null && [ ! -x "$HOME/.local/bin/mise" ]; then
   echo "== Installing mise (ACT4 tool manager) =="
@@ -131,6 +135,7 @@ for _d in "$_muse_deps/riscv-toolchain/riscv/bin" "$_muse_deps/bin" "$HOME/.loca
   case ":$PATH:" in *":$_d:"*) ;; *) [ -d "$_d" ] && PATH="$_d:$PATH" ;; esac
 done
 export PATH
+export RISCV_TESTS_DIR="${RISCV_TESTS_DIR:-$(dirname "$_muse_deps")/third_party/riscv-tests}"
 unset VERILATOR_ROOT _d _muse_deps
 EOF
 
