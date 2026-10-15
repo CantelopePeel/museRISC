@@ -1410,9 +1410,12 @@ stages 4c/5:
   `make core-test`, using a new `core_tb` IRQ_CTL store
   (0x10000008) that drives the interrupt pins. It fails
   subtest 4 (SEIP latched after the pin drops) on the old
-  RTL and passes with the fix.
+  RTL and passes with the fix. `irq_mip_rmw_variants.S` (from
+  review) adds CSRRSI/CSRRCI and CSRRW on `mip` with the pins
+  high and the `sip` alias from S-mode; `csr_tb` checks
+  `rmw_rdata_o` directly.
 - Gates: `make lint` clean (7 s); `make test`
-  `ALL PHASE-0 KATs PASS` (35 s); `make core-test` all PASS,
+  `ALL PHASE-0 KATs PASS` (35 s); `make core-test` all PASS (re-run after review: CSR TB 214 checks incl. `rmw_rdata_o`, 24 directed binaries incl. `irq_mip_rmw_variants`, 119 s; riscv-tests 123/123, 30 s); first run:
   23 directed binaries (244 s); `make riscv-tests`
   **123/123** (59 s); full ACT regenerated in this worktree
   (2,578 ELFs; same set as vec-serial)
@@ -1427,4 +1430,4 @@ stages 4c/5:
   ([`irqfix-linux-boot-2026-10-15.log`](irqfix-linux-boot-2026-10-15.log)).
   The vector unit is idle for the whole boot. The same boot
   on this branch's own RTL was still running when this was
-  written; its result is posted on the PR.
+  written; its result will be posted on the PR.
