@@ -111,9 +111,9 @@ mmu: $(BUILD)/mmu_tb
 ## ---- FPU unit test --------------------------------------------------------
 SOFTFLOAT := $(ROOT)/third_party/berkeley-softfloat-3
 SF_HOST   := $(ROOT)/build/softfloat-host
-$(SF_HOST)/softfloat.a:
+$(SF_HOST)/softfloat.a: softfloat-host/Makefile softfloat-host/platform.h
 	mkdir -p $(SF_HOST)
-	cp $(SOFTFLOAT)/build/HostRISCV/Makefile $(SOFTFLOAT)/build/HostRISCV/platform.h $(SF_HOST)/
+	cp softfloat-host/Makefile softfloat-host/platform.h $(SF_HOST)/
 	cd $(SF_HOST) && sed -i.bak 's|../../source|../../third_party/berkeley-softfloat-3/source|' Makefile && $(MAKE) -j8
 $(BUILD)/fpu_tb: $(ROOT)/tb/cpp/fpu_tb.cpp \
                  $(RTL)/muserisc_fpu_pkg.sv $(RTL)/muserisc_fpu.sv \
