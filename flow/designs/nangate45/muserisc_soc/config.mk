@@ -1,5 +1,12 @@
 export DESIGN_NAME = muserisc_soc_top
 export PLATFORM    = nangate45
+# Core RTL is full SystemVerilog (packages/imports): the
+# default Yosys Verilog-2005 frontend rejects it, use the
+# slang frontend built into the ORFS Yosys.
+export SYNTH_HDL_FRONTEND = slang
+# Whole-vector/FPU combinational loops exceed slang's
+# default 4000 unroll limit (fp_eval + 512-wide vec).
+export SYNTH_SLANG_ARGS = --unroll-limit=200000
 # Source order matters (packages first); tree is the repo rtl/
 # mounted at designs/src/muserisc_soc by openroad_docker.sh.
 export VERILOG_FILES = \

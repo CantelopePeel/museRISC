@@ -100,6 +100,12 @@ module muserisc_core import muserisc_pkg::*; (
   logic [1:0]  walk_acc;
   logic        mem_stall;     // data translation miss: hold all regs
   logic        sfence_fire;   // SFENCE.VMA commits this cycle
+  // Forward declarations for signals driven in later
+  // stages but read in EX/ID gating (slang synthesis
+  // requires declaration before use; Verilator did not).
+  logic        vec_wb_stall, vls_vrf_we, vec_fflags_we, mem_exc;
+  logic signed [3:0] vls_emul_log2;
+  logic [63:0] load_shifted;
 
   // ------------------------------------------------------------
   // IF stage
@@ -332,7 +338,6 @@ module muserisc_core import muserisc_pkg::*; (
   // MEM the cycle before; a vector op in EX in either cycle
   // would read or write stale state, so EX holds across both
   // (bubbles into EX/MEM, front stages frozen).
-  logic        vec_wb_stall;
   assign vec_wb_stall = (memwb_vec_we_q || vls_vrf_we) &&
                         idex_valid_q && idex_ctrl_q.vec && !idex_exc_q;
   assign wb_write = memwb_valid_q && memwb_reg_write_q && !memwb_exc_q;
@@ -498,13 +503,12 @@ module muserisc_core import muserisc_pkg::*; (
   logic [4095:0] vec_vs2, vec_vs1, vec_old_vd, vec_result;
   logic [511:0]  vec_v0;
   logic [63:0]   vec_scalar;
-  logic          vec_we, vec_illegal, vec_align_bad, vls_vrf_we;
+  logic          vec_we, vec_illegal, vec_align_bad;
   logic [2:0]    vec_wlmul;
   logic [63:0]   vset_avl, vset_vtype_raw, vec_vlmax;
   logic [1:0]    csr_vxrm;
   logic          vset_en, vec_sat;
   logic [4:0]    vec_fflags;
-  logic          vec_fflags_we;
   // FP vector ops accrue fflags and dirty FS on commit,
   // under the same precise-trap gating as vxsat.
   assign vec_fflags_we = idex_valid_q && idex_ctrl_q.vec &&
@@ -980,7 +984,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] mem_result;
   logic        data_access, mem_uses_port;
   logic        mem_pmp_fault, mem_trans_fault;
-  logic        mem_exc, mem_gva;
+  logic        mem_gva;
   logic [63:0] mem_cause, mem_tval, mem_gpa;
   // Effective data-translation context in MEM. HLV/HSV run
   // as VS/VU (hstatus.SPVP) under vsatp + hgatp regardless of
@@ -1176,7 +1180,6 @@ module muserisc_core import muserisc_pkg::*; (
   // EMUL for the destination group: (EEW/SEW)*LMUL. The
   // write count is the register span (fields * group size
   // for segments, nf+1 for whole-register transfers).
-  logic signed [3:0] vls_emul_log2;
   logic [3:0] vls_wnum;
   always_comb begin
     logic signed [3:0] lmul_log2;
@@ -1248,7 +1251,6 @@ module muserisc_core import muserisc_pkg::*; (
   assign dmem_addr_o = walk_grant ? walk_addr : mmu_d_pa;
   assign dmem_re_o = mem_uses_port && exmem_ctrl_q.mem_read;
 
-  logic [63:0] load_shifted;
   logic        res_valid_q;
   logic [63:0] res_pa_q;
   logic        res_is_d_q;  // reserved access size: 1 = 8B, 0 = 4B
