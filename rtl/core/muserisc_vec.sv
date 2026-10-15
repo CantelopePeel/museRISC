@@ -168,8 +168,6 @@ module muserisc_vec
   logic        off_ok_q;           // slideup offset < 512 / slidedown ok
   logic [9:0]  gidx10_q;           // vrgather .vx/.vi index
   logic        gidx_ok_q;
-  logic [9:0]  wp_init_q;          // vcompress write pointer start
-  logic        wp_ok_q;
 
   // Start-time decode of the incoming instruction.
   logic [2:0]  dw_i, aw_i;
@@ -249,7 +247,7 @@ module muserisc_vec
   logic       s1_v_q, s1_ph_q;
   logic [1:0] s1_kind_q;
   logic [9:0] s1_i_q, s1_ai_q;
-  logic       s1_m_q, s1_first_q, s1_last_q, s1_azero_q, s1_scal_q;
+  logic       s1_m_q, s1_first_q, s1_last_q;
   logic       s1_skip_q;
 
   logic        s2_v_q;
@@ -794,13 +792,12 @@ module muserisc_vec
   // ------------------------------------------------------------
   logic [1:0]  s0_kind;
   logic [9:0]  s0_ai;
-  logic        s0_azero, s0_scal, s0_skip, s0_last;
+  logic        s0_scal, s0_skip, s0_last;
   always_comb begin
     s0_kind = (s0_ph_q == PH_SEED) ? K_SEED :
               (s0_ph_q == PH_FIN) ? K_FIN : K_ELEM;
     s0_last = (i0_q == (end_q - 10'd1));
     s0_ai = i0_q;
-    s0_azero = 1'b0;
     s0_scal = 1'b0;
     s0_skip = 1'b0;
     unique case (op_q)
@@ -980,8 +977,6 @@ module muserisc_vec
       off10_q <= off64_i[9:0];
       gidx10_q <= gidx64_i[9:0];
       gidx_ok_q <= gidx64_i < vlmax_i;
-      wp_init_q <= vstart10_i;
-      wp_ok_q <= vstart_i < (64'd512 >> sew_i);
       // Op-level accumulators.
       cnt_q <= (op_i == VOP_COMPRESS) ? vstart10_i : 10'd0;
       cnt_ok_q <= vstart_i < (64'd512 >> sew_i);
@@ -1001,8 +996,6 @@ module muserisc_vec
         s1_m_q <= v0_i[i0_q[8:0]];
         s1_first_q <= (i0_q == beg_q);
         s1_last_q <= s0_last;
-        s1_azero_q <= s0_azero;
-        s1_scal_q <= s0_scal;
         s1_skip_q <= s0_skip;
         s1_ph_q <= 1'b0;
       end else if (s1_gissue) begin
@@ -1138,7 +1131,7 @@ module muserisc_vec
 
   // Unused-by-design bits (lint).
   logic unused;
-  assign unused = ^{s1_azero_q, s1_scal_q, wp_init_q, wp_ok_q, s2_cw_q[0],
+  assign unused = ^{s2_cw_q[0],
                     fp_er.result[0], mul_pp[79:76]};
 
 endmodule
