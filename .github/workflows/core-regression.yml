@@ -85,6 +85,7 @@ jobs:
           repository: riscv-software-src/riscv-tests
           ref: eeacd5507db7a0f50ca8c4f27aff220fcbb60bdf
           path: third_party/riscv-tests-ci
+          submodules: recursive
 
       - name: Install Verilator and RISC-V toolchain
         run: |
