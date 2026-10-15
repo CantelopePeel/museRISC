@@ -1649,8 +1649,12 @@ stages 4c/5:
   OpenROAD repair_design/repair_timing + OpenSTA, Nangate45
   typical, no wire parasitics, Yosys ripple-carry adders):
   **43,892 µm²** cell area (35,171 cells, 1,388 flops = 14%
-  of area); min period **5.38 ns (186 MHz)**, critical path =
-  the 2-step div/sqrt recurrence. With `FPU_DS_BITS = 1`
+  of area); register-to-register min period **5.38 ns
+  (186 MHz)**, critical path = the 2-step div/sqrt recurrence.
+  Inputs and outputs are unconstrained, so the issue-cycle
+  paths (forwarded operands → `unpack`/`i2f_sum`, and the
+  fast-op `a_i` → `result_o` path behind the core's
+  forwarding mux) are not in this figure. With `FPU_DS_BITS = 1`
   (div/sqrt 30/59 cycles instead of 17/32): 43,249 µm², 3.73 ns
   (268 MHz). A Kogge-Stone carry mapping was attempted but ABC
   did not finish within an hour and was abandoned. The full
