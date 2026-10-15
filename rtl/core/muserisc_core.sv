@@ -472,7 +472,8 @@ module muserisc_core import muserisc_pkg::*; (
   assign csr_fflags_we = idex_valid_q && idex_ctrl_q.fp_op &&
                          !idex_exc_q && !ex_illegal && !trap_fire &&
                          !mem_exc && !mem_stall;
-  assign fp_dirty_ex = csr_fflags_we && idex_ctrl_q.fp_rd;
+  assign fp_dirty_ex = (csr_fflags_we && idex_ctrl_q.fp_rd) ||
+                       vec_fflags_we;
   assign fp_dirty_mem = exmem_valid_q && exmem_ctrl_q.fp_rd &&
                         exmem_ctrl_q.mem_read && !exmem_exc_q &&
                         !mem_exc && !mem_stall;
@@ -495,6 +496,15 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0]   vset_avl, vset_vtype_raw, vec_vlmax;
   logic [1:0]    csr_vxrm;
   logic          vset_en, vec_sat;
+  logic [4:0]    vec_fflags;
+  logic          vec_fflags_we;
+  // FP vector ops accrue fflags and dirty FS on commit,
+  // under the same precise-trap gating as vxsat.
+  assign vec_fflags_we = idex_valid_q && idex_ctrl_q.vec &&
+      (idex_ctrl_q.bext_op >= VOP_FBIN) &&
+      (idex_ctrl_q.bext_op <= VOP_FMVFS) &&
+      !idex_exc_q && !vec_illegal && !trap_fire &&
+      !mem_exc && !mem_stall && !vec_wb_stall;
   // VLMAX for the execution unit (same formula as the CSR
   // vset logic): group bits / SEW.
   always_comb begin
@@ -517,16 +527,25 @@ module muserisc_core import muserisc_pkg::*; (
   // vill set) and is handled by its own alignment rule.
   logic ex_is_wide, ex_is_narrow, ex_is_mask_dest;
   logic signed [3:0] ex_lmul_log2, ex_vd_log2, ex_vs2_log2, ex_vs1_log2;
-  assign ex_is_wide = (idex_ctrl_q.bext_op >= VOP_WADD) &&
-                      (idex_ctrl_q.bext_op <= VOP_WMACCUS);
-  assign ex_is_narrow = (idex_ctrl_q.bext_op >= VOP_NSRL) &&
-                        (idex_ctrl_q.bext_op <= VOP_NCLIPU);
+  assign ex_is_wide =
+      ((idex_ctrl_q.bext_op >= VOP_WADD) &&
+       (idex_ctrl_q.bext_op <= VOP_WMACCUS)) ||
+      (idex_ctrl_q.bext_op == VOP_FBINW) ||
+      (idex_ctrl_q.bext_op == VOP_FMACCW) ||
+      ((idex_ctrl_q.bext_op == VOP_FCVT) &&
+       (idex_imm_q[4:0] >= 5'd8) && (idex_imm_q[4:0] < 5'd16));
+  assign ex_is_narrow =
+      ((idex_ctrl_q.bext_op >= VOP_NSRL) &&
+       (idex_ctrl_q.bext_op <= VOP_NCLIPU)) ||
+      ((idex_ctrl_q.bext_op == VOP_FCVT) &&
+       (idex_imm_q[4:0] >= 5'd16));
   assign ex_is_mask_dest = (idex_ctrl_q.bext_op == VOP_MADC) ||
       (idex_ctrl_q.bext_op == VOP_MSBC) ||
       ((idex_ctrl_q.bext_op >= VOP_CMPEQ) &&
        (idex_ctrl_q.bext_op <= VOP_CMPGT)) ||
       (idex_ctrl_q.bext_op == VOP_MLOG) ||
-      (idex_ctrl_q.bext_op == VOP_MSBIT);
+      (idex_ctrl_q.bext_op == VOP_MSBIT) ||
+      (idex_ctrl_q.bext_op == VOP_FCMP);
   always_comb begin
     logic signed [3:0] mvr_log2;
     unique case (csr_vtype[2:0])
@@ -546,14 +565,18 @@ module muserisc_core import muserisc_pkg::*; (
       ex_vs2_log2 = ((idex_ctrl_q.bext_op == VOP_WADDW) ||
                      (idex_ctrl_q.bext_op == VOP_WADDUW) ||
                      (idex_ctrl_q.bext_op == VOP_WSUBW) ||
-                     (idex_ctrl_q.bext_op == VOP_WSUBUW))
+                     (idex_ctrl_q.bext_op == VOP_WSUBUW) ||
+                     ((idex_ctrl_q.bext_op == VOP_FBINW) &&
+                      idex_imm_q[7]))
                     ? (ex_lmul_log2 + 4'sd1) : ex_lmul_log2;
     end else if (ex_is_narrow) begin
       ex_vd_log2 = ex_lmul_log2;
       ex_vs2_log2 = ex_lmul_log2 + 4'sd1;
     end else if (ex_is_mask_dest ||
                  (idex_ctrl_q.bext_op == VOP_RED) ||
-                 (idex_ctrl_q.bext_op == VOP_WRED)) begin
+                 (idex_ctrl_q.bext_op == VOP_WRED) ||
+                 (idex_ctrl_q.bext_op == VOP_FRED) ||
+                 (idex_ctrl_q.bext_op == VOP_FWRED)) begin
       ex_vd_log2 = -4'sd3;  // single register: no constraint
       // Mask-register sources (logicals, vmsbf family) are
       // single registers; data sources use the full group.
@@ -585,6 +608,7 @@ module muserisc_core import muserisc_pkg::*; (
   assign vec_align_bad =
       (idex_ctrl_q.bext_op != VOP_MVSX) &&
       (idex_ctrl_q.bext_op != VOP_MVXS) &&
+      (idex_ctrl_q.bext_op != VOP_FMVFS) &&
       (idex_ctrl_q.bext_op != VOP_CPOP) &&
       (idex_ctrl_q.bext_op != VOP_FIRST) &&
       !(idex_ctrl_q.mem_read || idex_ctrl_q.mem_write) &&
@@ -595,11 +619,17 @@ module muserisc_core import muserisc_pkg::*; (
        ((idex_ctrl_q.fpu_aux == VFORM_VV) &&
         (idex_ctrl_q.bext_op != VOP_RED) &&
         (idex_ctrl_q.bext_op != VOP_WRED) &&
+        (idex_ctrl_q.bext_op != VOP_FRED) &&
+        (idex_ctrl_q.bext_op != VOP_FWRED) &&
         (idex_ctrl_q.bext_op != VOP_EXT) &&
         (idex_ctrl_q.bext_op != VOP_MSBIT) &&
         (idex_ctrl_q.bext_op != VOP_MLOG) &&
         (idex_ctrl_q.bext_op != VOP_COMPRESS) &&
         (idex_ctrl_q.bext_op != VOP_IOTA) &&
+        // FCVT/FUNARY carry a sub-op in the vs1 field, not
+        // a register group.
+        (idex_ctrl_q.bext_op != VOP_FCVT) &&
+        (idex_ctrl_q.bext_op != VOP_FUNARY) &&
         (idex_ctrl_q.bext_op != VOP_ID) &&
         (idex_ctrl_q.bext_op != VOP_MVR) &&
         align_bad(idex_instr_q[19:15], ex_vs1_log2)) ||
@@ -612,6 +642,8 @@ module muserisc_core import muserisc_pkg::*; (
         // v0 under a mask.
         (idex_ctrl_q.bext_op != VOP_RED) &&
         (idex_ctrl_q.bext_op != VOP_WRED) &&
+        (idex_ctrl_q.bext_op != VOP_FRED) &&
+        (idex_ctrl_q.bext_op != VOP_FWRED) &&
         (idex_ctrl_q.bext_op != VOP_ADC) &&
         (idex_ctrl_q.bext_op != VOP_SBC) &&
         (idex_ctrl_q.bext_op != VOP_MERGE) &&
@@ -626,13 +658,40 @@ module muserisc_core import muserisc_pkg::*; (
       (ex_is_wide && ((csr_vtype[5:3] == 3'd3) ||
                       (ex_lmul_log2 == 4'sd3))) ||
       // Widening reductions: 2*SEW dest, any LMUL.
-      ((idex_ctrl_q.bext_op == VOP_WRED) &&
+      (((idex_ctrl_q.bext_op == VOP_WRED) ||
+        (idex_ctrl_q.bext_op == VOP_FWRED)) &&
        (csr_vtype[5:3] == 3'd3)) ||
       (ex_is_narrow && ((csr_vtype[5:3] == 3'd3) ||
                         (ex_lmul_log2 == 4'sd3))) ||
       ((idex_ctrl_q.bext_op == VOP_EXT) &&
        (4'(signed'({1'b0, csr_vtype[5:3]})) <
         (4'sd4 - 4'(signed'({2'b00, idex_imm_q[2:1]})))));
+  // FP vector legality (stage 9): FS must be enabled, SEW
+  // must name a supported FP width (32/64; no Zfh), and
+  // rounding forms need a legal dynamic frm. FPU op codes
+  // ride in imm[4:0]: ADD/SUB/MUL/DIV are 0..3.
+  logic ex_fp_vec, ex_fp_rounds, ex_fp_bad;
+  assign ex_fp_vec =
+      ((idex_ctrl_q.bext_op >= VOP_FBIN) &&
+       (idex_ctrl_q.bext_op <= VOP_FMVFS)) ||
+      (idex_ctrl_q.vec && idex_ctrl_q.fp_rs1 &&
+       !idex_ctrl_q.mem_read && !idex_ctrl_q.mem_write);
+  assign ex_fp_rounds =
+      (((idex_ctrl_q.bext_op == VOP_FBIN) ||
+        (idex_ctrl_q.bext_op == VOP_FBINW)) &&
+       (idex_imm_q[4:0] <= 5'd3)) ||
+      (idex_ctrl_q.bext_op == VOP_FMACC) ||
+      (idex_ctrl_q.bext_op == VOP_FMACCW) ||
+      ((idex_ctrl_q.bext_op == VOP_FUNARY) &&
+       (idex_imm_q[1:0] != 2'd1)) ||
+      (((idex_ctrl_q.bext_op == VOP_FRED) ||
+        (idex_ctrl_q.bext_op == VOP_FWRED)) &&
+       (idex_imm_q[1:0] < 2'd2)) ||
+      ((idex_ctrl_q.bext_op == VOP_FCVT) &&
+       (idex_imm_q[2:0] < 3'd6));
+  assign ex_fp_bad = ex_fp_vec &&
+      ((csr_fs == 2'b00) || (csr_vtype[5:3] < 3'd2) ||
+       (ex_fp_rounds && (csr_frm > 3'd4)));
   // VRF write group size for EX-executed vector ops.
   always_comb begin
     if (idex_ctrl_q.bext_op == VOP_MVR) begin
@@ -641,7 +700,9 @@ module muserisc_core import muserisc_pkg::*; (
                   (idex_instr_q[19:15] == 5'd7) ? 3'd3 : 3'd0;
     end else if (ex_is_mask_dest ||
                  (idex_ctrl_q.bext_op == VOP_RED) ||
-                 (idex_ctrl_q.bext_op == VOP_WRED)) begin
+                 (idex_ctrl_q.bext_op == VOP_WRED) ||
+                 (idex_ctrl_q.bext_op == VOP_FRED) ||
+                 (idex_ctrl_q.bext_op == VOP_FWRED)) begin
       vec_wlmul = 3'd0;
     end else begin
       vec_wlmul = (ex_vd_log2 < 0) ? 3'd0 : ex_vd_log2[2:0];
@@ -703,6 +764,7 @@ module muserisc_core import muserisc_pkg::*; (
         (idex_ctrl_q.bext_op != VLS_WHOLE)) ||
        (!idex_ctrl_q.vset && vec_align_bad) ||
        (!idex_ctrl_q.vset && ex_vec_bad) ||
+       (!idex_ctrl_q.vset && ex_fp_bad) ||
        ((idex_ctrl_q.mem_read || idex_ctrl_q.mem_write) && ex_vls_bad));
   assign vset_avl = (idex_ctrl_q.fpu_aux == 2'd1)
       ? {59'd0, idex_instr_q[19:15]} : ex_rs1;
@@ -744,6 +806,8 @@ module muserisc_core import muserisc_pkg::*; (
       .vstart_i  (csr_vstart),
       .vlmax_i   (vec_vlmax),
       .vxrm_i    (csr_vxrm),
+      .frm_i     (csr_frm),
+      .fflags_o  (vec_fflags),
       .sat_o     (vec_sat),
       .vta_i     (csr_vtype[6]),
       .vma_i     (csr_vtype[7]),
@@ -752,7 +816,9 @@ module muserisc_core import muserisc_pkg::*; (
       .vs2_i     (vec_vs2),
       .vs1_i     (vec_vs1),
       .old_vd_i  (vec_old_vd),
-      .scalar_i  (ex_rs1),
+      // FP vector .vf forms read the scalar from the FP
+      // register file; integer .vx forms use the GPR value.
+      .scalar_i  (idex_ctrl_q.fp_rs1 ? ex_frs1 : ex_rs1),
       .imm_i     (idex_imm_q),
       .result_o  (vec_result),
       .scalar_o  (vec_scalar)
@@ -1381,8 +1447,8 @@ module muserisc_core import muserisc_pkg::*; (
       .wr_en_i       (csr_we),  // module itself suppresses illegal writes
       .frm_o         (csr_frm),
       .fs_o          (csr_fs),
-      .fflags_we_i   (csr_fflags_we),
-      .fflags_i      (fpu_flags),
+      .fflags_we_i   (csr_fflags_we || vec_fflags_we),
+      .fflags_i      (vec_fflags_we ? vec_fflags : fpu_flags),
       .fp_dirty_i    (fp_dirty),
       .vec_vs_o      (csr_vec_vs),
       .vtype_o       (csr_vtype),

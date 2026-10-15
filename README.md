@@ -90,8 +90,17 @@ Key implementation files are
   suites, 1872/1872 generated self-checking ELFs
   ([#23](https://github.com/bubblebabyboi/museRISC/issues/23));
   43 tests were not generated/selected (documented in
-  the evidence index). Floating-point vector is not
-  implemented and is not claimed.
+  the evidence index).
+- **Floating-point V vector:** Zve32f/Zve64f/Zve64d
+  executes per element through the shared scalar FPU
+  evaluation (`fp_eval`/`fp_estimate` in
+  `muserisc_fpu_pkg.sv`), including widening/narrowing
+  forms, FMA, conversions (incl. `vfncvt.rod`),
+  reductions, and the `vfrec7`/`vfrsqrt7` estimates. It
+  passes the ACT Vf32+Vf64 suites, 162/162 generated
+  self-checking ELFs
+  ([#29](https://github.com/bubblebabyboi/museRISC/issues/29)).
+  Full V and FP16 (Zvfh/Vf16) are not claimed.
 - **Crypto:** KATs pass and the standalone macro is
   place-and-route complete with GDS generated. Core attach
   (B4, [#4](https://github.com/bubblebabyboi/museRISC/issues/4))
@@ -120,8 +129,10 @@ RV64GCV, built in stages; unchecked items are not claims.
       ([#22](https://github.com/bubblebabyboi/museRISC/issues/22))
 - [x] **V vector (integer)** — RVV 1.0 Zve32x/Zve64x,
       VLEN 512/ELEN 64
-      ([#23](https://github.com/bubblebabyboi/museRISC/issues/23));
-      FP vector (Zve32f/Zve64f/Zve64d) not implemented
+      ([#23](https://github.com/bubblebabyboi/museRISC/issues/23))
+- [x] **V vector (floating point)** — Zve32f/Zve64f/Zve64d
+      ([#29](https://github.com/bubblebabyboi/museRISC/issues/29));
+      full V and FP16 not claimed
 
 ### Tests and platform gates
 

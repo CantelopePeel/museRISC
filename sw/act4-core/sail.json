@@ -288,7 +288,7 @@
     },
     "V": {
       "mutable_misa": false,
-      "support_level": "Integer",
+      "support_level": "Float_double",
       "vlen_exp": 9,
       "elen_exp": 6,
       "reserved_behavior": {

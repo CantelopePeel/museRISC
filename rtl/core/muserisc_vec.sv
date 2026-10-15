@@ -9,12 +9,13 @@
 // whole-register moves. Prestart elements keep the old
 // destination; tail/inactive elements follow vta/vma
 // (agnostic = undisturbed in this implementation). Memory
-// forms live in the core MEM sequencer; FP vector classes
-// are not implemented. Element helpers live in
-// muserisc_vec_pkg.
+// forms live in the core MEM sequencer. FP vector classes
+// (stage 9, Zve32f/Zve64f/Zve64d) execute per element
+// through fp_eval/fp_estimate in muserisc_fpu_pkg.
+// Element helpers live in muserisc_vec_pkg.
 `default_nettype none
 module muserisc_vec
-  import muserisc_pkg::*, muserisc_vec_pkg::*;
+  import muserisc_pkg::*, muserisc_vec_pkg::*, muserisc_fpu_pkg::*;
 (
     input  wire [6:0]    op_i,       // VOP_*
     input  wire [1:0]    form_i,     // VFORM_* (VV/VX/VI)
@@ -32,10 +33,12 @@ module muserisc_vec
     input  wire [63:0]   scalar_i,   // rs1 value (VX)
     input  wire [63:0]   imm_i,      // imm5 / sub-operation
     input  wire [1:0]    vxrm_i,
+    input  wire [2:0]    frm_i,      // FP rounding mode (stage 9)
 
     output logic [4095:0] result_o,  // new vd group
     output logic [63:0]   scalar_o,  // vmv.x.s / vcpop / vfirst
-    output logic          sat_o      // an active element saturated
+    output logic          sat_o,     // an active element saturated
+    output logic [4:0]    fflags_o   // accrued FP flags (stage 9)
 );
 
   // Agnostic policies behave as undisturbed in this
@@ -48,11 +51,16 @@ module muserisc_vec
   logic is_wide, is_narrow, is_mask_dest, unmasked_op;
   logic [2:0] dw;  // destination width code
   assign is_wide = ((op_i >= VOP_WADD) && (op_i <= VOP_WMACCUS)) ||
-                   (op_i == VOP_WRED);
-  assign is_narrow = (op_i >= VOP_NSRL) && (op_i <= VOP_NCLIPU);
+                   (op_i == VOP_WRED) || (op_i == VOP_FBINW) ||
+                   (op_i == VOP_FMACCW) ||
+                   ((op_i == VOP_FCVT) && (imm_i[4:0] >= 5'd8) &&
+                    (imm_i[4:0] < 5'd16));
+  assign is_narrow = ((op_i >= VOP_NSRL) && (op_i <= VOP_NCLIPU)) ||
+                     ((op_i == VOP_FCVT) && (imm_i[4:0] >= 5'd16));
   assign is_mask_dest = (op_i == VOP_MADC) || (op_i == VOP_MSBC) ||
       ((op_i >= VOP_CMPEQ) && (op_i <= VOP_CMPGT)) ||
-      (op_i == VOP_MLOG) || (op_i == VOP_MSBIT);
+      (op_i == VOP_MLOG) || (op_i == VOP_MSBIT) ||
+      (op_i == VOP_FCMP);
   // Carry/merge forms take v0 as data, not as an enable mask.
   assign unmasked_op = (op_i == VOP_ADC) || (op_i == VOP_SBC) ||
                        (op_i == VOP_MERGE);
@@ -61,7 +69,8 @@ module muserisc_vec
   logic [2:0] aw;  // vs2 element width code for this op
   always_comb begin
     if (is_narrow || (op_i == VOP_WADDW) || (op_i == VOP_WADDUW) ||
-        (op_i == VOP_WSUBW) || (op_i == VOP_WSUBUW)) begin
+        (op_i == VOP_WSUBW) || (op_i == VOP_WSUBUW) ||
+        ((op_i == VOP_FBINW) && imm_i[7])) begin
       aw = (sew_i >= 3'd3) ? 3'd3 : (sew_i + 3'd1);
     end else if (op_i == VOP_EXT) begin
       // imm[2:1]: 01=/8, 10=/4, 11=/2 (legality in the core).
@@ -80,8 +89,16 @@ module muserisc_vec
     logic [5:0] shamt, shamt_w;
     logic sat_i, active, bit_v, seen_v, src_act;
     int shamt_bits, iota_cnt, wp, src_idx;
+    // FP element temporaries (stage 9). Vector elements are
+    // raw SEW-bit values; SEW=32 operands are presented to
+    // fp_eval NaN-boxed (the scalar datapath's convention).
+    fp_eval_result_t fr, fr2;
+    logic [63:0] fa, fb, fc, fx, facc;
+    logic [4:0] el_flags;
+    logic finv;
     result_o = old_vd_i;
     sat_o = 1'b0;
+    fflags_o = 5'd0;
     ones_s = (sew_i == 3'd3) ? 64'hffff_ffff_ffff_ffff :
              (sew_i == 3'd2) ? 64'h0000_0000_ffff_ffff :
              (sew_i == 3'd1) ? 64'h0000_0000_0000_ffff :
@@ -150,6 +167,27 @@ module muserisc_vec
               default: bit_v = ~(vs2_i[i] ^ vs1_i[i]); // vmxnor
             endcase
           end
+          VOP_FCMP: begin
+            // imm[2:0]: 0 eq, 1 ne, 2 lt, 3 le, 4 gt, 5 ge.
+            // gt/ge swap operands; ne inverts eq. Scalar CMP
+            // aux: 0 le, 1 lt, 2 eq (quiet for eq, signaling
+            // otherwise) matches vmf flag rules.
+            fa = (sew_i == 3'd2) ? {32'hffff_ffff, a[31:0]} : a;
+            fb = ((form_i == VFORM_VV) && (sew_i == 3'd2))
+                 ? {32'hffff_ffff, b[31:0]} : b;
+            finv = (imm_i[2:0] == 3'd1);
+            if (imm_i[2:0] >= 3'd4) begin
+              fx = fa; fa = fb; fb = fx;
+            end
+            fr = fp_eval(FPU_CMP, (sew_i == 3'd3), frm_i, fa, fb,
+                         64'd0,
+                         ((imm_i[2:0] == 3'd3) ||
+                          (imm_i[2:0] == 3'd5)) ? 2'd0 :
+                         ((imm_i[2:0] == 3'd2) ||
+                          (imm_i[2:0] == 3'd4)) ? 2'd1 : 2'd2);
+            bit_v = fr.result[0] ^ finv;
+            if (src_act) fflags_o |= fr.flags;
+          end
           default: begin  // VOP_MSBIT
             unique case (imm_i[1:0])
               2'd1: bit_v = !seen_v && !(src_act && vs2_i[i]); // vmsbf
@@ -186,6 +224,45 @@ module muserisc_vec
       end
       if (vl_i != 64'd0) begin
         result_o = put_el(result_o, 0, dw, acc[63:0]);
+      end
+    end else if ((op_i == VOP_FRED) || (op_i == VOP_FWRED)) begin
+      // FP reduction into element 0, seeded by vs1 element 0
+      // (double-wide for the widening forms). Both ordered
+      // and unordered sums fold sequentially for now; the
+      // pairwise order of vfredusum is checked against Sail
+      // by the ACT suites. imm[1:0]: 0 usum, 1 osum, 2 min,
+      // 3 max.
+      if (op_i == VOP_FWRED) begin
+        facc = get_el(vs1_i, 0, 3'd3);
+      end else begin
+        facc = get_el(vs1_i, 0, sew_i);
+        facc = (sew_i == 3'd2) ? {32'hffff_ffff, facc[31:0]} : facc;
+      end
+      for (int i = 0; i < (512 >> sew_i); i++) begin
+        a = get_el(vs2_i, i, sew_i);
+        if ((64'(unsigned'(i)) >= vstart_i) &&
+            (64'(unsigned'(i)) < vl_i) && (vm_i || mask_i[i])) begin
+          el_flags = 5'd0;
+          if (op_i == VOP_FWRED) begin
+            fr2 = fp_eval(FPU_F2F, 1'b1, frm_i,
+                          {32'hffff_ffff, a[31:0]}, 64'd0, 64'd0,
+                          2'd0);
+            fa = fr2.result;
+            el_flags |= fr2.flags;
+          end else begin
+            fa = (sew_i == 3'd2) ? {32'hffff_ffff, a[31:0]} : a;
+          end
+          fr = fp_eval((imm_i[1:0] < 2'd2) ? FPU_ADD : FPU_MINMAX,
+                       (op_i == VOP_FWRED) || (sew_i == 3'd3), frm_i,
+                       facc, fa, 64'd0, {1'b0, imm_i[0]});
+          facc = fr.result;
+          el_flags |= fr.flags;
+          fflags_o |= el_flags;
+        end
+      end
+      if (vl_i != 64'd0) begin
+        result_o = put_el(result_o, 0,
+                          (op_i == VOP_FWRED) ? 3'd3 : sew_i, facc);
       end
     end else if (op_i == VOP_RED) begin
       // Reduction into element 0; vs1 element 0 seeds it.
@@ -235,6 +312,7 @@ module muserisc_vec
                   ((6'd1 << (shamt_bits + 1)) - 6'd1);
         r = a;
         sat_i = 1'b0;
+        el_flags = 5'd0;
         unique case (op_i)
           VOP_ADD: r = a + b;
           VOP_SUB: r = a - b;
@@ -289,6 +367,126 @@ module muserisc_vec
           VOP_ADC: r = a + b + {63'd0, mask_i[i]};
           VOP_SBC: r = a - b - {63'd0, mask_i[i]};
           VOP_MERGE: r = mask_i[i] ? b : a;
+          VOP_FBIN: begin
+            fa = (sew_i == 3'd2) ? {32'hffff_ffff, a[31:0]} : a;
+            fb = ((form_i == VFORM_VV) && (sew_i == 3'd2))
+                 ? {32'hffff_ffff, b[31:0]} : b;
+            if (imm_i[7]) begin
+              fx = fa; fa = fb; fb = fx;  // vfrsub / vfrdiv
+            end
+            fr = fp_eval(imm_i[4:0], (sew_i == 3'd3),
+                         frm_i, fa, fb, 64'd0, imm_i[6:5]);
+            r = fr.result;
+            el_flags = fr.flags;
+          end
+          VOP_FBINW: begin
+            // SEW=32 sources widen to double (exactly, except
+            // sNaN signaling); .w forms read vs2 as doubles.
+            if (imm_i[7]) begin
+              fa = a;
+            end else begin
+              fr2 = fp_eval(FPU_F2F, 1'b1, frm_i,
+                            {32'hffff_ffff, a[31:0]}, 64'd0, 64'd0,
+                            2'd0);
+              fa = fr2.result;
+              el_flags |= fr2.flags;
+            end
+            fr2 = fp_eval(FPU_F2F, 1'b1, frm_i,
+                          (form_i == VFORM_VV)
+                          ? {32'hffff_ffff, b[31:0]} : b,
+                          64'd0, 64'd0, 2'd0);
+            fb = fr2.result;
+            el_flags |= fr2.flags;
+            fr = fp_eval(imm_i[4:0], 1'b1, frm_i, fa,
+                         fb, 64'd0, imm_i[6:5]);
+            r = fr.result;
+            el_flags |= fr.flags;
+          end
+          VOP_FMACC, VOP_FMACCW: begin
+            // macc: vd = vs2*vs1 + vd; madd (imm[7]):
+            // vd = vs1*vd + vs2. The product is commutative
+            // for values under canonical-NaN rules.
+            fa = (sew_i == 3'd2) ? {32'hffff_ffff, a[31:0]} : a;
+            fb = ((form_i == VFORM_VV) && (sew_i == 3'd2))
+                 ? {32'hffff_ffff, b[31:0]} : b;
+            fc = (op_i == VOP_FMACCW) ? old_el
+                 : ((sew_i == 3'd2)
+                    ? {32'hffff_ffff, old_el[31:0]} : old_el);
+            if (op_i == VOP_FMACCW) begin
+              fr2 = fp_eval(FPU_F2F, 1'b1, frm_i, fa, 64'd0, 64'd0,
+                            2'd0);
+              fa = fr2.result;
+              el_flags |= fr2.flags;
+              fr2 = fp_eval(FPU_F2F, 1'b1, frm_i, fb, 64'd0, 64'd0,
+                            2'd0);
+              fb = fr2.result;
+              el_flags |= fr2.flags;
+            end
+            if (imm_i[7]) begin
+              fx = fa; fa = fc; fc = fx;
+            end
+            // Scalar FMA negation is encoded in the op.
+            // Vector funct6[1:0] (imm[6:5]): 00 macc (+p+c),
+            // 01 nmacc (-p-c), 10 msac (+p-c), 11 nmsac
+            // (-p+c) -- so imm[5] negates the product and
+            // imm[6]^imm[5] negates the addend.
+            fr = fp_eval((imm_i[6] ^ imm_i[5])
+                             ? (imm_i[5] ? FPU_FNMA : FPU_FMS)
+                             : (imm_i[5] ? FPU_FNMS : FPU_FMA),
+                         (op_i == VOP_FMACCW) || (sew_i == 3'd3),
+                         frm_i, fa, fb, fc, imm_i[6:5]);
+            r = fr.result;
+            el_flags |= fr.flags;
+          end
+          VOP_FUNARY: begin
+            // imm[1:0]: 0 sqrt, 1 class, 2 rsqrt7, 3 rec7.
+            fa = (sew_i == 3'd2) ? {32'hffff_ffff, a[31:0]} : a;
+            if (imm_i[1:0] >= 2'd2) begin
+              fr = fp_estimate(imm_i[1:0] == 2'd2,
+                               (sew_i == 3'd3), frm_i, fa);
+            end else begin
+              fr = fp_eval((imm_i[1:0] == 2'd0) ? FPU_SQRT
+                                                : FPU_CLASS,
+                           (sew_i == 3'd3), frm_i, fa, 64'd0, 64'd0,
+                           2'd0);
+            end
+            r = fr.result;
+            el_flags = fr.flags;
+          end
+          VOP_FCVT: begin
+            // Sub-op imm[4:0] (the vs1 field): 0..7 plain,
+            // 8..15 widening, 16..23 narrowing; low bits
+            // 0 xu.f, 1 x.f, 2 f.xu, 3 f.x, 4 f.f, 5 rod
+            // (not decoded), 6/7 rtz x(u).f.
+            unique case (imm_i[2:0])
+              3'd0, 3'd1, 3'd6, 3'd7: begin  // float -> int
+                fa = (aw == 3'd2) ? {32'hffff_ffff, a[31:0]} : a;
+                fr = fp_eval(FPU_F2I, (aw == 3'd3),
+                             (imm_i[2:0] >= 3'd6) ? 3'b001 : frm_i,
+                             fa, 64'd0, 64'd0,
+                             {(dw == 3'd3),
+                              (imm_i[2:0] == 3'd0) ||
+                              (imm_i[2:0] == 3'd6)});
+                r = fr.result;
+                el_flags = fr.flags;
+              end
+              3'd2, 3'd3: begin  // int -> float
+                fr = fp_eval(FPU_I2F, (dw == 3'd3), frm_i, a,
+                             64'd0, 64'd0,
+                             {(aw == 3'd3), (imm_i[2:0] == 3'd2)});
+                r = fr.result;
+                el_flags = fr.flags;
+              end
+              default: begin  // float -> float (narrow/widen)
+                fa = (aw == 3'd2) ? {32'hffff_ffff, a[31:0]} : a;
+                fr = fp_eval(FPU_F2F, (dw == 3'd3),
+                             (imm_i[2:0] == 3'd5) ? 3'b101 : frm_i,
+                             fa, 64'd0, 64'd0, 2'd0);
+                r = fr.result;
+                el_flags = fr.flags;
+              end
+            endcase
+          end
           VOP_SADD: r = sat_s(signed'({{64{a_s[63]}}, a_s}) +
                               signed'({{64{b_s[63]}}, b_s}), sew_i, sat_i);
           VOP_SADDU: r = sat_u({64'd0, a & ones_v} +
@@ -416,13 +614,14 @@ module muserisc_vec
           active = 1'b0;  // shifted-in region keeps old vd
         end
         if (sat_i && active) sat_o = 1'b1;
+        if (active) fflags_o |= el_flags;
         if (op_i == VOP_IOTA) begin
           if ((64'(unsigned'(i)) >= vstart_i) &&
               (64'(unsigned'(i)) < vl_i) && (vm_i || mask_i[i]) &&
               vs2_i[i]) iota_cnt++;
         end
         if (op_i == VOP_MVXS || op_i == VOP_CPOP ||
-            op_i == VOP_FIRST) begin
+            op_i == VOP_FIRST || op_i == VOP_FMVFS) begin
           // Scalar destination only; group result unused.
         end else if (op_i == VOP_MVSX) begin
           if ((i == 0) && (vstart_i == 64'd0) && (vl_i != 64'd0) &&
@@ -462,6 +661,10 @@ module muserisc_vec
     unique case (op_i)
       VOP_CPOP: scalar_o = 64'(unsigned'(cnt));
       VOP_FIRST: scalar_o = first_v;
+      // vfmv.f.s: element 0, NaN-boxed for SEW=32.
+      VOP_FMVFS: scalar_o = (sew_i == 3'd2)
+                            ? {32'hffff_ffff, vs2_i[31:0]}
+                            : vs2_i[63:0];
       default: scalar_o = sext_el(vs2_i[63:0], sew_i);
     endcase
   end

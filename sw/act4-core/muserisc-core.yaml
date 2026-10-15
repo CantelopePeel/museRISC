@@ -62,12 +62,15 @@ implemented_extensions:
   # 1.0 integer unit (rtl/core/muserisc_vec.sv) + MEM-stage
   # element sequencer for all load/store classes in
   # muserisc_core.sv; VLEN=512, ELEN=64 (see params below).
-  # misa.V is set in the RTL, but the FP vector classes
-  # (Zve32f/Zve64f/Zve64d) are NOT implemented and trap as
-  # illegal, so only the integer Zve*x extensions are
-  # declared here and the Vf* ACT suites are not generated.
+  # FP vector (stage 9, issue #29): the OPF classes execute
+  # per element through the shared scalar fp_eval in
+  # muserisc_fpu_pkg.sv from muserisc_vec.sv, so the Vf*
+  # suites are generated. Full V is not declared yet.
   - { name: Zve32x, version: "= 1.0.0" }
   - { name: Zve64x, version: "= 1.0.0" }
+  - { name: Zve32f, version: "= 1.0.0" }
+  - { name: Zve64f, version: "= 1.0.0" }
+  - { name: Zve64d, version: "= 1.0.0" }
   - { name: Zvl32b, version: "= 1.0.0" }
   - { name: Zvl64b, version: "= 1.0.0" }
   - { name: Zvl128b, version: "= 1.0.0" }
@@ -119,8 +122,9 @@ implemented_extensions:
   # UXL is hardwired 2 (64-bit) in mstatus assembly.
   - { name: Ssu64xl, version: "= 1.0.0" }
 
-  # Not implemented and deliberately absent: FP vector
-  # (Zve32f/Zve64f/Zve64d and full V), Zihpm
+  # Not implemented and deliberately absent: full V (the
+  # Zve*f/d subsets above are implemented; full V awaits
+  # its own evidence), Zihpm
   # (mhpmcounter3..31 decode as zero in M, their unprivileged
   # shadows trap, so the Zihpm contract is not met),
   # Svinval, Svpbmt, Sstc, Sdtrig, Zicbo*.
@@ -381,8 +385,9 @@ params:
      false, false, false, false, false, false, false, false,
      false, false, false, false, false, false, false, false,
      false, false, false, false, false, false, false, false]
-  # FP vector reductions are not implemented (no Zve*f/d);
-  # values mirror the Sail reference and gate nothing here.
+  # FP vector reductions fold sequentially from the vs1
+  # seed in muserisc_vec.sv; node behavior values mirror the
+  # Sail reference configuration.
   VFREDUSUM_FINAL_NODE_ELEMENT_BEHAVIOR: "additive_identity"
   VFREDUSUM_INACTIVE_NODE_ELEMENT_BEHAVIOR: "additive_identity"
   VFREDUSUM_NAN: "no_change"
