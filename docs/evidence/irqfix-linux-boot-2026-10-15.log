@@ -1,0 +1,56 @@
+# soc_tb Linux boot with the #3 mip-RMW fix, 2026-10-15.
+# RTL: vec-serial branch (d54cd7c) + this branch's csr/core fix; soc_tb.cpp from vec-serial,
+# built -O3 without coverage. Payloads: the same OpenSBI v1.9 fw_jump.bin / Linux 6.6 Image /
+# muserisc.dtb as vecserial-linux-smoke-2026-10-15.log (which livelocked after uname).
+# Result: SOC TB PASS (exit string at 508,685,709 cycles), wall 1,648 s.
+
+# soc_tb stderr:
+loaded 16 bytes at 0x1000 from linuxart/boot_stub.bin
+loaded 277840 bytes at 0x80000000 from linuxart/fw_jump.bin
+loaded 1583 bytes at 0x83000000 from linuxart/muserisc.dtb
+loaded 26496000 bytes at 0x80200000 from linuxart/Image
+sample cy=0 fetch_pa=0x1000 daddr=0x0
+sample cy=50000000 fetch_pa=0x802b2c80 daddr=0x141
+sample cy=100000000 fetch_pa=0x806691d4 daddr=0xfaa006bcf3e0f75f
+sample cy=150000000 fetch_pa=0x80669134 daddr=0x81c8e6d0
+sample cy=200000000 fetch_pa=0x80669114 daddr=0xbfba32472
+sample cy=250000000 fetch_pa=0x80f106b0 daddr=0x81c8ea68
+sample cy=300000000 fetch_pa=0x806771e0 daddr=0x81f80930
+sample cy=350000000 fetch_pa=0x8024e878 daddr=0x81c8eaa0
+sample cy=400000000 fetch_pa=0x80f08b24 daddr=0x2
+[    2.613869] libata version 3.00 loaded.
+[    2.850641] vgaarb: loaded
+[   28.863130] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 246)
+[   40.696202] loop: module loaded
+[   42.272844] IPVS: ipvs loaded.
+sample cy=450000000 fetch_pa=0x8103fb4c daddr=0x8120d190
+sample cy=500000000 fetch_pa=0x80257eec daddr=0x181957c37
+[   48.268235] Btrfs loaded, zoned=no, fsverity=no
+SOC TB PASS (exit string at 508685709 cycles)
+
+# UART log tail:
+[   48.534685] initcall tcp_bpf_v4_build_proto+0x0/0xc4 returned 0 after 131 usecs
+[   48.540130] calling  udp_bpf_v4_build_proto+0x0/0x4e @ 1
+[   48.544263] initcall udp_bpf_v4_build_proto+0x0/0x4e returned 0 after 42 usecs
+[   48.549004] calling  lockup_detector_check+0x0/0x86 @ 1
+[   48.554278] initcall lockup_detector_check+0x0/0x86 returned 0 after 1570 usecs
+[   48.559024] calling  acpi_gpio_handle_deferred_request_irqs+0x0/0x74 @ 1
+[   48.563044] initcall acpi_gpio_handle_deferred_request_irqs+0x0/0x74 returned 0 after 27 usecs
+[   48.568381] calling  clk_disable_unused+0x0/0xd2 @ 1
+[   48.572305] clk: Disabling unused clocks
+[   48.573929] initcall clk_disable_unused+0x0/0xd2 returned 0 after 1625 usecs
+[   48.578511] calling  regulator_init_complete+0x0/0x48 @ 1
+[   48.582798] initcall regulator_init_complete+0x0/0x48 returned 0 after 77 usecs
+[   48.588315] calling  of_platform_sync_state_init+0x0/0x1a @ 1
+[   48.591257] initcall of_platform_sync_state_init+0x0/0x1a returned 0 after 33 usecs
+[   48.750446] Freeing unused kernel image (initmem) memory: 2476K
+[   48.754262] Run /init as init process
+[   48.756112]   with arguments:
+[   48.757123]     /init
+[   48.758123]   with environment:
+[   48.759168]     HOME=/
+[   48.760860]     TERM=linux
+muserisc init: userspace alive
+uname: Linux 6.6.0 #1 SMP Thu Oct 15 07:58:47 UTC 2026 riscv64
+/proc/version: Linux version 6.6.0 (root@97d17950cc31) (riscv64-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #1 SMP Thu Oct 15 07:58:47 UTC 2026
+MUSERISC_LINUX_BOOT_OK
