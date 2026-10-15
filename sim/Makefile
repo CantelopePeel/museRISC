@@ -245,7 +245,8 @@ SOC_RTL   := $(CORE_RTL) $(CRYPTO)/sha256_block.sv \
              $(SOCDIR)/muserisc_bootrom.sv \
              $(SOCDIR)/muserisc_crypto_bridge.sv \
              $(SOCDIR)/muserisc_soc_top.sv
-SOCFW     := $(ROOT)/build/soc-tests
+# Absolute: recipes below cd into $(BUILD), where ROOT-relative paths break.
+SOCFW     := $(abspath $(ROOT)/build/soc-tests)
 
 $(BUILD)/soc_rtl_tb: $(ROOT)/tb/cpp/soc_rtl_tb.cpp $(SOC_RTL) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/socrtl --top-module muserisc_soc_top \
@@ -264,7 +265,7 @@ $(SOCFW)/crypto_soc_test.bin: $(ROOT)/sw/soc-tests/crypto_soc_test.c \
 
 socrtl: $(BUILD)/soc_rtl_tb $(SOCFW)/crypto_soc_test.bin
 	cd $(BUILD) && COV_FILE=cov_socrtl.dat ./soc_rtl_tb 200000000 \
-	  --load 0x80000000=$(abspath $(SOCFW))/crypto_soc_test.bin \
+	  --load 0x80000000=$(SOCFW)/crypto_soc_test.bin \
 	  --exit-string "SOC CRYPTO PASS"
 
 $(BUILD)/%.bin: $(ROOT)/sw/core-tests/%.S $(ROOT)/sw/core-tests/link.ld | $(BUILD)
