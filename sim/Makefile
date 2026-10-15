@@ -322,18 +322,21 @@ soc: $(BUILD)/soc_tb $(ROOT)/build/linux/boot_stub.bin $(ROOT)/build/linux/s_hel
 
 ## ---- RTL SoC harness (synthesizable SoC, issue #4) ---------------------
 SOCDIR    := $(ROOT)/rtl/soc
-SOC_RTL   := $(CORE_RTL) $(CRYPTO)/sha256_block.sv \
+SOC_RTL   := $(CPU_RTL) $(CRYPTO)/sha256_block.sv \
              $(CRYPTO)/ec_field.sv $(CRYPTO)/muse_crypto_top.sv \
              $(SOCDIR)/muserisc_clint.sv $(SOCDIR)/muserisc_plic.sv \
              $(SOCDIR)/muserisc_uart16550.sv \
              $(SOCDIR)/muserisc_bootrom.sv \
              $(SOCDIR)/muserisc_crypto_bridge.sv \
+             $(SOCDIR)/muserisc_soc_fabric.sv \
              $(SOCDIR)/muserisc_soc_top.sv
 # Absolute: recipes below cd into $(BUILD), where ROOT-relative paths break.
 SOCFW     := $(abspath $(ROOT)/build/soc-tests)
 
-$(BUILD)/soc_rtl_tb: $(ROOT)/tb/cpp/soc_rtl_tb.cpp $(SOC_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/socrtl --top-module muserisc_soc_top \
+# Long firmware runs: no coverage instrumentation (as soc_tb).
+$(BUILD)/soc_rtl_tb: $(ROOT)/tb/cpp/soc_rtl_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(SOC_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS_FAST) $(OBJ)/socrtl --top-module muserisc_soc_top \
+	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
 	  -o $(abspath $(BUILD)/soc_rtl_tb) $(SOC_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/soc_rtl_tb.cpp)
 
@@ -348,8 +351,8 @@ $(SOCFW)/crypto_soc_test.bin: $(ROOT)/sw/soc-tests/crypto_soc_test.c \
 	$(RISCV_OBJCOPY) -O binary $(SOCFW)/crypto_soc_test.elf $@
 
 socrtl: $(BUILD)/soc_rtl_tb $(SOCFW)/crypto_soc_test.bin
-	cd $(BUILD) && COV_FILE=cov_socrtl.dat ./soc_rtl_tb 200000000 \
-	  --load 0x80000000=$(SOCFW)/crypto_soc_test.bin \
+	cd $(BUILD) && ./soc_rtl_tb 400000000 $(CORE_RAND_ARGS) \
+	  --load 0x80000000=$(abspath $(SOCFW))/crypto_soc_test.bin \
 	  --exit-string "SOC CRYPTO PASS"
 
 $(BUILD)/%.bin: $(ROOT)/sw/core-tests/%.S $(ROOT)/sw/core-tests/link.ld | $(BUILD)

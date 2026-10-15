@@ -27,7 +27,13 @@ export VERILOG_FILES = \
   $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_decoder.sv \
   $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_csr.sv \
   $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_mmu.sv \
+  $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_cache_pkg.sv \
   $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_core.sv \
+  $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_sram_sp.sv \
+  $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_icache.sv \
+  $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_dcache.sv \
+  $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_bus_arb.sv \
+  $(DESIGN_HOME)/src/muserisc_soc/core/muserisc_cpu.sv \
   $(DESIGN_HOME)/src/muserisc_soc/crypto/sha256_block.sv \
   $(DESIGN_HOME)/src/muserisc_soc/crypto/ec_field.sv \
   $(DESIGN_HOME)/src/muserisc_soc/crypto/muse_crypto_top.sv \
@@ -36,6 +42,7 @@ export VERILOG_FILES = \
   $(DESIGN_HOME)/src/muserisc_soc/soc/muserisc_uart16550.sv \
   $(DESIGN_HOME)/src/muserisc_soc/soc/muserisc_bootrom.sv \
   $(DESIGN_HOME)/src/muserisc_soc/soc/muserisc_crypto_bridge.sv \
+  $(DESIGN_HOME)/src/muserisc_soc/soc/muserisc_soc_fabric.sv \
   $(DESIGN_HOME)/src/muserisc_soc/soc/muserisc_soc_top.sv
 # muserisc_fpu_ops.svh is `included by muserisc_fpu_pkg.sv and
 # muserisc_fpu.sv.
