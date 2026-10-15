@@ -28,9 +28,11 @@ SWFLAGS       := -march=rv64imafdc_zba_zbb_zbc_zbs_zcb_zicond_zbkb_zbkx_zkne_zkn
 
 CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
             $(RTL)/muserisc_fpregfile.sv $(RTL)/muserisc_alu.sv \
-            $(RTL)/muserisc_muldiv.sv $(RTL)/muserisc_fpu.sv \
-            $(RTL)/muserisc_bext.sv \
-            $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
+            $(RTL)/muserisc_muldiv.sv \
+            $(RTL)/muserisc_fpu_pkg.sv $(RTL)/muserisc_fpu.sv \
+            $(RTL)/muserisc_bext_pkg.sv $(RTL)/muserisc_bext.sv \
+            $(RTL)/muserisc_vregfile.sv \
+            $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_vec.sv \
             $(RTL)/muserisc_rvc.sv \
             $(RTL)/muserisc_decoder.sv \
             $(RTL)/muserisc_csr.sv $(RTL)/muserisc_mmu.sv \
@@ -113,21 +115,25 @@ $(SF_HOST)/softfloat.a:
 	mkdir -p $(SF_HOST)
 	cp $(SOFTFLOAT)/build/HostRISCV/Makefile $(SOFTFLOAT)/build/HostRISCV/platform.h $(SF_HOST)/
 	cd $(SF_HOST) && sed -i.bak 's|../../source|../../third_party/berkeley-softfloat-3/source|' Makefile && $(MAKE) -j8
-$(BUILD)/fpu_tb: $(ROOT)/tb/cpp/fpu_tb.cpp $(RTL)/muserisc_fpu.sv \
+$(BUILD)/fpu_tb: $(ROOT)/tb/cpp/fpu_tb.cpp \
+                 $(RTL)/muserisc_fpu_pkg.sv $(RTL)/muserisc_fpu.sv \
                  $(SF_HOST)/softfloat.a | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/fpu --top-module muserisc_fpu \
 	  -CFLAGS "-I$(abspath $(SOFTFLOAT))/source/include -I$(abspath $(SF_HOST))" \
 	  -LDFLAGS "$(abspath $(SF_HOST))/softfloat.a" \
-	  -o $(abspath $(BUILD)/fpu_tb) $(RTL)/muserisc_fpu.sv \
+	  -o $(abspath $(BUILD)/fpu_tb) $(RTL)/muserisc_fpu_pkg.sv \
+	  $(RTL)/muserisc_fpu.sv \
 	  $(abspath $(ROOT)/tb/cpp/fpu_tb.cpp)
 
 fpu: $(BUILD)/fpu_tb
 	cd $(BUILD) && COV_FILE=cov_fpu.dat ./fpu_tb
 
 ## ---- B/crypto unit test ---------------------------------------------------
-$(BUILD)/bext_tb: $(ROOT)/tb/cpp/bext_tb.cpp $(RTL)/muserisc_bext.sv | $(BUILD) $(OBJ)
+$(BUILD)/bext_tb: $(ROOT)/tb/cpp/bext_tb.cpp \
+                  $(RTL)/muserisc_bext_pkg.sv $(RTL)/muserisc_bext.sv | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/bext --top-module muserisc_bext \
-	  -o $(abspath $(BUILD)/bext_tb) $(RTL)/muserisc_bext.sv \
+	  -o $(abspath $(BUILD)/bext_tb) $(RTL)/muserisc_bext_pkg.sv \
+	  $(RTL)/muserisc_bext.sv \
             $(RTL)/muserisc_rvc.sv \
 	  $(abspath $(ROOT)/tb/cpp/bext_tb.cpp)
 
@@ -144,9 +150,11 @@ rvc: $(BUILD)/rvc_tb
 	cd $(BUILD) && COV_FILE=cov_rvc.dat ./rvc_tb
 
 ## ---- Vector unit test ------------------------------------------------------
-$(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(RTL)/muserisc_vec.sv | $(BUILD) $(OBJ)
+$(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) \
+                 $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_vec.sv | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/vec --top-module muserisc_vec \
-	  -o $(abspath $(BUILD)/vec_tb) $(PKG) $(RTL)/muserisc_vec.sv \
+	  -o $(abspath $(BUILD)/vec_tb) $(PKG) \
+	  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_vec.sv \
 	  $(abspath $(ROOT)/tb/cpp/vec_tb.cpp)
 
 vec: $(BUILD)/vec_tb
