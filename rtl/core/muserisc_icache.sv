@@ -61,7 +61,8 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
   end
 
   typedef enum logic [2:0] {
-    S_IDLE, S_LOOKUP, S_FILL_REQ, S_FILL, S_REPLAY, S_UNC_REQ, S_UNC_RSP
+    S_IDLE, S_LOOKUP, S_FILL_REQ, S_FILL, S_REPLAY, S_UNC_REQ, S_UNC_RSP,
+    S_UNC_DONE
   } state_e;
   state_e state_q;
 
@@ -70,6 +71,7 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
   logic [WAY_W-1:0] victim_q, rr_q;
   logic [BW-1:0]    cnt_q;
   logic             fill_kill_q;  // inval_i seen during this refill
+  logic [63:0]      unc_rdata_q;  // registered uncached fetch data
 
   /* verilator lint_off UNUSEDSIGNAL */
   function automatic logic [IDX_W-1:0] f_idx(input logic [63:0] a);
@@ -139,8 +141,10 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
 
   logic [63:0] rsp_word;
   assign rsp_valid_o = ((state_q == S_LOOKUP) && hit) ||
-                       ((state_q == S_UNC_RSP) && bus_rsp_valid_i);
-  assign rsp_word = (state_q == S_UNC_RSP) ? bus_rsp_rdata_i : hit_word;
+                       (state_q == S_UNC_DONE);
+  // Registered uncached response: no bus input reaches the core
+  // combinationally.
+  assign rsp_word = (state_q == S_UNC_DONE) ? unc_rdata_q : hit_word;
   assign rsp_rdata_o = r_addr_q[2] ? rsp_word[63:32] : rsp_word[31:0];
 
   always_comb begin
@@ -187,7 +191,7 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
         data_en = '1;
       end
       S_UNC_REQ: bus_req_valid_o = 1'b1;
-      default: ;  // S_LOOKUP, S_UNC_RSP
+      default: ;  // S_LOOKUP, S_UNC_RSP, S_UNC_DONE
     endcase
   end
 
@@ -200,6 +204,7 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
       rr_q <= '0;
       cnt_q <= '0;
       fill_kill_q <= 1'b0;
+      unc_rdata_q <= 64'd0;
     end else begin
       unique case (state_q)
         S_IDLE: begin
@@ -234,7 +239,13 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
         end
         S_REPLAY: state_q <= S_LOOKUP;
         S_UNC_REQ: if (bus_req_ready_i) state_q <= S_UNC_RSP;
-        S_UNC_RSP: if (bus_rsp_valid_i) state_q <= S_IDLE;
+        S_UNC_RSP: begin
+          if (bus_rsp_valid_i) begin
+            unc_rdata_q <= bus_rsp_rdata_i;
+            state_q <= S_UNC_DONE;
+          end
+        end
+        S_UNC_DONE: state_q <= S_IDLE;
         // Unreachable encodings recover to idle (excluded from
         // line coverage: no legal state reaches it).
         /* verilator coverage_off */

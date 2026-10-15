@@ -224,6 +224,13 @@ Pipeline behaviour:
   whole job (as before).
 - Misaligned accesses still trap in EX and never reach a port.
   Vector loads/stores issue one element access per response.
+- Simulation speed (behaviour-preserving): a non-vector
+  instruction in EX presents the trivial `VOP_MVR` op to
+  `muserisc_vec` (operand isolation; all its outputs are only
+  consumed for vector instructions), and the MEM vector-LS
+  element scans are skipped when MEM holds no vector LS. With
+  the registered cache responses this makes `soc_tb` about
+  10x faster (~240k vs ~20k cycles/s on the shared host).
 
 ### Caches
 
@@ -244,6 +251,9 @@ forwarding needed — i.e. an SRAM macro or a BRAM in NO_CHANGE
 mode. Hit latency is one cycle after acceptance; a miss adds a
 line refill (one burst) plus, for a dirty victim, a line
 write-back (one burst) before it, then a one-cycle replay.
+Uncached responses are registered in the cache (one extra
+cycle), so no bus input reaches the core combinationally: the
+core sees only cache state and SRAM outputs.
 
 Write-back was chosen over write-through because every store
 would otherwise be a bus transaction (and, with blocking

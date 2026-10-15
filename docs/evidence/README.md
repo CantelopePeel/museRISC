@@ -1715,3 +1715,81 @@ stages 4c/5:
   interrupt trap (mcause bit 63), not on any trap: a synchronous
   exception taken while the IRQ is pending used to drop it silently
   (found by `md_irq_directed` at offset 168).
+
+## In-house core L1 caches + latency-tolerant memory ports (2026-10-15, #32/#11/#4)
+
+- Scope: the core's combinational Harvard ports are replaced
+  by request/response ports; `muserisc_cpu` adds a blocking
+  8 KiB 2-way L1 I$, a blocking 16 KiB 4-way write-back +
+  write-allocate L1 D$ (single-port sync-read SRAM arrays),
+  and a 2:1 arbiter onto one valid/ready burst memory bus.
+  FENCE.I cleans the D$ and invalidates the I$; the PTW and
+  AMO/LR/SC go through the D$; DRAM-only PMA keeps
+  ROM/CLINT/PLIC/UART uncached. Design, protocol and
+  parameters: [`docs/CORE.md`](../CORE.md#memory-interface-and-l1-caches).
+- `make core-test` (84 s wall):
+  [`l1cache-core-test-2026-10-15.log`](l1cache-core-test-2026-10-15.log).
+  All 26 directed tests (22 existing + 4 new:
+  `smc_fencei_directed`, `amo_cache_directed`,
+  `mmio_bypass_directed`, `vm_sfence_cache_directed`) pass
+  twice — caches on with seeded random bus latency 1–6,
+  inter-beat gaps 0–2 and 70 % `req_ready` backpressure, and
+  caches off — = 52 `CORE TB PASS`. New unit TBs:
+  `icache_tb` 30,000 checked fetches (2,167 FENCE.I
+  invalidations, 1,770 with a request outstanding), and
+  `dcache_tb` 141,535 checks (16,565 loads, 17,951 stores,
+  1,484 cleans, 6,250 I/O accesses), each over 10–12 bus
+  timing profiles incl. a cache-disabled phase; both verify
+  against a golden memory and check the bus protocol (I/O
+  as exact in-order single beats, line bursts only for
+  cacheable lines, no lost write-back after CLEAN).
+  Mutation checks during development (dirty bit not set for
+  byte stores; refill kill on invalidate removed; I$
+  invalidate tied off; D$ clean skipped) were each caught by
+  the unit TBs or `smc_fencei_directed`.
+- Coverage (Verilator line+toggle+branch; `scripts/cov_report.py`):
+  cache unit TBs alone: `muserisc_dcache` line 41/41,
+  branch 58/58, toggle 99.55 %; `muserisc_icache` line
+  26/26, branch 44/44, toggle 98.48 %; `muserisc_sram_sp`
+  line 2/2, toggle 99.85 %. Line coverage is 100 % with the
+  two unreachable FSM `default:` recovery arms excluded via
+  `coverage_off`. The uncovered toggles are structurally
+  constant: `bus_req_len_o[7:2]` (fixed burst length),
+  I$ fetch address bits [1:0] (always 0 by protocol), one
+  SRAM data bit. `muserisc_bus_arb` (exercised only through
+  `muserisc_cpu`): line 5/5, branch 16/16. Merged over all
+  runs, the new core memory-port logic is fully line-covered;
+  the remaining uncovered core lines/branches are
+  pre-existing (vector LS corner cases, guest-fault causes).
+- riscv-tests: **123/123** with caches + random latency
+  ([`riscv-tests-core-l1cache-2026-10-15.csv`](riscv-tests-core-l1cache-2026-10-15.csv),
+  `make riscv-tests`, 16 s) and **123/123** uncached
+  ([`riscv-tests-core-l1cache-nocache-2026-10-15.csv`](riscv-tests-core-l1cache-nocache-2026-10-15.csv),
+  16 s).
+- ACT (all 2,578 generated self-checking ELFs: 544 scalar/
+  priv + 1,872 Vx/Vls + 162 Vf, regenerated in this
+  worktree with the recorded `EXTENSIONS` lists):
+  **2,577/2,578** with caches + random latency (seed 3,
+  [`act-core-l1cache-2026-10-15.csv`](act-core-l1cache-2026-10-15.csv),
+  291 s with 20 jobs via `sim/run_act_parallel.sh`) and
+  **2,577/2,578** uncached
+  ([`act-core-l1cache-nocache-2026-10-15.csv`](act-core-l1cache-nocache-2026-10-15.csv),
+  469 s). The only failure is the known
+  `PMPSm_cfg_A_tor_zero-00` PA-0 waiver; the pre-change core
+  gives the same 2,577/2,578 on the same ELFs. No regression
+  vs 543/544 + 1,872/1,872 + 162/162.
+- Cycle cost (blocking caches, two cycles per hit, correctness
+  first): riscv-tests take 2.76x the stage-7 cycles with
+  caches + random latency (median 3.15x), 3.70x uncached
+  at latency 1 (every access a bus round trip plus the
+  registered response); ACT 3.16x / 3.83x.
+- Synthesis check (Yosys 0.68 in `openroad/orfs:latest`, sv2v
+  v0.0.13, Nangate45 typical, arrays black-boxed):
+  [`synth-caches-nangate45-2026-10-15.log`](synth-caches-nangate45-2026-10-15.log).
+  Logic area excluding SRAM arrays: I$ 2,928 um2 (1,508
+  cells, 270 flops), D$ 13,796 um2 (7,086 cells, 1,299
+  flops, 47 % sequential — valid/dirty bits and the 64 B
+  write-back line buffer and the registered uncached
+  response), arbiter 178 um2. Arrays: I$
+  2 x (512 x 64 b data + 64 x 44 b tag); D$ 4 x (512 x
+  64 b data with byte write mask + 64 x 44 b tag).

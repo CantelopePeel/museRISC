@@ -78,7 +78,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
 
   typedef enum logic [3:0] {
     S_IDLE, S_LOOKUP, S_WB_RD, S_WB_BUS, S_WB_ACK, S_FILL_REQ, S_FILL,
-    S_REPLAY, S_UNC_REQ, S_UNC_RSP, S_CLEAN, S_CLEAN_TAG
+    S_REPLAY, S_UNC_REQ, S_UNC_RSP, S_UNC_DONE, S_CLEAN, S_CLEAN_TAG
   } state_e;
   state_e state_q;
 
@@ -93,6 +93,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
   logic [IDX_W-1:0] sc_set_q;
   logic [WAY_W-1:0] sc_way_q;
   logic [63:0]      linebuf_q [BEATS];
+  logic [63:0]      unc_rdata_q;   // registered uncached read data
 
   // Address fields (PA bits above 55 never reach a cacheable
   // window: the core faults PAs >= 2^56 before the port).
@@ -172,10 +173,12 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
   // ---- Datapath / outputs ----
   // Response (kept out of the request-side block below: it never
   // depends on the incoming request).
+  // The uncached response is registered (S_UNC_DONE): no bus
+  // input reaches the core combinationally.
   assign rsp_valid_o = ((state_q == S_LOOKUP) && hit) ||
-                       ((state_q == S_UNC_RSP) && bus_rsp_valid_i) ||
+                       (state_q == S_UNC_DONE) ||
                        ((state_q == S_CLEAN) && !sc_dirty && sc_last);
-  assign rsp_rdata_o = (state_q == S_UNC_RSP) ? bus_rsp_rdata_i
+  assign rsp_rdata_o = (state_q == S_UNC_DONE) ? unc_rdata_q
                                               : data_rdata[hit_way];
   always_comb begin
     req_ready_o = 1'b0;
@@ -253,7 +256,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
         tag_addr = sc_set_q;
         if (sc_dirty) tag_en[sc_way_q] = 1'b1;
       end
-      default: ;  // S_WB_ACK, S_UNC_RSP, S_CLEAN_TAG: wait
+      default: ;  // S_WB_ACK, S_UNC_RSP, S_UNC_DONE, S_CLEAN_TAG
     endcase
   end
 
@@ -274,6 +277,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
       cnt_q <= '0;
       sc_set_q <= '0;
       sc_way_q <= '0;
+      unc_rdata_q <= 64'd0;
     end else begin
       unique case (state_q)
         S_IDLE: begin
@@ -347,7 +351,13 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
         end
         S_REPLAY: state_q <= S_LOOKUP;
         S_UNC_REQ: if (bus_req_ready_i) state_q <= S_UNC_RSP;
-        S_UNC_RSP: if (bus_rsp_valid_i) state_q <= S_IDLE;
+        S_UNC_RSP: begin
+          if (bus_rsp_valid_i) begin
+            unc_rdata_q <= bus_rsp_rdata_i;
+            state_q <= S_UNC_DONE;
+          end
+        end
+        S_UNC_DONE: state_q <= S_IDLE;
         S_CLEAN: begin
           if (sc_dirty) begin
             victim_q <= sc_way_q;

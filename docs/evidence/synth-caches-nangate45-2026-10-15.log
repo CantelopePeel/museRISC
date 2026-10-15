@@ -1,0 +1,151 @@
+# L1 cache synthesis check, 2026-10-15 (branch l1-cache)
+# Command: SV2V=<sv2v v0.0.13> bash scripts/synth_caches.sh
+# Tools: sv2v v0.0.13 (SV -> Verilog, -DSYNTHESIS drops assertions);
+#        Yosys 0.68+post (git sha1 UNKNOWN, Release, GNU /usr/local/bin/wrapped-cc/g++ 11.4.0) from openroad/orfs:latest
+# Liberty: Nangate45 NangateOpenCellLibrary_typical.lib; flow: synth -flatten, dfflibmap, abc, stat -liberty
+# Default geometry: I$ 64 sets x 2 ways x 64 B (8 KiB), D$ 64 sets x 4 ways x 64 B (16 KiB).
+# muserisc_sram_sp is a black box (SRAM macro / BRAM); its area is NOT in the totals.
+# Arrays per cache (from the elaborated black-box parameters):
+#   I$: 2 x data 512 words x 64 b (8 lanes) + 2 x tag 64 x 44 b  = 64 Kib data + 5,632 b tag
+#   D$: 4 x data 512 words x 64 b (8 lanes) + 4 x tag 64 x 44 b  = 128 Kib data + 11,264 b tag
+
+=================== muserisc_icache ===================
+8. Printing statistics.
+
+=== muserisc_icache ===
+
+        +----------Local Count, excluding submodules.
+        |        +-Local Area, excluding submodules.
+        |        | 
+     1492        - wires
+     2957        - wire bits
+       53        - public wires
+     1518        - public wire bits
+       17        - ports
+      251        - port bits
+     1508 2.93E+03 cells
+       17   18.088   AND2_X1
+       77   102.41   AND3_X1
+        2    3.192   AND4_X1
+       70     93.1   AOI211_X1
+       80    85.12   AOI21_X1
+       21   33.516   AOI221_X1
+        9   19.152   AOI222_X1
+       29    38.57   AOI22_X1
+      269  1431.08   DFFR_X1
+        1     5.32   DFFS_X1
+       83   44.156   INV_X1
+      138  256.956   MUX2_X1
+       76   60.648   NAND2_X1
+       37   39.368   NAND3_X1
+       16    21.28   NAND4_X1
+       34   27.132   NOR2_X1
+       31   32.984   NOR3_X1
+       27    35.91   NOR4_X1
+       11    14.63   OAI211_X1
+      342  363.888   OAI21_X1
+       19   30.324   OAI221_X1
+       38    50.54   OAI22_X1
+        2    2.128   OR2_X1
+        6     7.98   OR3_X1
+        3    4.788   OR4_X1
+       26   41.496   XNOR2_X1
+       40    63.84   XOR2_X1
+        4        -   muserisc_sram_sp
+
+   Area for cell type \muserisc_sram_sp is unknown!
+
+   Chip area for module '\muserisc_icache': 2927.596000
+     of which used for sequential elements: 1436.400000 (49.06%)
+
+=================== muserisc_dcache ===================
+14. Printing statistics.
+
+=== muserisc_dcache ===
+
+        +----------Local Count, excluding submodules.
+        |        +-Local Area, excluding submodules.
+        |        | 
+     6836        - wires
+     9878        - wire bits
+       86        - public wires
+     3128        - public wire bits
+       22        - ports
+      422        - port bits
+     7086 1.38E+04 cells
+       73   77.672   AND2_X1
+       25    33.25   AND3_X1
+       21   33.516   AND4_X1
+       12    15.96   AOI211_X1
+      471  501.144   AOI21_X1
+       80   127.68   AOI221_X1
+       79  168.112   AOI222_X1
+      925  1230.25   AOI22_X1
+      786  4181.52   DFFR_X1
+        1     5.32   DFFS_X1
+      512 2.32E+03   DFF_X1
+      369  196.308   INV_X1
+     1224 2.28E+03   MUX2_X1
+      678  541.044   NAND2_X1
+      305   324.52   NAND3_X1
+      165   219.45   NAND4_X1
+      365   291.27   NOR2_X1
+       56   59.584   NOR3_X1
+       61    81.13   NOR4_X1
+       84   111.72   OAI211_X1
+      346  368.144   OAI21_X1
+       49   78.204   OAI221_X1
+        6   12.768   OAI222_X1
+      195   259.35   OAI22_X1
+        2    3.724   OAI33_X1
+       26   27.664   OR2_X1
+       25    33.25   OR3_X1
+        9   14.364   OR4_X1
+       58   92.568   XNOR2_X1
+       70   111.72   XOR2_X1
+        8        -   muserisc_sram_sp
+
+   Area for cell type \muserisc_sram_sp is unknown!
+
+   Chip area for module '\muserisc_dcache': 13795.558000
+     of which used for sequential elements: 6502.104000 (47.13%)
+
+=================== muserisc_bus_arb ===================
+20. Printing statistics.
+
+=== muserisc_bus_arb ===
+
+        +----------Local Count, excluding submodules.
+        |        +-Local Area, excluding submodules.
+        |        | 
+       43        - wires
+      400        - wire bits
+       31        - public wires
+      388        - public wire bits
+       28        - ports
+      385        - port bits
+      100  177.954 cells
+        4    4.256   AND2_X1
+        2    10.64   DFFR_X1
+        3    1.596   INV_X1
+       82  152.684   MUX2_X1
+        3    2.394   NAND2_X1
+        1    0.798   NOR2_X1
+        1    1.064   NOR3_X1
+        1     1.33   OAI211_X1
+        2    2.128   OAI21_X1
+        1    1.064   OR2_X1
+
+   Chip area for module '\muserisc_bus_arb': 177.954000
+     of which used for sequential elements: 10.640000 (5.98%)
+
+=================== yosys warnings ===================
+      3 ABC: Warning: Detected 2 multi-output cells (for example, "FA_X1").
+      6 ABC: Warning: The network is combinational (run "fraig" or "fraig_sweep").
+      1 Warning: Replacing memory \data_we with list of registers. See /work/build/synth/caches.v:204
+      1 Warning: Replacing memory \data_we with list of registers. See /work/build/synth/caches.v:557
+      1 Warning: Replacing memory \dirty_q with list of registers. See /work/build/synth/caches.v:648
+      1 Warning: Replacing memory \linebuf_q with list of registers. See /work/build/synth/caches.v:693
+      1 Warning: Replacing memory \valid_q with list of registers. See /work/build/synth/caches.v:260
+      1 Warning: Replacing memory \valid_q with list of registers. See /work/build/synth/caches.v:647
+      1 Warnings: 6 unique messages, 6 total
