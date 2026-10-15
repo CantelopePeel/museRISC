@@ -1668,9 +1668,11 @@ stages 4c/5:
   (#3), so this branch was held to "identical to main": the
   M-level trap trace and UART output of no-coverage `soc_tb`
   builds of origin/main and this branch are cycle-identical
-  over the first 30M boot cycles (710 trap events each). The
-  full boot of this branch on top of the #6 fix is reported on
-  the PR.
+  over the first 30M boot cycles (710 trap events each). On
+  the final head (with #6): **`MUSERISC_LINUX_BOOT_OK`, `SOC
+  TB PASS` at 502,782,909 cycles** (41 min wall,
+  no-coverage build):
+  [`fpu-multicycle-linux-boot-2026-10-15.log`](fpu-multicycle-linux-boot-2026-10-15.log).
 - Synthesis (`scripts/synth_fpu.sh`, sv2v v0.0.13 → Yosys →
   OpenROAD repair_design/repair_timing + OpenSTA, Nangate45
   typical, no wire parasitics, Yosys ripple-carry adders):
