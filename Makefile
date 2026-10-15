@@ -1,6 +1,9 @@
 # museRISC Phase-0 make targets. See docs/ROADMAP.md for phased goals.
 RTL := rtl/crypto/sha256_block.sv rtl/crypto/keccak_f1600.sv \
        rtl/crypto/ec_field.sv rtl/crypto/muse_crypto_top.sv \
+       rtl/soc/muserisc_clint.sv rtl/soc/muserisc_plic.sv \
+       rtl/soc/muserisc_uart16550.sv rtl/soc/muserisc_bootrom.sv \
+       rtl/soc/muserisc_crypto_bridge.sv \
        rtl/soc/muserisc_soc_top.sv
 BUILD := build
 
@@ -23,7 +26,7 @@ test: ## Python golden self-check + Verilator C++ crypto KATs (needs python3, ve
 	@echo "ALL PHASE-0 KATs PASS"
 
 lint: ## Verilator lint on all synthesizable RTL
-	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module muserisc_soc_top $(RTL)
+	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module muserisc_soc_top $(CORE_RTL) $(RTL)
 	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module keccak_f1600 rtl/crypto/keccak_f1600.sv
 	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module sha512_block rtl/crypto/sha512_block.sv
 	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module muserisc_core $(CORE_RTL)
