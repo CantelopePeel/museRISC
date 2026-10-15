@@ -264,7 +264,7 @@ $(SOCFW)/crypto_soc_test.bin: $(ROOT)/sw/soc-tests/crypto_soc_test.c \
 
 socrtl: $(BUILD)/soc_rtl_tb $(SOCFW)/crypto_soc_test.bin
 	cd $(BUILD) && COV_FILE=cov_socrtl.dat ./soc_rtl_tb 200000000 \
-	  --load 0x80000000=$(SOCFW)/crypto_soc_test.bin \
+	  --load 0x80000000=$(abspath $(SOCFW))/crypto_soc_test.bin \
 	  --exit-string "SOC CRYPTO PASS"
 
 $(BUILD)/%.bin: $(ROOT)/sw/core-tests/%.S $(ROOT)/sw/core-tests/link.ld | $(BUILD)
