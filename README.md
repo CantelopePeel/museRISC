@@ -179,9 +179,8 @@ not hidden in the count above.
 ## Quick start
 
 Prerequisites for the fast gates are Verilator, a RISC-V ELF
-toolchain (`riscv64-elf-gcc` or compatible), Python 3, and
-Icarus Verilog for the legacy crypto KAT flow. The setup
-script checks tools and fetches pinned third-party sources.
+toolchain (`riscv64-elf-gcc` or compatible), and Python 3.
+The setup script checks tools and fetches pinned third-party sources.
 
 ```sh
 git clone https://github.com/bubblebabyboi/museRISC.git
@@ -229,7 +228,7 @@ More detail: [`docs/ROADMAP.md`](docs/ROADMAP.md) ·
 rtl/core/     In-house SystemVerilog RV64 core
 rtl/crypto/   SystemVerilog SHA-256/512, Keccak, EC-field RTL
 rtl/soc/      SystemVerilog standalone crypto/SoC top
-tb/cpp/       C++ Verilator unit, core, and platform testbenches
+tb/cpp/       C++ Verilator unit, core, platform, crypto KAT TBs
 sw/core-tests/ Directed assembly suites for the in-house core
 sw/linux/     DT, boot stub, OpenSBI/Linux build inputs, init
 sim/          Core/platform runners and upstream-suite scripts

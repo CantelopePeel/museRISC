@@ -1175,3 +1175,19 @@ stages 4c/5:
   (behavior-identical) design.
 - Remainder of #19: migrating the `tb/*.v` benches to
   Verilator/cocotb is still open.
+
+## Crypto testbench Verilator migration (2026-10-14, #19)
+
+- The five Icarus benches (`tb/tb_sha256.v`,
+  `tb/tb_sha512.v`, `tb/tb_keccak.v`, `tb/tb_ec_field.v`,
+  `tb/tb_muse_crypto_top.v`) are replaced by C++
+  Verilator benches in `tb/cpp/` with the same KAT
+  vectors and pass markers: `sha256_tb.cpp`,
+  `sha512_tb.cpp`, `keccak_tb.cpp`, `ec_field_tb.cpp`,
+  and `crypto_top_tb.cpp`.
+- Build/run wiring lives in `sim/Makefile` (`make -C sim
+  crypto`); the top-level `make test` now runs the
+  Python golden models plus those targets and still
+  ends with `ALL PHASE-0 KATs PASS`. Icarus Verilog is
+  no longer a host prerequisite for the fast gates.
+- No RTL changed in this step.

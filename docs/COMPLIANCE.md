@@ -2,13 +2,13 @@
 
 "Compliant" here means: passes the named public test suite with a
 stored report. Anything else is marked **not yet claimed**.
-Last updated: 2026-10-14 (in-house core stages 1–7: RV64 IMABC FD SU + Sv39/PMP, B/Zicond/scalar crypto, Linux boot, and H hypervisor with a KVM smoke; earlier rows are the historical CVA6 characterization).
+Last updated: 2026-10-14 (in-house core stages 1–8: RV64 IMABC FD SU + Sv39/PMP, B/Zicond/scalar crypto, Linux boot, H hypervisor with a KVM smoke, and integer V; earlier rows are the historical CVA6 characterization).
 
 | Block | Suite | Status |
 |---|---|---|
-| SHA-256 core | FIPS 180-4 "abc"/empty KATs (`tb/tb_sha256`) | PASS (`make test`) |
-| SHA-512 core | FIPS 180-4 / hashlib KATs (`tb/tb_sha512`) | PASS (`make test`) |
-| Keccak-f1600 | Golden model vs hashlib SHA3-256 (`tb/tb_keccak`) | PASS (`make test`) |
+| SHA-256 core | FIPS 180-4 "abc"/empty KATs (`tb/cpp/sha256_tb.cpp`) | PASS (`make test`) |
+| SHA-512 core | FIPS 180-4 / hashlib KATs (`tb/cpp/sha512_tb.cpp`) | PASS (`make test`) |
+| Keccak-f1600 | Golden model vs hashlib SHA3-256 (`tb/cpp/keccak_tb.cpp`) | PASS (`make test`) |
 | EC field unit | Python mod-arith cross-check, edge cases | PASS (`make test`) |
 | Ed25519 (ref model) | RFC 8032 TEST 1+2 sign/verify (`sw/ec_ops.py`) | PASS (algorithm only; HW sequencer pending) |
 | secp256k1 (ref model) | `cryptography` ECDSA oracle vector | PASS (algorithm only) |
