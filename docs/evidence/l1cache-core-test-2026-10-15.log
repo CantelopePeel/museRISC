@@ -1,4 +1,4 @@
-# make core-test on branch l1-cache (2026-10-15), wall 122s
+# make core-test on branch l1-cache (2026-10-15), wall 65s
 # Verilator 5.048, GCC 16 riscv64-unknown-elf; every directed test runs twice:
 #   [rand]    caches on, --mem-lat 1:6 --mem-gap 2 --mem-ready 70, --mem-seed = run index
 #   [nocache] caches off (--no-cache), bus latency 1
@@ -6,12 +6,12 @@ ALU TB PASS (205642 checks)
 MULDIV TB PASS (165877 checks)
 DECODER TB PASS (12343 checks)
 REGFILE TB PASS (4194 checks)
-CSR TB PASS (207 checks)
+CSR TB PASS (214 checks)
 MMU TB PASS (74 checks)
 FPU TB PASS (690071 checks)
 BEXT TB PASS (60866 checks)
 RVC TB PASS (49152 checks)
-VEC TB PASS (1014624 checks)
+VEC TB PASS (61672 checks, 22880 random trials, 13220778 cycles, seed 0x5eed8a)
 icache_tb: 30000 checks, 30000 fetches, 2167 invals (1770 during a miss), 5263 I/O, 0 errors
 ICACHE TB PASS
 dcache_tb: 141535 checks, 16565 loads, 17951 stores, 1484 cleans, 6250 I/O, 0 errors
@@ -48,26 +48,32 @@ CORE TB PASS trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 32 cycles
 CORE TB PASS trap_younger_store.bin (expected trap cause 4 at pc 0x4, 27 cycles)
 [rand] core_tb trap_younger_csr.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 16
 CORE TB PASS trap_younger_csr.bin (208 cycles)
-[rand] core_tb counter_time_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 17
-CORE TB PASS counter_time_directed.bin (12686 cycles)
-[rand] core_tb hyp_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 18
-CORE TB PASS hyp_directed.bin (3776 cycles)
-[rand] core_tb vec_directed.bin 4000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 19
-CORE TB PASS vec_directed.bin (2355 cycles)
-[rand] core_tb fpvec_directed.bin 4000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 20
-CORE TB PASS fpvec_directed.bin (928 cycles)
-[rand] core_tb trap_pa_fetch.bin 100000 --expect-trap 1 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 21
-CORE TB PASS trap_pa_fetch.bin (expected trap cause 1 at pc 0x100000000000000, 32 cycles)
-[rand] core_tb trap_pa_load.bin 100000 --expect-trap 5 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 22
-CORE TB PASS trap_pa_load.bin (expected trap cause 5 at pc 0x8, 28 cycles)
-[rand] core_tb smc_fencei_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 23
+[rand] core_tb irq_seip_rmw.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 17
+CORE TB PASS irq_seip_rmw.bin (480 cycles)
+[rand] core_tb irq_mip_rmw_variants.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 18
+CORE TB PASS irq_mip_rmw_variants.bin (517 cycles)
+[rand] core_tb counter_time_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 19
+CORE TB PASS counter_time_directed.bin (12685 cycles)
+[rand] core_tb hyp_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 20
+CORE TB PASS hyp_directed.bin (3770 cycles)
+[rand] core_tb vec_directed.bin 4000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 21
+CORE TB PASS vec_directed.bin (3226 cycles)
+[rand] core_tb fpvec_directed.bin 4000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 22
+CORE TB PASS fpvec_directed.bin (1162 cycles)
+[rand] core_tb vec_trap_directed.bin 4000000 --irq-timer-after 2000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 23
+CORE TB PASS vec_trap_directed.bin (14468 cycles)
+[rand] core_tb trap_pa_fetch.bin 100000 --expect-trap 1 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 24
+CORE TB PASS trap_pa_fetch.bin (expected trap cause 1 at pc 0x100000000000000, 36 cycles)
+[rand] core_tb trap_pa_load.bin 100000 --expect-trap 5 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 25
+CORE TB PASS trap_pa_load.bin (expected trap cause 5 at pc 0x8, 29 cycles)
+[rand] core_tb smc_fencei_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 26
 CORE TB PASS smc_fencei_directed.bin (8539 cycles)
-[rand] core_tb amo_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 24
-CORE TB PASS amo_cache_directed.bin (3385 cycles)
-[rand] core_tb mmio_bypass_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 25
-CORE TB PASS mmio_bypass_directed.bin (1476 cycles)
-[rand] core_tb vm_sfence_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 26
-CORE TB PASS vm_sfence_cache_directed.bin (23227 cycles)
+[rand] core_tb amo_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 27
+CORE TB PASS amo_cache_directed.bin (3409 cycles)
+[rand] core_tb mmio_bypass_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 28
+CORE TB PASS mmio_bypass_directed.bin (1757 cycles)
+[rand] core_tb vm_sfence_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 29
+CORE TB PASS vm_sfence_cache_directed.bin (23224 cycles)
 [nocache] core_tb rv64i_directed.bin --no-cache --mem-seed 1
 CORE TB PASS rv64i_directed.bin (1450 cycles)
 [nocache] core_tb rv64m_directed.bin --no-cache --mem-seed 2
@@ -100,44 +106,50 @@ CORE TB PASS trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 15 cycles
 CORE TB PASS trap_younger_store.bin (expected trap cause 4 at pc 0x4, 11 cycles)
 [nocache] core_tb trap_younger_csr.bin --no-cache --mem-seed 16
 CORE TB PASS trap_younger_csr.bin (223 cycles)
-[nocache] core_tb counter_time_directed.bin --no-cache --mem-seed 17
+[nocache] core_tb irq_seip_rmw.bin --no-cache --mem-seed 17
+CORE TB PASS irq_seip_rmw.bin (607 cycles)
+[nocache] core_tb irq_mip_rmw_variants.bin --no-cache --mem-seed 18
+CORE TB PASS irq_mip_rmw_variants.bin (647 cycles)
+[nocache] core_tb counter_time_directed.bin --no-cache --mem-seed 19
 CORE TB PASS counter_time_directed.bin (25287 cycles)
-[nocache] core_tb hyp_directed.bin --no-cache --mem-seed 18
+[nocache] core_tb hyp_directed.bin --no-cache --mem-seed 20
 CORE TB PASS hyp_directed.bin (3214 cycles)
-[nocache] core_tb vec_directed.bin 4000000 --no-cache --mem-seed 19
-CORE TB PASS vec_directed.bin (3209 cycles)
-[nocache] core_tb fpvec_directed.bin 4000000 --no-cache --mem-seed 20
-CORE TB PASS fpvec_directed.bin (1041 cycles)
-[nocache] core_tb trap_pa_fetch.bin 100000 --expect-trap 1 --no-cache --mem-seed 21
+[nocache] core_tb vec_directed.bin 4000000 --no-cache --mem-seed 21
+CORE TB PASS vec_directed.bin (4007 cycles)
+[nocache] core_tb fpvec_directed.bin 4000000 --no-cache --mem-seed 22
+CORE TB PASS fpvec_directed.bin (1237 cycles)
+[nocache] core_tb vec_trap_directed.bin 4000000 --irq-timer-after 2000 --no-cache --mem-seed 23
+CORE TB PASS vec_trap_directed.bin (16015 cycles)
+[nocache] core_tb trap_pa_fetch.bin 100000 --expect-trap 1 --no-cache --mem-seed 24
 CORE TB PASS trap_pa_fetch.bin (expected trap cause 1 at pc 0x100000000000000, 18 cycles)
-[nocache] core_tb trap_pa_load.bin 100000 --expect-trap 5 --no-cache --mem-seed 22
+[nocache] core_tb trap_pa_load.bin 100000 --expect-trap 5 --no-cache --mem-seed 25
 CORE TB PASS trap_pa_load.bin (expected trap cause 5 at pc 0x8, 15 cycles)
-[nocache] core_tb smc_fencei_directed.bin --no-cache --mem-seed 23
+[nocache] core_tb smc_fencei_directed.bin --no-cache --mem-seed 26
 CORE TB PASS smc_fencei_directed.bin (7014 cycles)
-[nocache] core_tb amo_cache_directed.bin --no-cache --mem-seed 24
+[nocache] core_tb amo_cache_directed.bin --no-cache --mem-seed 27
 CORE TB PASS amo_cache_directed.bin (2493 cycles)
-[nocache] core_tb mmio_bypass_directed.bin --no-cache --mem-seed 25
-CORE TB PASS mmio_bypass_directed.bin (1581 cycles)
-[nocache] core_tb vm_sfence_cache_directed.bin --no-cache --mem-seed 26
+[nocache] core_tb mmio_bypass_directed.bin --no-cache --mem-seed 28
+CORE TB PASS mmio_bypass_directed.bin (1917 cycles)
+[nocache] core_tb vm_sfence_cache_directed.bin --no-cache --mem-seed 29
 CORE TB PASS vm_sfence_cache_directed.bin (28947 cycles)
 
 # verilator_coverage --annotate summary (all modules; a line counts only if every point on it is hit)
-  lines with all attached points covered : 46.00%  (2143/4605)
+  lines with all attached points covered : 50.00%  (2508/4978)
 
 # per-file coverage, all core-test runs merged (scripts/cov_report.py build/sim/cov_merged.dat)
 muserisc_bus_arb.sv          branch       16/16     100.00%
 muserisc_bus_arb.sv          line          5/5      100.00%
-muserisc_bus_arb.sv          toggle      486/778     62.47%
-muserisc_core.sv             branch      247/268     92.16%
-muserisc_core.sv             line        184/194     94.85%
-muserisc_core.sv             toggle     9493/16618   57.12%
-muserisc_cpu.sv              toggle     1332/2310    57.66%
+muserisc_bus_arb.sv          toggle      487/778     62.60%
+muserisc_core.sv             branch      259/276     93.84%
+muserisc_core.sv             line        165/174     94.83%
+muserisc_core.sv             toggle    11066/18080   61.21%
+muserisc_cpu.sv              toggle     1333/2310    57.71%
 muserisc_dcache.sv           branch       58/58     100.00%
 muserisc_dcache.sv           line         41/41     100.00%
 muserisc_dcache.sv           toggle     3524/4202    83.86%
 muserisc_icache.sv           branch       44/44     100.00%
 muserisc_icache.sv           line         26/26     100.00%
-muserisc_icache.sv           toggle     1618/1842    87.84%
+muserisc_icache.sv           toggle     1622/1842    88.06%
 muserisc_sram_sp.sv          branch        6/6      100.00%
 muserisc_sram_sp.sv          line          2/2      100.00%
 muserisc_sram_sp.sv          toggle      685/686     99.85%
