@@ -51,5 +51,23 @@ compliance suites, TestFloat and Linux boot), open a pull request.
   its pass counts and wall-clock time, and anything not run or waived.
 - Do not open a PR for work whose tests are failing or not yet run;
   push the branch and report status instead.
-- Significant RTL changes (e.g. FPU, multiply/divide, caches) get an
-  independent audit by a separate agent before the PR is merged.
+
+## Review
+
+Every PR is reviewed by subagents before it is merged, in at most
+three rounds. A round is one review followed by the author's fixes:
+
+1. Review: a reviewer subagent that did not write the change reviews
+   the PR (correctness, test coverage and evidence, docs, and for RTL:
+   synthesizability, timing-relevant structure, interaction with
+   traps/stalls/flushes). Significant RTL changes (e.g. FPU,
+   multiply/divide, caches) get a full independent audit, including
+   re-running the gates rather than trusting the PR description.
+2. Fix: the author addresses the findings, re-runs the affected gates,
+   and pushes.
+
+The next round uses a fresh reviewer. Stop as soon as a review has no
+blocking findings. If blocking findings remain after the third round,
+stop and escalate to the user with the outstanding issues instead of
+merging. Reviewers post their findings as PR comments so the history
+stays with the PR.
