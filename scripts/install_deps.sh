@@ -164,5 +164,5 @@ echo
 echo "Load project tools with:  source deps/env.sh"
 # shellcheck source=/dev/null
 . "$DEPS/env.sh"
-./scripts/setup.sh | awk '/== Host tools ==/{p=1} p{print} p && /riscv64/{exit}'
+./scripts/setup.sh | awk '/== Host tools ==/{p=1} p{print} p && /riscv64/{p=0}'
 echo "  verilator: $(verilator --version)"
