@@ -252,8 +252,9 @@ int main(int argc, char** argv) {
   }
 
   dut->final();
-  delete dut;
+  // write coverage before the model (which owns the counters) is freed
   if (cov_path != nullptr) context.coveragep()->write(cov_path);
+  delete dut;
   if (fails) { std::printf("RVC TB FAIL (%ld/%ld)\n", fails, checks);
     return 1; }
   std::printf("RVC TB PASS (%ld checks)\n", checks);

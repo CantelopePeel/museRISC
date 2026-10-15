@@ -1574,3 +1574,120 @@ stages 4c/5:
   not a Linux boot on the RTL SoC — Linux evidence
   remains the `soc_tb` C++ platform above; ASIC
   timing is #11, FPGA hardware is #32.
+
+## Multi-cycle synthesizable FPU + EX stall protocol (2026-10-15, branch `fpu-multicycle`, #32)
+
+- `rtl/core/muserisc_fpu.sv` is now a multi-cycle F/D unit
+  (FSM over registered stages; div/sqrt radix-2 restoring
+  recurrence at 2 steps/cycle; log-depth leading-zero
+  normalisers; separate round stage; no data-dependent
+  loops). The arithmetic lives in
+  `rtl/core/muserisc_fpu_ops.svh`, `include`d by the module
+  and by `muserisc_fpu_pkg.sv`, whose `fp_eval` chains the
+  same functions combinationally for the (still
+  combinational) vector FP path. Latencies and the generic
+  EX-stage req/done/ack/kill handshake are in
+  [`docs/CORE.md`](../CORE.md) ("EX-stage multi-cycle
+  units"). All numbers below:
+  [`fpu-multicycle-2026-10-15.log`](fpu-multicycle-2026-10-15.log).
+- FPU unit TB vs SoftFloat: **476,563 checks** (random sweep
+  of every op × both formats × 5 IEEE modes, round-to-odd
+  and rm 6/7, special/boundary pools, NaN-boxing, FMA
+  cancellation, exact div/sqrt, undefined op codes) with
+  randomized ack delays (HOLD), operand scrambling while
+  busy, back-to-back issue, 2,000 mid-op kills/request drops,
+  40 resets in flight, and every op's latency checked.
+  TestFloat (`scripts/testfloat_fpu_vectors.sh`,
+  berkeley-testfloat-3 a9c849f1, level 1, seed 42, all 36
+  F/D operations × 5 rounding modes): **64,648,560/64,648,560
+  vectors PASS** (1,148 s on the final RTL).
+- Coverage (merged `make core-test`): `muserisc_fpu.sv` line
+  39/39, branch 22/22, toggle 3,682/3,698 (the 16 untoggled
+  points are flag bits that are constant by construction);
+  `muserisc_fpu_ops.svh` line 123/123, branch 156/156. Note:
+  Verilator collects no line coverage inside *package*
+  functions, so the pre-existing package-based FPU logic had
+  been invisible to coverage since stage 9a; the module-local
+  `include` fixes that. The FPU/BEXT/RVC TBs also wrote
+  coverage after freeing the model (garbage counts); fixed.
+- Directed: `fp_directed.S` tests 11–16 (dependent chains
+  through multi-cycle ops, back-to-back issue, int/store/branch
+  consumers, FP load-use into long ops, fflags ordering vs
+  CSR accesses, dynamic rm sampled at issue),
+  `fp_stall_directed.S` (older trap/vector-load fault kills an
+  in-flight fdiv which replays cleanly, FP ops completing
+  during a 64-element vector-load mem_stall, branch/jump
+  shadows, precise ecall/illegal after long ops, FS dirtying,
+  held-EX operand refresh) and `fp_irq_directed.S` (machine
+  timer IRQ at 48 consecutive offsets across in-flight
+  fdiv/fsqrt/FMA; results identical to an IRQ-free run).
+  `fp_stall_directed.S` test 4 **fails on the previous core**
+  (stale scalar operand of an instruction held by
+  `vec_wb_stall` after its producer retired) and passes with
+  the held-EX operand refresh.
+- Gates (final, rebased onto origin/main ef9a0cb with #4
+  element-serial vector unit, #6 and the upstream RTL SoC;
+  round-1 audit fixes included): `make core-test` green
+  (138 s; now
+  also builds and runs the `FPU_DS_BITS = 1` configuration:
+  `fpu-ds1` unit TB 476,563 checks with its 30/59-cycle
+  div/sqrt latencies, and `core-ds1` running `fp_directed`,
+  `fp_stall_directed`, `fpvec_directed` and 25 IRQ offsets),
+  `make lint` clean,
+  `make test` `ALL PHASE-0 KATs PASS`,
+  [`riscv-tests-core-fpu-multicycle-2026-10-15.csv`](riscv-tests-core-fpu-multicycle-2026-10-15.csv)
+  **123/123**,
+  [`act-core-fpu-multicycle-2026-10-15.csv`](act-core-fpu-multicycle-2026-10-15.csv)
+  **2,577/2,578**: the stage-7 scalar set 543/544 (only the
+  known `PMPSm_cfg_A_tor_zero-00` PA0 waiver; F 84/84, D
+  116/116) plus the stage-8/9 vector sets 2,034/2,034 (1,872
+  Vx/Vls + 162 Vf32/Vf64), regenerated in this tree with the
+  same 34 Sail-side generation failures and 9 deselected
+  tests as before.
+- RTL SoC (upstream #4 sync): `make -C sim socrtl`
+  `SOC CRYPTO PASS` (11,097,819 cycles) and OpenSBI v1.9 +
+  S-mode payload on `soc_rtl_tb` (`HELLO FROM S-MODE`,
+  6,059,345 cycles); yosys `read_slang` elaborates
+  `muserisc_soc_top` with `-I rtl/core` (the include path is
+  added to the SoC lint line and to
+  `flow/designs/nangate45/muserisc_soc/config.mk`).
+  `ex_hold = vec_ex_stall || ex_mc_busy`; simulation asserts
+  the FPU and the vector unit are never in flight together,
+  and `fp_stall_directed.S` test 13 interleaves vector ops
+  with fdiv.d/fsqrt.d in both directions.
+- Verilator 5.020 (the CI version): `make lint`, the unit
+  TBs, `make -C sim core` and the riscv-tests smoke subset
+  pass with Ubuntu 24.04's Verilator 5.020 (Docker), and the
+  GitHub checks on the PR are green.
+- Core-level coverage (unit TBs excluded) of
+  `muserisc_fpu.sv` is also line 39/39 / branch 22/22: the
+  HOLD state (FP op completing during an older vector load's
+  `mem_stall`) is reached by `fp_stall_directed.S` test 3.
+- Linux smoke: before #6, the `soc_tb` boot on origin/main
+  itself livelocked in S-external interrupts after `/init`
+  (#3), so this branch was held to "identical to main": the
+  M-level trap trace and UART output of no-coverage `soc_tb`
+  builds of origin/main and this branch are cycle-identical
+  over the first 30M boot cycles (710 trap events each). On
+  the final head (with #6): **`MUSERISC_LINUX_BOOT_OK`, `SOC
+  TB PASS` at 502,782,909 cycles** (41 min wall,
+  no-coverage build):
+  [`fpu-multicycle-linux-boot-2026-10-15.log`](fpu-multicycle-linux-boot-2026-10-15.log).
+- Synthesis (`scripts/synth_fpu.sh`, sv2v v0.0.13 → Yosys →
+  OpenROAD repair_design/repair_timing + OpenSTA, Nangate45
+  typical, no wire parasitics, Yosys ripple-carry adders):
+  **44,416 µm²** cell area (35,546 cells, 1,388 flops = 14%
+  of area); register-to-register min period **5.34 ns
+  (187 MHz)**, critical path = the 2-step div/sqrt recurrence.
+  Inputs and outputs are unconstrained, so the issue-cycle
+  paths (forwarded operands → `unpack`/`i2f_sum`, and the
+  fast-op `a_i` → `result_o` path behind the core's
+  forwarding mux) are not in this figure. With `FPU_DS_BITS = 1`
+  (div/sqrt 30/59 cycles instead of 17/32; simulated by
+  `fpu-ds1`/`core-ds1`): 43,325 µm², 3.73 ns (268 MHz). A Kogge-Stone carry mapping was attempted but ABC
+  did not finish within an hour and was abandoned. Full-core
+  synthesis was not run here; per the round-2 audit, Yosys
+  `read_slang` elaborates the whole SoC, and through sv2v +
+  Yosys the core passes `proc`/coarse synthesis once the sv2v
+  sensitivity lists over `muserisc_mmu`'s TLB array are
+  relaxed to `@(*)`.

@@ -58,22 +58,24 @@ nothing about core Fmax on FPGA — see below).
    I/D cache or BRAM adapter plus a real stall/ready
    handshake; a first milestone can use LUTRAM/registered
    BRAM with an IF-stage fetch-latency fix.
-3. **Single-cycle FP and whole-vector datapaths will not
-   close 10 ns as-is.** `muserisc_fpu` is explicitly a
-   correctness-first combinational unit (256-bit window,
-   wide integer div/sqrt in EX), and `muserisc_vec`
-   evaluates up to `512/SEW` elements combinationally
-   fed by three 4096-bit register-group read ports from a
-   flop-array VRF (32×512). Closing ≥100 MHz needs:
-   iterative/pipelined FP div/sqrt/FMA with EX stall,
-   element-serial vector execution over a narrow (e.g.
-   64-bit) datapath, and a banked BRAM/LUTRAM VRF. ISA
-   semantics must not change: riscv-tests, ACT and the
-   unit TBs re-run after every such refactor.
+3. **FP and vector datapaths: refactored, not yet timed on
+   FPGA.** The scalar `muserisc_fpu` is multi-cycle behind a
+   generic EX stall handshake (fpu-multicycle: Nangate45
+   synth 5.34 ns register-to-register, unplaced, see
+   `docs/evidence/fpu-multicycle-2026-10-15.log`), and
+   `muserisc_vec` is element-serial over a banked
+   sync-read VRF (#4 on the fork). Vector FP still
+   evaluates one element per cycle through the
+   combinational `fp_eval` chain. ISA semantics must not
+   change: riscv-tests, ACT and the unit TBs re-run after
+   every such refactor.
 4. **Synthesis portability is unproven for the core.**
-   The core has only been Verilated; local Yosys rejects
-   the unpacked struct in `muserisc_fpu_pkg.sv`
-   (`Only PACKED supported`). Vivado handles much more
+   The core has only been Verilated. Yosys `read_slang`
+   (the ORFS SoC flow) elaborates the whole SoC; through
+   sv2v + Yosys the core passes `hierarchy`/`proc` and
+   coarse synthesis once the sv2v sensitivity lists over
+   `muserisc_mmu`'s TLB array are relaxed to `@(*)` (sv2v
+   interop, round-2 audit of PR #5). Vivado handles much more
    SystemVerilog, but elaboration of the full core in
    Vivado is itself milestone F0, not an assumption.
 
