@@ -1,0 +1,77 @@
+#31 OpenROAD rerun evidence — muse_crypto_top, nangate45, 2026-10-14
+Command: ./scripts/openroad_docker.sh (make openroad), then
+         ./scripts/orfs_liberty_check.sh
+Config: flow/designs/nangate45/muse_crypto/{config.mk,constraint.sdc}
+  CORE_UTILIZATION=28, CLOCK_PERIOD=10ns (100 MHz constraint),
+  EARLY_SIZING_CAP_RATIO=0.8,
+  SDC set_max_capacitance 21 fF (repair guardband, not signoff),
+  DONT_USE_CELLS += NOR3_X1 NOR4_X1 NOR4_X2 AOI221_X1 OAI221_X1.
+Scope: crypto accelerator macro only (muse_crypto_top, current .sv
+sources). This is GDS generated / place-and-route complete for
+that macro; it is not a tapeout, not full-SoC closure (#11), and
+says nothing about core timing (the in-house core is not in
+this macro).
+
+Two runs were made for #31:
+  rerun1 = b3 cell ban unchanged. Timing closed, but liberty
+           signoff found 3 new max-capacitance violators.
+  rerun2 = + AOI221_X1 OAI221_X1 in DONT_USE_CELLS (the two
+           violating cell types: OAI221_X1 limit 22.16 fF,
+           AOI221_X1 limit 13.81 fF). Clean; this is the
+           released run. Fresh run from cleaned ORFS outputs,
+           so placement is not identical to b3 or rerun1.
+
+Flow metrics (6_report.json, finish stage):
+  metric                       b3 2026-10-13   rerun1      rerun2 (released)
+  setup worst slack [ns]       4.51794        4.80268     4.34052
+  setup TNS [ns]               0              0           0
+  hold worst slack [ns]        0.0390653      0.0374827   0.0386021
+  hold TNS [ns]                0              0           0
+  fmax [MHz] (ORFS estimate)   (n/a in b3 log) 192.4      176.7
+  stdcell count                61590          62939       63474
+  stdcell area [um2]           95430.7        97142.9     97819.6
+  core area [um2]              296867         303265      305084
+  die area [um2]               299625         306240      308436
+  utilization                  0.32146        0.320324    0.320631
+  total power [W]              0.0201571      0.0211645   0.0211133
+  flow errors                  0              0           0
+  detail-route DRC             0 (empty rpt)  0           0 (5_route_drc.rpt empty;
+                                                          DRT ends "Number of
+                                                          violations = 0")
+  antenna                      0              0           0 net / 0 pin (ANT-0001/2)
+  liberty max-cap violators    0              3           0 (signoff below)
+  liberty max-slew violators   0              0           0
+  liberty max-fanout violators 0              0           0
+  6_final.gds                  61 MB          60 MB       60 MB
+                               (release asset, not in git, in all cases)
+
+Rerun1 liberty violators (fixed in rerun2 by the cell ban):
+  _058564_/ZN (OAI221_X1)  limit 22.16  cap 24.20  slack -2.04 (VIOLATED)
+  _085647_/ZN (AOI221_X1)  limit 13.81  cap 15.55  slack -1.74 (VIOLATED)
+  _083720_/ZN (AOI221_X1)  limit 13.81  cap 15.06  slack -1.25 (VIOLATED)
+
+Rerun2 liberty signoff (scripts/orfs_liberty_check.sh on
+6_1_fill.odb + 6_final.spef, liberty limits only):
+SIGNOFF max_capacitance violators (liberty limits):
+SIGNOFF max_slew violators:
+SIGNOFF max_fanout violators:
+worst slack max 4.32
+worst slack min 0.04
+tns max 0.00
+Group                  Internal  Switching    Leakage      Total
+                          Power      Power      Power      Power (Watts)
+----------------------------------------------------------------
+Sequential             3.50e-03   5.53e-05   3.84e-04   3.94e-03  18.7%
+Combinational          5.72e-03   7.08e-03   1.69e-03   1.45e-02  68.6%
+Clock                  1.21e-03   1.44e-03   4.26e-05   2.69e-03  12.7%
+Macro                  0.00e+00   0.00e+00   0.00e+00   0.00e+00   0.0%
+Pad                    0.00e+00   0.00e+00   0.00e+00   0.00e+00   0.0%
+----------------------------------------------------------------
+Total                  1.04e-02   8.57e-03   2.12e-03   2.11e-02 100.0%
+                          49.4%      40.6%      10.0%
+
+Conclusion: at the 10 ns (100 MHz) constraint the macro closes
+setup and hold with TNS 0 and no liberty, route-DRC or antenna
+violations. The +2.9% die / +3.1% stdcell-count growth vs b3 is
+a fresh-run + banned-cell effect, not an RTL change (crypto RTL
+is behavior-identical .sv since #19).

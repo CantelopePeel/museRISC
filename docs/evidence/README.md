@@ -1271,3 +1271,29 @@ stages 4c/5:
   virt and `soc_tb` differ as platforms; ISA-level
   differential coverage already comes from
   riscv-tests, ACT vs Sail, and the unit TBs.
+
+## OpenROAD P&R rerun on current .sv sources (2026-10-14, #31)
+
+- Full ORFS rerun of the nangate45 `muse_crypto_top`
+  macro on the current `.sv` sources. This supersedes
+  the #19 note above ("full P&R was not re-run"): it
+  has now been re-run. Scope is the crypto macro
+  only — GDS generated / place-and-route complete,
+  not a tapeout, not full-SoC closure (#11), and no
+  core-timing claim. Full log with the b3 comparison
+  table:
+  [`openroad-nangate45-31-2026-10-14.log`](openroad-nangate45-31-2026-10-14.log).
+- Rerun 1 (b3 cell ban) closed timing but liberty
+  signoff (`scripts/orfs_liberty_check.sh`) found 3
+  new max-capacitance violators, all AOI221_X1
+  (13.81 fF limit) or OAI221_X1 (22.16 fF).
+  `flow/designs/nangate45/muse_crypto/config.mk`
+  now also bans those two cells.
+- Rerun 2 (released): setup WS 4.34 ns, hold WS
+  0.039 ns, setup/hold TNS 0 at the 10 ns
+  (100 MHz) constraint; ORFS fmax estimate
+  176.7 MHz; 63,474 stdcells, die 308,436 um2,
+  utilization 0.321, total power 0.0211 W; route
+  DRC 0, antenna 0, liberty max-cap/max-slew/
+  max-fanout violators 0. `6_final.gds` (60 MB) is
+  published as a GitHub release asset, not in git.
