@@ -16,9 +16,11 @@ OBJ    := $(BUILD)/obj
 
 VERILATOR ?= verilator
 VFLAGS    := --cc --exe --build -j 0 -Wall -Wno-DECLFILENAME \
-             --coverage-line --coverage-toggle --assert \
+             --coverage-line --coverage-toggle --assert -I$(RTL) \
              -CFLAGS "-std=c++17 -O2" --Mdir
 PKG       := $(RTL)/muserisc_pkg.sv
+# `included by muserisc_fpu_pkg.sv and muserisc_fpu.sv (dependency only)
+FPU_INC   := $(RTL)/muserisc_fpu_ops.svh
 
 RISCV_PREFIX ?= $(shell command -v riscv64-unknown-elf-gcc >/dev/null 2>&1 \
                   && echo riscv64-unknown-elf- || echo riscv64-elf-)
@@ -37,7 +39,7 @@ CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
             $(RTL)/muserisc_decoder.sv \
             $(RTL)/muserisc_csr.sv $(RTL)/muserisc_mmu.sv \
             $(RTL)/muserisc_core.sv
-TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed vec_directed fpvec_directed vec_trap_directed \
+TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed fp_stall_directed fp_irq_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed vec_directed fpvec_directed vec_trap_directed \
             vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
             trap_store_misalign trap_younger_store trap_younger_csr irq_seip_rmw irq_mip_rmw_variants \
@@ -115,7 +117,7 @@ $(SF_HOST)/softfloat.a: softfloat-host/Makefile softfloat-host/platform.h
 	mkdir -p $(SF_HOST)
 	cp softfloat-host/Makefile softfloat-host/platform.h $(SF_HOST)/
 	cd $(SF_HOST) && sed -i.bak 's|../../source|../../third_party/berkeley-softfloat-3/source|' Makefile && $(MAKE) -j8
-$(BUILD)/fpu_tb: $(ROOT)/tb/cpp/fpu_tb.cpp \
+$(BUILD)/fpu_tb: $(ROOT)/tb/cpp/fpu_tb.cpp $(FPU_INC) \
                  $(RTL)/muserisc_fpu_pkg.sv $(RTL)/muserisc_fpu.sv \
                  $(SF_HOST)/softfloat.a | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/fpu --top-module muserisc_fpu \
@@ -151,7 +153,7 @@ rvc: $(BUILD)/rvc_tb
 
 ## ---- Vector unit test ------------------------------------------------------
 # Harness = muserisc_vec + banked muserisc_vregfile + TB backdoor.
-$(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) \
+$(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(FPU_INC) \
                  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
                  $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
                  $(ROOT)/tb/sv/muserisc_vec_harness.sv | $(BUILD) $(OBJ)
@@ -213,13 +215,13 @@ cryptotop: $(BUILD)/crypto_top_tb
 crypto: sha256 sha512 keccak ecfield cryptotop
 
 ## ---- Core harness + directed software ---------------------------------
-$(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(CORE_RTL) | $(BUILD) $(OBJ)
+$(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(CORE_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/core --top-module muserisc_core \
 	  -o $(abspath $(BUILD)/core_tb) $(CORE_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/core_tb.cpp)
 
 ## ---- SoC platform harness (Linux/OpenSBI boot, issue #21) --------------
-$(BUILD)/soc_tb: $(ROOT)/tb/cpp/soc_tb.cpp $(CORE_RTL) | $(BUILD) $(OBJ)
+$(BUILD)/soc_tb: $(ROOT)/tb/cpp/soc_tb.cpp $(CORE_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/soc --top-module muserisc_core \
 	  -o $(abspath $(BUILD)/soc_tb) $(CORE_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/soc_tb.cpp)
@@ -277,6 +279,13 @@ core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_rv64m.dat ./core_tb rv64m_directed.bin
 	cd $(BUILD) && COV_FILE=cov_amo.dat ./core_tb amo_directed.bin
 	cd $(BUILD) && COV_FILE=cov_fp.dat ./core_tb fp_directed.bin
+	cd $(BUILD) && COV_FILE=cov_fpstall.dat ./core_tb fp_stall_directed.bin
+	@# Timer IRQ at every offset across a window wider than the
+	@# longest FP op (fdiv.d/fsqrt.d: 32 cycles in EX).
+	cd $(BUILD) && for o in $$(seq 100 147); do \
+	  COV_FILE=cov_fpirq.dat ./core_tb fp_irq_directed.bin --irq-timer-after $$o \
+	    > fp_irq_$$o.log 2>&1 || { cat fp_irq_$$o.log; exit 1; }; \
+	done; echo "CORE TB PASS fp_irq_directed.bin (48/48 IRQ offsets 100..147)"
 	cd $(BUILD) && COV_FILE=cov_bextsw.dat ./core_tb bext_directed.bin
 	cd $(BUILD) && COV_FILE=cov_rvcsw.dat ./core_tb rvc_directed.bin
 	cd $(BUILD) && COV_FILE=cov_pipeline.dat ./core_tb pipeline_directed.bin
@@ -315,6 +324,7 @@ COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
               $(BUILD)/cov_fpu.dat \
               $(BUILD)/cov_rv64i.dat $(BUILD)/cov_rv64m.dat \
               $(BUILD)/cov_amo.dat $(BUILD)/cov_fp.dat \
+              $(BUILD)/cov_fpstall.dat $(BUILD)/cov_fpirq.dat \
               $(BUILD)/cov_bext.dat $(BUILD)/cov_bextsw.dat \
               $(BUILD)/cov_rvc.dat $(BUILD)/cov_rvcsw.dat \
               $(BUILD)/cov_pipeline.dat $(BUILD)/cov_priv.dat \
