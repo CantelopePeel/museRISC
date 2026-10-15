@@ -1310,7 +1310,9 @@ stages 4c/5:
   inverse share one tower inverter, with the AES<->tower
   isomorphism and the (inverse) affine transform folded into
   four 8x8 GF(2) matrices (λ and the isomorphism root chosen
-  by exhaustive search for minimum matrix weight).
+  by exhaustive search for minimum matrix weight — unique
+  minimum 110, next 112; reproduced and checked against the
+  RTL by `scripts/gen_aes_tower.py --check`).
   `muserisc_bext` now has eight S-box lanes, each shared by
   SubBytes/InvSubBytes and also serving aes64ks1i (lanes
   0-3), instead of 16 (+4 ks1i) S-box instances. Still
@@ -1372,8 +1374,12 @@ stages 4c/5:
   Zcb 7 + ZcbZba 1 + ZcbZbb 3 + ZcbZmmul 1: same test names
   and verdicts as `act-core-stage7-2026-10-14.csv`. Every
   test runs exactly +263 cycles vs that file, crypto and
-  non-crypto alike, i.e. the current ELF prologue (config
-  changed since stage 7), not this RTL. ELFs:
+  non-crypto alike. Confirmed not this RTL: the same ELFs on
+  a `core_tb` built from origin/main give an identical CSV
+  (review round 1); the cause is the vector-register prologue
+  (`vsetvli` + `vmv.v.x v0..v31`) that ACT emits since
+  Zve*/Zvl* entered `sw/act4-core/muserisc-core.yaml` in
+  stages 8c/9. ELFs:
   `EXTENSIONS=Zba,Zbb,Zbc,Zbs,Zbkb,Zbkc,Zbkx,Zicond,Zkne,Zknd,Zknh`
   then `EXTENSIONS=Zcb` via `scripts/build_act4_core.sh`
   (17 s + cached), then `sim/run_act_core.sh` (48 s).

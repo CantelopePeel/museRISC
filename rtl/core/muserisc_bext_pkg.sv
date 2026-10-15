@@ -137,8 +137,11 @@ package muserisc_bext_pkg;
   //                 d = (h^2 LAM + h l + l^2)^-1 in GF(16)
   // The isomorphism maps z-tower generator 0x14 to AES element
   // 0x1E; LAM and the root were chosen (exhaustive search over
-  // all LAM / conjugate roots) to minimise the total weight of
-  // the four 8x8 GF(2) matrices below. Forward and inverse
+  // all 8 LAM x 8 conjugate roots) to minimise the total weight
+  // of the four 8x8 GF(2) matrices below (unique minimum: 110,
+  // next 112). scripts/gen_aes_tower.py reproduces every
+  // constant here (incl. the GF(16) inverse table); run it with
+  // --check to compare against this file. Forward and inverse
   // S-boxes share one tower inverter: the input matrix folds in
   // the AES->tower map (and, for decryption, the inverse
   // affine transform), the output matrix folds in the tower->
