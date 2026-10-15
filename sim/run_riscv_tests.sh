@@ -6,10 +6,13 @@
 # optionally writes a CSV (test,result,cycles) for evidence.
 #
 # Usage: run_riscv_tests.sh [out.csv]
+# RISCV_TESTS_DIR overrides the source tree location.
+# RISCV_TESTS_LIST (a file of test names, one per line) limits
+# the run to a smoke subset; default is every test.
 set -u
 cd "$(dirname "$0")/.."
 
-RT=third_party/cva6/tmp/riscv-tests
+RT=${RISCV_TESTS_DIR:-third_party/cva6/tmp/riscv-tests}
 BUILD=build/riscv-tests
 CORE_TB=build/sim/core_tb
 mkdir -p "$BUILD"
@@ -48,6 +51,9 @@ for suite in rv64ui rv64um rv64ua rv64uf rv64ud rv64uc rv64mi rv64si; do
   esac
   for src in "$SRCDIR"/*.S; do
     name=$suite-p-$(basename "$src" .S)
+    if [ -n "${RISCV_TESTS_LIST:-}" ]; then
+      grep -qx "$name" "$RISCV_TESTS_LIST" || continue
+    fi
     elf=$BUILD/$name
     if [ ! -x "$elf" ]; then
       # shellcheck disable=SC2086
@@ -74,4 +80,4 @@ for suite in rv64ui rv64um rv64ua rv64uf rv64ud rv64uc rv64mi rv64si; do
   done
 done
 echo "riscv-tests rv64ui+um+ua+uf+ud+uc+mi+si: $pass/$total PASS, $fail FAIL"
-[ "$fail" -eq 0 ]
+[ "$fail" -eq 0 ] && [ "$total" -gt 0 ]
