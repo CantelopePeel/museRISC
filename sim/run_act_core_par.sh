@@ -28,6 +28,7 @@ one() {
 export -f one
 find "$ELF_DIR" -type f -name '*.elf' | sort > "$RES/.list"
 nelf=$(wc -l < "$RES/.list")
+[ "$nelf" -gt 0 ] || { echo "no ELFs found under $ELF_DIR"; exit 1; }
 xargs -P "$JOBS" -I{} bash -c 'one "$@"' _ {} "$TB" "$RES" < "$RES/.list"
 { echo "test,result,cycles"; cat "$RES"/[0-9a-f]* 2>/dev/null | sort; } > "$OUT"
 rows=$(( $(wc -l < "$OUT") - 1 ))

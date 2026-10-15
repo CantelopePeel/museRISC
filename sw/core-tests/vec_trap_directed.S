@@ -19,6 +19,17 @@
 //       resets vstart to 0 on completion.
 //  8:   strided store faulting at element 2: elements 0-1 are
 //       stored, element 2 is not, vstart = 2.
+//  9:   fault-only-first with element 0 masked off and a fault
+//       on element 1 trims vl to 1 without trapping.
+//  10-12: vstart > 0 honored by vl1re32.v, vs1r.v and vmv1r.v.
+//  13:  vl1re64.v PMP fault inside element 2 (byte 20): vstart =
+//       2 (EEW=64 elements), mtval = pbuf+20; resume completes.
+//  14:  vs1r.v PMP fault at byte 20 (EEW=8): vstart = 20, bytes
+//       0-19 stored, 20+ not.
+//  15:  fault-only-first with vstart=1, element 1 faults: vl
+//       trimmed to 1, no trap, vstart reads 0.
+//  16:  fault-only-first, unmasked element 0 faults: trap, vl
+//       unchanged. (13-16 contributed by the round-2 reviewer.)
 // Convention: t0 = test number, exit store 0 = pass.
     .option arch, +v
     .option norvc  // norvc last: gas 13 .option arch resets it
@@ -363,6 +374,161 @@ irq_after_vmacc:
     vmv.x.s a2, v6
     li a3, 3
     bne a2, a3, fail                 // element 3 copied
+
+    // ---- 13: vl1re64.v PMP fault inside element 2
+    // (byte 20): vstart = 2, mtval = pbuf+20; resume completes ----
+    li t0, 13
+    la a1, pbuf
+    li a2, 0x0000003100000030
+    sd a2, 16(a1)
+    li a2, 0x0000004100000040
+    sd a2, 24(a1)
+    la t1, pbuf
+    addi t1, t1, 20
+    srli t1, t1, 2
+    csrw pmpaddr0, t1                // TOR [0, pbuf+20)
+    vsetivli x0, 2, e64, m1, tu, mu
+    li a2, 0x5a5a5a5a
+    vmv.v.x v16, a2
+    la a1, trap_cause
+    sd x0, 0(a1)
+    li t1, (1 << 17)
+    csrs mstatus, t1
+    la a1, pbuf
+    vl1re64.v v16, (a1)
+    li t1, (1 << 17)
+    csrc mstatus, t1
+    la a1, trap_cause
+    ld a2, 0(a1)
+    li a3, 5
+    bne a2, a3, fail
+    li t0, 131
+    ld a2, 16(a1)
+    li a3, 2
+    bne a2, a3, fail                 // vstart in EEW=64 elements
+    li t0, 132
+    ld a2, 8(a1)
+    la a3, pbuf
+    addi a3, a3, 20
+    bne a2, a3, fail
+    li t0, 133
+    csrr a2, vstart
+    li a3, 2
+    bne a2, a3, fail
+    // resume with fixup
+    li t0, 134
+    la a1, fixup
+    li a2, 2
+    sd a2, 0(a1)
+    li t1, (1 << 17)
+    csrs mstatus, t1
+    la a1, pbuf
+    vl1re64.v v16, (a1)
+    csrr a4, vstart
+    li t1, (1 << 17)
+    csrc mstatus, t1
+    bnez a4, fail
+    vsetivli x0, 8, e64, m1, tu, mu
+    vslidedown.vi v6, v16, 2
+    vmv.x.s a2, v6
+    li a3, 0x0000003100000030
+    li t0, 135
+    bne a2, a3, fail
+    vslidedown.vi v6, v16, 3
+    vmv.x.s a2, v6
+    li a3, 0x0000004100000040
+    li t0, 136
+    bne a2, a3, fail
+
+    // ---- 14: vs1r.v PMP fault at byte 20 (EEW=8):
+    // vstart = 20, bytes 0-19 stored ----
+    li t0, 14
+    la t1, pbuf
+    addi t1, t1, 20
+    srli t1, t1, 2
+    csrw pmpaddr0, t1
+    vmv.v.i v17, 0
+    la a1, trap_cause
+    sd x0, 0(a1)
+    li t1, (1 << 17)
+    csrs mstatus, t1
+    la a1, pbuf
+    vs1r.v v17, (a1)
+    li t1, (1 << 17)
+    csrc mstatus, t1
+    la a1, trap_cause
+    ld a2, 0(a1)
+    li a3, 7                         // store access fault
+    bne a2, a3, fail
+    li t0, 141
+    ld a2, 16(a1)
+    li a3, 20
+    bne a2, a3, fail
+    csrw vstart, x0
+    li t0, 142
+    la a1, pbuf
+    lw a2, 16(a1)
+    bnez a2, fail                    // byte 16-19 stored (zero)
+    lw a2, 20(a1)
+    li t0, 143
+    beqz a2, fail                    // byte 20+ not stored
+
+    // ---- 15: FOF with vstart=1, element 1 faults:
+    // trim vl to 1, no trap ----
+    li t0, 15
+    la t1, pbuf
+    addi t1, t1, 4
+    srli t1, t1, 2
+    csrw pmpaddr0, t1                // TOR [0, pbuf+4)
+    vsetivli x0, 3, e32, m1, tu, mu
+    la a1, trap_cause
+    sd x0, 0(a1)
+    csrwi vstart, 1
+    li t1, (1 << 17)
+    csrs mstatus, t1
+    la a1, pbuf
+    vle32ff.v v18, (a1)
+    csrr a4, vl
+    csrr a5, vstart
+    li t1, (1 << 17)
+    csrc mstatus, t1
+    la a1, trap_cause
+    ld a2, 0(a1)
+    bnez a2, fail
+    li t0, 151
+    li a3, 1
+    bne a4, a3, fail
+    li t0, 152
+    bnez a5, fail
+
+    // ---- 16: FOF unmasked element 0 faults: trap,
+    // vl unchanged ----
+    li t0, 16
+    la t1, pbuf
+    srli t1, t1, 2
+    csrw pmpaddr0, t1                // TOR [0, pbuf)
+    vsetivli x0, 3, e32, m1, tu, mu
+    la a1, trap_cause
+    sd x0, 0(a1)
+    li t1, (1 << 17)
+    csrs mstatus, t1
+    la a1, pbuf
+    vle32ff.v v18, (a1)
+    csrr a4, vl
+    li t1, (1 << 17)
+    csrc mstatus, t1
+    la a1, trap_cause
+    ld a2, 0(a1)
+    li a3, 5
+    bne a2, a3, fail
+    li t0, 161
+    li a3, 3
+    bne a4, a3, fail
+    csrw vstart, x0
+    la t1, pbuf
+    addi t1, t1, 64
+    srli t1, t1, 2
+    csrw pmpaddr0, t1
     j pass
 
 // Exceptions: record mcause/mtval/vstart, then either skip the
