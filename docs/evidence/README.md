@@ -1600,11 +1600,11 @@ stages 4c/5:
   TestFloat (`scripts/testfloat_fpu_vectors.sh`,
   berkeley-testfloat-3 a9c849f1, level 1, seed 42, all 36
   F/D operations × 5 rounding modes): **64,648,560/64,648,560
-  vectors PASS** (1,029 s).
+  vectors PASS** (1,148 s on the final RTL).
 - Coverage (merged `make core-test`): `muserisc_fpu.sv` line
-  39/39, branch 22/22, toggle 3,680/3,696 (the 16 untoggled
+  39/39, branch 22/22, toggle 3,682/3,698 (the 16 untoggled
   points are flag bits that are constant by construction);
-  `muserisc_fpu_ops.svh` line 123/123, branch 146/146. Note:
+  `muserisc_fpu_ops.svh` line 123/123, branch 156/156. Note:
   Verilator collects no line coverage inside *package*
   functions, so the pre-existing package-based FPU logic had
   been invisible to coverage since stage 9a; the module-local
@@ -1625,8 +1625,10 @@ stages 4c/5:
   (stale scalar operand of an instruction held by
   `vec_wb_stall` after its producer retired) and passes with
   the held-EX operand refresh.
-- Gates (final, rebased onto origin/main ea057e8, round-1
-  audit fixes included): `make core-test` green (445 s; now
+- Gates (final, rebased onto origin/main ef9a0cb with #4
+  element-serial vector unit, #6 and the upstream RTL SoC;
+  round-1 audit fixes included): `make core-test` green
+  (138 s; now
   also builds and runs the `FPU_DS_BITS = 1` configuration:
   `fpu-ds1` unit TB 476,563 checks with its 30/59-cycle
   div/sqrt latencies, and `core-ds1` running `fp_directed`,
@@ -1642,6 +1644,17 @@ stages 4c/5:
   Vx/Vls + 162 Vf32/Vf64), regenerated in this tree with the
   same 34 Sail-side generation failures and 9 deselected
   tests as before.
+- RTL SoC (upstream #4 sync): `make -C sim socrtl`
+  `SOC CRYPTO PASS` (11,097,819 cycles) and OpenSBI v1.9 +
+  S-mode payload on `soc_rtl_tb` (`HELLO FROM S-MODE`,
+  6,059,345 cycles); yosys `read_slang` elaborates
+  `muserisc_soc_top` with `-I rtl/core` (the include path is
+  added to the SoC lint line and to
+  `flow/designs/nangate45/muserisc_soc/config.mk`).
+  `ex_hold = vec_ex_stall || ex_mc_busy`; simulation asserts
+  the FPU and the vector unit are never in flight together,
+  and `fp_stall_directed.S` test 13 interleaves vector ops
+  with fdiv.d/fsqrt.d in both directions.
 - Verilator 5.020 (the CI version): `make lint`, the unit
   TBs, `make -C sim core` and the riscv-tests smoke subset
   pass with Ubuntu 24.04's Verilator 5.020 (Docker), and the

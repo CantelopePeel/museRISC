@@ -1,4 +1,4 @@
-# fpu-multicycle evidence (2026-10-15), branch fpu-multicycle rebased on origin/main ea057e8 (incl. #6 Linux IRQ fix)
+# fpu-multicycle evidence (2026-10-15), branch fpu-multicycle rebased on origin/main ef9a0cb (incl. #4 vec-serial, #6 Linux IRQ fix, upstream RTL SoC)
 # Verilator 5.048, riscv64-unknown-elf GCC 16, host x86_64 (48 cores, shared)
 
 == make core-test (unit TBs + directed asm incl. fp_stall/fp_irq/vec) ==
@@ -112,12 +112,12 @@ cycles simulated: 3716009
 FPU TB PASS (476563 checks)
 BEXT TB PASS (60866 checks)
 RVC TB PASS (49152 checks)
-VEC TB PASS (1014624 checks)
+VEC TB PASS (61672 checks, 22880 random trials, 13220778 cycles, seed 0x5eed8a)
 CORE TB PASS rv64i_directed.bin (315 cycles)
 CORE TB PASS rv64m_directed.bin (167 cycles)
 CORE TB PASS amo_directed.bin (413 cycles)
 CORE TB PASS fp_directed.bin (1013 cycles)
-CORE TB PASS fp_stall_directed.bin (741 cycles)
+CORE TB PASS fp_stall_directed.bin (1244 cycles)
 done; echo "CORE TB PASS fp_irq_directed.bin (48/48 IRQ offsets 100..147)"
 CORE TB PASS fp_irq_directed.bin (48/48 IRQ offsets 100..147)
 CORE TB PASS bext_directed.bin (402 cycles)
@@ -136,18 +136,19 @@ CORE TB PASS irq_seip_rmw.bin (167 cycles)
 CORE TB PASS irq_mip_rmw_variants.bin (179 cycles)
 CORE TB PASS counter_time_directed.bin (8423 cycles)
 CORE TB PASS hyp_directed.bin (810 cycles)
-CORE TB PASS vec_directed.bin (803 cycles)
-CORE TB PASS fpvec_directed.bin (267 cycles)
+CORE TB PASS vec_directed.bin (1711 cycles)
+CORE TB PASS fpvec_directed.bin (511 cycles)
+CORE TB PASS vec_trap_directed.bin (12603 cycles)
 CORE TB PASS trap_pa_fetch.bin (expected trap cause 1 at pc 0x100000000000000, 9 cycles)
 CORE TB PASS trap_pa_load.bin (expected trap cause 5 at pc 0x8, 6 cycles)
 CORE TB PASS fp_directed.bin (1417 cycles)
-CORE TB PASS fp_stall_directed.bin (903 cycles)
-CORE TB PASS fpvec_directed.bin (267 cycles)
+CORE TB PASS fp_stall_directed.bin (1487 cycles)
+CORE TB PASS fpvec_directed.bin (511 cycles)
 done; echo "CORE TB PASS fp_irq_directed.bin on FPU_DS_BITS=1 (25 IRQ offsets 100..172)"
 CORE TB PASS fp_irq_directed.bin on FPU_DS_BITS=1 (25 IRQ offsets 100..172)
-  lines with all attached points covered : 43.00%  (2004/4622)
+  lines with all attached points covered : 47.00%  (2365/4995)
 See lines with '%00' in ../build/sim/coverage
-EXIT=0 WALL=445s
+EXIT=0 WALL=138s
 
 == FPU coverage (merged build/sim/cov_merged.dat, scripts/coverage_summary.py) ==
 ../rtl/core/muserisc_fpu.sv: line 39/39 (100.0%), branch 22/22 (100.0%), toggle 3682/3698 (99.6%)
@@ -176,19 +177,30 @@ untoggled bits (structurally constant flag fields):
 vectors: 64648560
 checks[testfloat] = 64648560
 FPU TB PASS (64648560 checks)
-EXIT=0 WALL=1372s
+EXIT=0 WALL=1148s
 
 == make lint / make test / riscv-tests ==
-EXIT=0 WALL=3s
+EXIT=0 WALL=4s
 ALL PHASE-0 KATs PASS
-EXIT=0 WALL=8s
+EXIT=0 WALL=4s
 riscv-tests rv64ui+um+ua+uf+ud+uc+mi+si: 123/123 PASS, 0 FAIL
-EXIT=0 WALL=51s
+EXIT=0 WALL=25s
+
+== RTL SoC (soc_rtl_tb): make -C sim socrtl (crypto) and OpenSBI v1.9 + s_hello ==
+SOC CRYPTO START
+SOC CRYPTO PASS
+SOC RTL TB PASS (exit string at 11097819 cycles)
+EXIT=0 WALL=150s
+HELLO FROM S-MODE
+SOC RTL TB PASS (exit string at 6059345 cycles)
+EXIT=0 WALL=88s
+slang elaboration of muserisc_soc_top (openroad/orfs yosys read_slang, -I rtl/core):
+rc=0
 
 == ACT on the core (JOBS=32 sim/run_act_core.sh; CSV act-core-fpu-multicycle-2026-10-15.csv) ==
-FAIL PMPSm_cfg_A_tor_zero-00 (8020 cycles)
+FAIL PMPSm_cfg_A_tor_zero-00 (8660 cycles)
 ACT (muserisc-core): 2577/2578 PASS, 1 FAIL
-EXIT=1 WALL=795s
+EXIT=1 WALL=150s
 generation-time failures (Sail signature overflow, same 34 as act-vector-core-genfail-2026-10-14.csv):
   Vls16-vloxei32.v-00
   Vls16-vloxei64.v-00
@@ -245,9 +257,8 @@ wns max -1.73
 clk period_min = 3.73 fmax = 267.99
 
 == Linux boot smoke (soc_tb; OpenSBI v1.9 cbf9f67 + Linux 6.6, sw/linux/README.md recipe) ==
-Pre-existing on main, not caused by this change: main's soc_tb boot livelocks in S-external
-interrupts after /init (issue #3; vec-serial d54cd7c vecserial-linux-smoke-2026-10-15.log).
-Regression check vs origin/main (no-coverage soc_tb builds, M-level trap trace + UART, first 30M cycles):
+Before #6, main's soc_tb boot livelocked in S-external interrupts after /init (issue #3).
+Regression check vs then-origin/main (no-coverage soc_tb builds, M-level trap trace + UART, first 30M cycles):
 base: 710 events, uart 2701 bytes
 mine: 710 events, uart 2701 bytes
 TRAP+UART SEQUENCE IDENTICAL over 30000000 cycles
