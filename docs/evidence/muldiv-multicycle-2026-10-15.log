@@ -60,4 +60,12 @@ muserisc_muldiv_mc: 28,566 um^2, 274 flops, reg->reg 4.693 ns,
 muserisc_muldiv (old combinational): 49,787 um^2, in->out 115.824 ns
 
 == Linux boot (soc_tb, no-coverage --assert build, OpenSBI v1.9 + Linux 6.6) ==
-LINUX_RESULT_PLACEHOLDER
+MUSERISC_LINUX_BOOT_OK; SOC TB PASS (exit string at 510301199 cycles),
+wall 3,235 s (54 min; host load ~90). Images: fw_jump.bin, muserisc.dtb and
+Image from the fpu-multicycle build (sw/linux/README.md recipe), boot_stub
+built here. The soc_tb binary was built from this branch's RTL before the
+last edit, which changed only the type of muserisc_muldiv_mc's COMB
+parameter (bit -> int unsigned, default 0; no logic change).
+UART capture: muldiv-multicycle-linux-boot-2026-10-15.log (fpu-multicycle
+reached the same exit at 502,782,909 cycles; the extra ~7.5M cycles are the
+M-unit EX stalls).

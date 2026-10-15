@@ -1708,7 +1708,9 @@ stages 4c/5:
   ([`act-core-muldiv-multicycle-2026-10-15.csv`](act-core-muldiv-multicycle-2026-10-15.csv),
   only the known `PMPSm_cfg_A_tor_zero-00` waiver; I,M regenerated
   here 64/64), Verilator 5.020, `socrtl` + OpenSBI on `soc_rtl_tb`,
-  Yosys `read_slang` of the SoC, and the `soc_tb` Linux boot.
+  Yosys `read_slang` of the SoC, and the `soc_tb` Linux boot
+  (`MUSERISC_LINUX_BOOT_OK` at 510,301,199 cycles:
+  [`muldiv-multicycle-linux-boot-2026-10-15.log`](muldiv-multicycle-linux-boot-2026-10-15.log)).
 - `core_tb` now clears its `--irq-timer-after` line only on an
   interrupt trap (mcause bit 63), not on any trap: a synchronous
   exception taken while the IRQ is pending used to drop it silently
