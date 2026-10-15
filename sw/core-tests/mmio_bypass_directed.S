@@ -7,9 +7,12 @@
 // program order, as a single beat (the harness fails the run on
 // any burst or fetch into the device window). Also: code
 // executed from uncached RAM (single-beat fetches), and a
-// cacheable line next to I/O traffic stays coherent.
+// cacheable line next to I/O traffic stays coherent, and
+// vector loads/stores (element-serial sequencer) to I/O: each
+// element is exactly one uncached access, in element order.
 // t0 = test number; exit store 0 = pass.
-    .option norvc
+    .option arch, +v
+    .option norvc  // norvc last: gas 13 .option arch resets it
     .text
     .globl _start
 
@@ -89,6 +92,41 @@ _start:
     ld t5, 8(s0)
     li t6, 20                    // 4 + 16 writes
     bne t5, t6, fail
+
+    // 6: vector strided accesses with stride 0 to the device:
+    //    a 4-element load reads the counter 4 times (consecutive
+    //    values in element order), a 4-element store writes 4
+    //    times; then a unit-stride round trip through uncached
+    //    RAM and through a cacheable buffer.
+    li t0, 6
+    li t1, (1 << 9)
+    csrs mstatus, t1             // VS = Initial
+    vsetivli x0, 4, e64, m1, ta, ma
+    ld s2, 0(s0)                 // current count n
+    vlse64.v v1, (s0), x0        // n+1, n+2, n+3, n+4
+    la s1, cached_buf
+    vse64.v v1, (s1)
+    li s3, 0
+2:  addi s2, s2, 1
+    ld t2, 0(s1)
+    bne t2, s2, fail
+    addi s1, s1, 8
+    addi s3, s3, 1
+    li t3, 4
+    blt s3, t3, 2b
+    ld t5, 8(s0)                 // writes so far (20)
+    addi t1, s0, 0x10
+    vsse64.v v1, (t1), x0
+    ld t6, 8(s0)
+    addi t5, t5, 4
+    bne t5, t6, fail
+    li t1, NC_CODE + 0x100       // uncached RAM
+    vse64.v v1, (t1)
+    vle64.v v2, (t1)
+    vmseq.vv v3, v1, v2
+    vcpop.m t2, v3
+    li t3, 4
+    bne t2, t3, fail
 
 pass:
     li t1, 0x10000000

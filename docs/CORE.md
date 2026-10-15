@@ -224,13 +224,18 @@ Pipeline behaviour:
   whole job (as before).
 - Misaligned accesses still trap in EX and never reach a port.
   Vector loads/stores issue one element access per response.
-- Simulation speed (behaviour-preserving): a non-vector
-  instruction in EX presents the trivial `VOP_MVR` op to
-  `muserisc_vec` (operand isolation; all its outputs are only
-  consumed for vector instructions), and the MEM vector-LS
-  element scans are skipped when MEM holds no vector LS. With
-  the registered cache responses this makes `soc_tb` about
-  10x faster (~240k vs ~20k cycles/s on the shared host).
+- The element-serial vector load/store sequencer issues one
+  D$ request per active element (or segment field) in its
+  ACC phase and holds ACC until that request's response; the
+  VRF port mux and the store-data/index word reads are
+  unchanged (MEM is frozen while it waits). Vector accesses to
+  I/O addresses go out as single uncached beats like scalar
+  ones.
+- Front-end holds: IF consumes its word only when ID can
+  accept it (`!stall && !vec_ex_stall` and no MEM stall), so a
+  word that arrives while EX is held stays buffered. Any new
+  EX hold (e.g. a multi-cycle FPU) must be added to
+  `if_consume` as well.
 
 ### Caches
 

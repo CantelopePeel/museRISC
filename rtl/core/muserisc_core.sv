@@ -1889,7 +1889,7 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
   // consumes its word on the same condition that loads IF/ID
   // (or enters a straddle) below; a flush or trap redirects.
   // NOTE: if_consume must mirror every EX hold that freezes the
-  // front end (today only vec_wb_stall); a generic EX-busy hold
+  // front end (today only vec_ex_stall); a generic EX-busy hold
   // (multi-cycle FPU) must be added here as well.
   logic if_redirect, if_consume, ifq_issue;
   assign if_redirect = trap_take || (flush && !freeze && !mem_stall);
