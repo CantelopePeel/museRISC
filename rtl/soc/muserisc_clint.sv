@@ -40,9 +40,13 @@ module muserisc_clint (
     return r;
   endfunction
 
-  logic [63:0] msip_merged;
-  assign msip_merged = merge_bytes({32'd0, msip_q}, wdata_i,
-                                    {4'd0, be_i[3:0]});
+  logic [31:0] msip_merged;
+  always_comb begin
+    for (int i = 0; i < 4; i++) begin
+      msip_merged[8*i +: 8] = be_i[i] ? wdata_i[8*i +: 8]
+                                      : msip_q[8*i +: 8];
+    end
+  end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -52,7 +56,7 @@ module muserisc_clint (
     end else begin
       mtime_q <= mtime_q + 64'd1;
       if (align_off == 16'h0000 && (be_i[3:0] != 4'd0)) begin
-        msip_q <= msip_merged[31:0];
+        msip_q <= msip_merged;
       end
       if (align_off == 16'h4000 && (be_i != 8'd0)) begin
         mtimecmp_q <= merge_bytes(mtimecmp_q, wdata_i, be_i);
