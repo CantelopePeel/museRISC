@@ -46,10 +46,20 @@ Security note: Phase 0 is a functional accelerator, **not** a
 side-channel-hardened HSM. No private keys on this design until the
 constant-time + fault review in ROADMAP Phase 2 is complete.
 
-## 4. Memory map (SoC, Phase 1)
+## 4. Memory map (SoC)
 
-`0x0000_0000` boot ROM · `0x1000_0000` UART · `0x2000_0000` crypto ·
-`0x8000_0000` DRAM. Host access via CVA6 AXI crossbar.
+Implemented by `rtl/soc/muserisc_soc_top.sv` (issue #4) and
+shared by the RTL SoC, the `soc_tb` C++ platform, and
+`sw/linux/muserisc.dts`:
+
+`0x0000_1000` boot ROM (4 KiB) · `0x0200_0000` CLINT ·
+`0x0C00_0000` PLIC · `0x1000_0000` 16550 UART ·
+`0x2000_0000` crypto · `0x8000_0000` external RAM window.
+The in-house core reaches crypto through a scalar-MMIO to
+AXI4-Lite bridge (`dmem_stall_i` parks MEM during a
+transaction); RAM is external at block level (simulation
+model, ASIC SRAM wrapper, or FPGA BRAM/DDR behind the
+`mem_*` ports).
 
 ## 5. Physical targets (v1, non-binding)
 

@@ -1,0 +1,54 @@
+RTL SoC integration evidence (#4), 2026-10-15
+Top: muserisc_soc_top (in-house core + fabric + boot ROM +
+CLINT + PLIC + 16550 UART + crypto bridge @0x2000_0000),
+external async RAM modelled by tb/cpp/soc_rtl_tb.cpp.
+All platform devices below are RTL, not the C++ soc_tb
+model (which remains the Linux-boot harness).
+
+1) On-core crypto driver + secp256k1 ECDSA verify
+   ($ make -C sim socrtl; firmware sw/soc-tests/)
+loaded 3688 bytes at 0x80000000 from build/soc-tests/crypto_soc_test.bin
+SOC CRYPTO START
+stage1 sha256 ok
+stage2 field mul ok
+stage3 2G ok
+stage4a scalar inv ok
+........
+stage4b u1*G ok
+........
+stage4c u2*Q ok
+SOC CRYPTO PASS
+SOC RTL TB PASS (exit string at 11097819 cycles)
+(wall 11m54s in Verilator; dots = 32 scalar bits each)
+Stages: SHA-256("abc") vs known digest; field-mul mixed
+vector mod secp p; Jacobian 2*G vs known coordinates;
+ECDSA verify of the sw/ec_ops.py frozen vector (privkey
+1, msg "museRISC", z hashed on the accelerator, scalar
+inverse on the accelerator with MODSEL=2/MOD=n, point
+muls with field ops on the accelerator). Ed25519 verify
+is not yet ported (remains open on #4).
+
+2) OpenSBI + S-mode payload on the RTL platform
+   (soc_rtl_tb with fw_jump.bin at 0x80000000, DTB at
+   0x83000000, s_hello.bin at 0x80200000; boot via the
+   RTL boot ROM at 0x1000)
+OpenSBI v1.9 banner over the RTL UART; platform devices
+reported by OpenSBI: aclint-mswi, aclint-mtimer @
+10000000Hz, uart8250; Domain0 Next Mode: S-mode; then:
+HELLO FROM S-MODE
+SOC RTL TB PASS (exit string at 5978097 cycles)
+Full UART capture saved from the run (OpenSBI platform
+and Boot HART lines) is reproduced in the session log;
+the decisive lines are above.
+
+Gates in the same session: make lint clean (0 warnings),
+make test = ALL PHASE-0 KATs PASS, make -C sim core =
+22/22 directed CORE TB PASS (includes the new
+dmem_stall_i port tied off in the core harness).
+
+Claim boundary: this proves the synthesizable SoC in
+Verilator simulation. It is not a Linux boot on the RTL
+SoC (Linux evidence remains the soc_tb C++ platform;
+at this model's ~15k cycles/s a Linux boot would take
+many hours), not timing closure (ASIC slice is #11),
+and not FPGA hardware (#32).

@@ -40,6 +40,13 @@ module muserisc_core import muserisc_pkg::*; (
     output logic [7:0]  dmem_be_o,
     output wire        dmem_re_o,
     input  wire [63:0] dmem_rdata_i,
+    // External scalar data stall: while asserted for a data
+    // access in MEM, the whole pipeline holds exactly as for a
+    // translation miss and the access completes in the cycle
+    // this drops (SoC fabric uses it for AXI/handshaked MMIO;
+    // tie to 0 for plain combinational SRAM). Vector LS and
+    // walker accesses do not consume it.
+    input  wire        dmem_stall_i,
     // Trap observability: pulses the cycle a trap is taken.
     output wire        trap_o,
     output wire [63:0] trap_cause_o,
@@ -93,6 +100,11 @@ module muserisc_core import muserisc_pkg::*; (
   logic [1:0]  walk_acc;
   logic        mem_stall;     // data translation miss: hold all regs
   logic        sfence_fire;   // SFENCE.VMA commits this cycle
+  // Forward declarations for signals driven in later
+  // stages but read in EX/ID gating (slang synthesis
+  // requires declaration before use; Verilator did not).
+  logic        vec_ex_stall, vec_fflags_we, mem_exc;
+  logic [63:0] load_shifted;
 
   // ------------------------------------------------------------
   // IF stage
@@ -318,8 +330,8 @@ module muserisc_core import muserisc_pkg::*; (
   // A vector arithmetic op holds EX (front stages frozen,
   // bubbles into EX/MEM) from the cycle it reaches EX until
   // the element-serial vector unit reports done; see the
-  // vector datapath section below.
-  logic        vec_ex_stall;
+  // vector datapath section below (vec_ex_stall is
+  // forward-declared at the top of the module).
   assign wb_write = memwb_valid_q && memwb_reg_write_q && !memwb_exc_q;
   logic        wb_fp_write;
   assign wb_fp_write = memwb_valid_q && memwb_fp_write_q &&
@@ -494,7 +506,6 @@ module muserisc_core import muserisc_pkg::*; (
   logic [1:0]    csr_vxrm;
   logic          vset_en, vec_sat;
   logic [4:0]    vec_fflags;
-  logic          vec_fflags_we;
   logic          vec_unit_op, vec_busy, vec_done, vec_start, vec_commit;
   logic          vls_is;  // MEM holds a vector load/store
   // EX holds an instruction the vector unit executes.
@@ -1015,7 +1026,7 @@ module muserisc_core import muserisc_pkg::*; (
   logic [63:0] mem_result;
   logic        data_access, mem_uses_port;
   logic        mem_pmp_fault, mem_trans_fault;
-  logic        mem_exc, mem_gva;
+  logic        mem_gva;
   logic [63:0] mem_cause, mem_tval, mem_gpa;
   // Effective data-translation context in MEM. HLV/HSV run
   // as VS/VU (hstatus.SPVP) under vsatp + hgatp regardless of
@@ -1284,7 +1295,9 @@ module muserisc_core import muserisc_pkg::*; (
                        (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write) &&
                        (!vls_is || vls_acc);
   assign mem_stall = (data_access && !mmu_d_ok && !mmu_d_fault) ||
-                     (vls_is && !vls_done && !vls_fault);
+                     (vls_is && !vls_done && !vls_fault) ||
+                     (data_access && mmu_d_ok && !vls_is &&
+                      dmem_stall_i);
   assign mem_trans_fault = data_access && mmu_d_fault;
   // PMP denial, or a physical address outside the 56-bit map.
   assign mem_pmp_fault = data_access && mmu_d_ok &&
@@ -1296,7 +1309,6 @@ module muserisc_core import muserisc_pkg::*; (
   assign dmem_addr_o = walk_grant ? walk_addr : mmu_d_pa;
   assign dmem_re_o = mem_uses_port && exmem_ctrl_q.mem_read;
 
-  logic [63:0] load_shifted;
   logic        res_valid_q;
   logic [63:0] res_pa_q;
   logic        res_is_d_q;  // reserved access size: 1 = 8B, 0 = 4B

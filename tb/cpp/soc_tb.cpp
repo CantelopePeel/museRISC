@@ -396,6 +396,7 @@ int main(int argc, char** argv) {
   dut->boot_pc_i = boot_pc;
   dut->imem_rdata_i = 0;
   dut->dmem_rdata_i = 0;
+  dut->dmem_stall_i = 0;
   dut->trap_halt_i = 0;
   dut->irq_m_timer_i = dut->irq_m_soft_i = dut->irq_m_ext_i = 0;
   dut->irq_s_timer_i = dut->irq_s_ext_i = 0;
