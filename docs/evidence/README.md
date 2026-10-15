@@ -1415,7 +1415,7 @@ stages 4c/5:
   - scalar+priv **543/544**, with only the existing
     `PMPSm_cfg_A_tor_zero-00` PA0 waiver failing.
 
-  Run with the new `sim/run_act_core_par.sh` (32 jobs, 185 s).
+  Run with `sim/run_act_core_par.sh` from #37 (32 jobs, 185 s).
   It uses the same per-ELF verdict and CSV format as
   `sim/run_act_core.sh`, writes one result file per ELF, checks
   that the row count and test names match the ELFs, and exits
