@@ -6,8 +6,8 @@
 // vsatp, stores through VA->GPA->host translation, and takes
 // a load guest-page fault (cause 21) for an unmapped GPA.
 // Convention: t0 = test number, exit store 0 = pass.
-    .option norvc
     .option arch, +h
+    .option norvc  // norvc last: gas 13 .option arch resets it
     .text
     .globl _start
 _start:

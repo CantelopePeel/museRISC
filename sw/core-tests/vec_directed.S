@@ -5,8 +5,8 @@
 // and a mid-instruction PMP fault that commits the elements
 // before it and sets vstart to the faulting index.
 // Convention: t0 = test number, exit store 0 = pass.
-    .option norvc
     .option arch, +v
+    .option norvc  // norvc last: gas 13 .option arch resets it
     .text
     .globl _start
 _start:
