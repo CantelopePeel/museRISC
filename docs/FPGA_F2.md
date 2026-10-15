@@ -76,8 +76,9 @@ nothing about core Fmax on FPGA — see below).
 4. **Synthesis portability is unproven for the core.**
    The core has only been Verilated. The FPU now uses
    packed structs only and synthesizes (sv2v + Yosys);
-   the full core still stops in Yosys at `muserisc_bext`
-   (`gf_inv` constant-function call). Vivado handles much more
+   the full core still stops in Yosys at `muserisc_vec`
+   (data-dependent loop bound in the combinational vector
+   unit). Vivado handles much more
    SystemVerilog, but elaboration of the full core in
    Vivado is itself milestone F0, not an assumption.
 

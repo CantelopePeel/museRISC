@@ -1,5 +1,5 @@
-# fpu-multicycle evidence (2026-10-15), branch fpu-multicycle
-# Verilator 5.048, riscv64-unknown-elf GCC 16, host x86_64 (48 cores)
+# fpu-multicycle evidence (2026-10-15), branch fpu-multicycle rebased on origin/main 1af0b3a
+# Verilator 5.048, riscv64-unknown-elf GCC 16, host x86_64 (48 cores, shared)
 
 == make core-test (unit TBs + directed asm incl. fp_stall/fp_irq/vec) ==
 ALU TB PASS (205642 checks)
@@ -59,7 +59,7 @@ latency (cycles in EX) per op:
   undef.s   2:6
 cycles simulated: 2930169
 FPU TB PASS (476563 checks)
-BEXT TB PASS (54980 checks)
+BEXT TB PASS (60866 checks)
 RVC TB PASS (49152 checks)
 VEC TB PASS (1014624 checks)
 CORE TB PASS rv64i_directed.bin (315 cycles)
@@ -87,9 +87,9 @@ CORE TB PASS vec_directed.bin (803 cycles)
 CORE TB PASS fpvec_directed.bin (267 cycles)
 CORE TB PASS trap_pa_fetch.bin (expected trap cause 1 at pc 0x100000000000000, 9 cycles)
 CORE TB PASS trap_pa_load.bin (expected trap cause 5 at pc 0x8, 6 cycles)
-  lines with all attached points covered : 41.00%  (2125/5062)
+  lines with all attached points covered : 41.00%  (2110/5099)
 See lines with '%00' in ../build/sim/coverage
-EXIT=0 WALL=133s
+EXIT=0 WALL=170s
 
 == FPU coverage (merged build/sim/cov_merged.dat, scripts/coverage_summary.py) ==
 ../rtl/core/muserisc_fpu.sv: line 39/39 (100.0%), branch 22/22 (100.0%), toggle 3680/3696 (99.6%)
@@ -112,23 +112,23 @@ untoggled bits (structurally constant flag fields):
   line 100: f2i_out.flags[3]:0->1
   line 100: f2i_out.flags[3]:1->0
 
-== TestFloat (scripts/testfloat_fpu_vectors.sh; testfloat_gen a9c849f1 level 1 seed 42, 5 rounding modes) ==
+== TestFloat (scripts/testfloat_fpu_vectors.sh; testfloat_gen a9c849f1 level 1 seed 42, 5 rounding modes; FPU RTL unchanged by the rebase) ==
 vectors: 64648560
 checks[testfloat] = 64648560
 FPU TB PASS (64648560 checks)
 EXIT=0 WALL=1029s
 
-== make lint / make test / make riscv-tests ==
+== make lint / make test / riscv-tests ==
 EXIT=0 WALL=2s
 ALL PHASE-0 KATs PASS
-EXIT=0 WALL=32s
+EXIT=0 WALL=3s
 riscv-tests rv64ui+um+ua+uf+ud+uc+mi+si: 123/123 PASS, 0 FAIL
-EXIT=0 WALL=23s
+EXIT=0 WALL=18s
 
 == ACT on the core (JOBS=32 sim/run_act_core.sh; CSV act-core-fpu-multicycle-2026-10-15.csv) ==
 FAIL PMPSm_cfg_A_tor_zero-00 (8020 cycles)
 ACT (muserisc-core): 2577/2578 PASS, 1 FAIL
-EXIT=1 WALL=490s
+EXIT=1 WALL=314s
 generation-time failures (Sail signature overflow, same 34 as act-vector-core-genfail-2026-10-14.csv):
   Vls16-vloxei32.v-00
   Vls16-vloxei64.v-00
@@ -183,3 +183,12 @@ Design area 44626 um^2 100% utilization.
    Chip area for module '\muserisc_fpu': 43249.472000
 wns max -1.73
 clk period_min = 3.73 fmax = 268.25
+
+== Linux boot smoke (soc_tb; OpenSBI v1.9 cbf9f67 + Linux 6.6, sw/linux/README.md recipe) ==
+Pre-existing on main, not caused by this change: main's soc_tb boot livelocks in S-external
+interrupts after /init (issue #3; vec-serial d54cd7c vecserial-linux-smoke-2026-10-15.log).
+Regression check vs origin/main (no-coverage soc_tb builds, M-level trap trace + UART, first 30M cycles):
+base: 710 events, uart 2701 bytes
+mine: 710 events, uart 2701 bytes
+TRAP+UART SEQUENCE IDENTICAL over 30000000 cycles
+including cycle numbers

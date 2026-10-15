@@ -1625,7 +1625,8 @@ stages 4c/5:
   (stale scalar operand of an instruction held by
   `vec_wb_stall` after its producer retired) and passes with
   the held-EX operand refresh.
-- Gates: `make core-test` green (133 s), `make lint` clean,
+- Gates (re-run after rebasing onto origin/main 1af0b3a):
+  `make core-test` green (170 s), `make lint` clean,
   `make test` `ALL PHASE-0 KATs PASS`,
   [`riscv-tests-core-fpu-multicycle-2026-10-15.csv`](riscv-tests-core-fpu-multicycle-2026-10-15.csv)
   **123/123**,
@@ -1636,6 +1637,14 @@ stages 4c/5:
   Vx/Vls + 162 Vf32/Vf64), regenerated in this tree with the
   same 34 Sail-side generation failures and 9 deselected
   tests as before.
+- Linux smoke: the `soc_tb` boot on origin/main itself
+  livelocks in S-external interrupts after `/init`
+  (issue #3, found by the vec-serial work, d54cd7c), so
+  this branch is held to "identical to main": the M-level
+  trap trace and UART output of no-coverage `soc_tb` builds
+  of origin/main and this branch are cycle-identical over
+  the first 30M boot cycles (710 trap events each). A boot of
+  this branch plus the separate #3 fix is reported on the PR.
 - Synthesis (`scripts/synth_fpu.sh`, sv2v v0.0.13 → Yosys →
   OpenROAD repair_design/repair_timing + OpenSTA, Nangate45
   typical, no wire parasitics, Yosys ripple-carry adders):
@@ -1646,5 +1655,6 @@ stages 4c/5:
   (268 MHz). A Kogge-Stone carry mapping was attempted but ABC
   did not finish within an hour and was abandoned. The full
   core does not yet synthesize in Yosys: after sv2v, Yosys
-  stops in `muserisc_bext` (constant-function call of
-  `gf_inv` with a non-constant argument), outside this change.
+  elaborates every module up to `muserisc_vec`, then stops on
+  its data-dependent loop bound (`for (i < (512 >> sew_i))`,
+  the combinational vector unit), outside this change.
