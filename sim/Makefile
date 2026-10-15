@@ -31,6 +31,7 @@ SWFLAGS       := -march=rv64imafdc_zba_zbb_zbc_zbs_zcb_zicond_zbkb_zbkx_zkne_zkn
 CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
             $(RTL)/muserisc_fpregfile.sv $(RTL)/muserisc_alu.sv \
             $(RTL)/muserisc_muldiv.sv \
+            $(RTL)/muserisc_muldiv_mc.sv \
             $(RTL)/muserisc_fpu_pkg.sv $(RTL)/muserisc_fpu.sv \
             $(RTL)/muserisc_bext_pkg.sv $(RTL)/muserisc_bext.sv \
             $(RTL)/muserisc_vregfile.sv \
@@ -39,7 +40,7 @@ CORE_RTL := $(PKG) $(RTL)/muserisc_regfile.sv \
             $(RTL)/muserisc_decoder.sv \
             $(RTL)/muserisc_csr.sv $(RTL)/muserisc_mmu.sv \
             $(RTL)/muserisc_core.sv
-TESTS    := rv64i_directed rv64m_directed amo_directed fp_directed fp_stall_directed fp_irq_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed vec_directed fpvec_directed vec_trap_directed \
+TESTS    := rv64i_directed rv64m_directed md_directed md_irq_directed amo_directed fp_directed fp_stall_directed fp_irq_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed vec_directed fpvec_directed vec_trap_directed \
             vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
             trap_store_misalign trap_younger_store trap_younger_csr irq_seip_rmw irq_mip_rmw_variants \
@@ -312,6 +313,15 @@ $(BUILD)/%.bin: $(ROOT)/sw/core-tests/%.S $(ROOT)/sw/core-tests/link.ld | $(BUIL
 core: $(BUILD)/core_tb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 	cd $(BUILD) && COV_FILE=cov_rv64i.dat ./core_tb rv64i_directed.bin
 	cd $(BUILD) && COV_FILE=cov_rv64m.dat ./core_tb rv64m_directed.bin
+	cd $(BUILD) && COV_FILE=cov_md.dat ./core_tb md_directed.bin
+	@# Timer IRQ at every offset across a window wider than the
+	@# longest M op (64-bit divide: 35 cycles in EX), plus a
+	@# misaligned-load exception killing an in-flight divide.
+	cd $(BUILD) && for o in $$(seq 100 171); do \
+	  COV_FILE=cov_mdirq_$$o.dat ./core_tb md_irq_directed.bin --irq-timer-after $$o \
+	    > md_irq_$$o.log 2>&1 || { cat md_irq_$$o.log; exit 1; }; \
+	done; echo "CORE TB PASS md_irq_directed.bin (72/72 IRQ offsets 100..171)"
+	cd $(BUILD) && verilator_coverage --write cov_mdirq.dat cov_mdirq_*.dat
 	cd $(BUILD) && COV_FILE=cov_amo.dat ./core_tb amo_directed.bin
 	cd $(BUILD) && COV_FILE=cov_fp.dat ./core_tb fp_directed.bin
 	cd $(BUILD) && COV_FILE=cov_fpstall.dat ./core_tb fp_stall_directed.bin
@@ -376,6 +386,7 @@ COV_INPUTS := $(wildcard $(BUILD)/cov_rvtest.dat) \
               $(BUILD)/cov_csr.dat $(BUILD)/cov_mmu.dat \
               $(BUILD)/cov_fpu.dat $(BUILD)/cov_fpu_ds1.dat \
               $(BUILD)/cov_rv64i.dat $(BUILD)/cov_rv64m.dat \
+              $(BUILD)/cov_md.dat $(BUILD)/cov_mdirq.dat \
               $(BUILD)/cov_amo.dat $(BUILD)/cov_fp.dat \
               $(BUILD)/cov_fpstall.dat $(BUILD)/cov_fpirq.dat \
               $(BUILD)/cov_bext.dat $(BUILD)/cov_bextsw.dat \

@@ -1691,3 +1691,25 @@ stages 4c/5:
   Yosys the core passes `proc`/coarse synthesis once the sv2v
   sensitivity lists over `muserisc_mmu`'s TLB array are
   relaxed to `@(*)`.
+
+## Multi-cycle M unit (2026-10-15, branch `muldiv-multicycle`)
+
+- `muserisc_muldiv_mc` (2-cycle-pipelined 65×65 multiplier, radix-4
+  clz-normalised divider) replaces the combinational M unit in EX on
+  the generic multi-cycle protocol (`docs/CORE.md`, "M unit"). Unit
+  evidence (TB, 100% line/toggle, Nangate45 block synthesis 49.8k →
+  28.6k µm², 115.8 ns comb → 4.7 ns reg→reg):
+  [`muldiv-mc-nangate45-2026-10-15.log`](muldiv-mc-nangate45-2026-10-15.log).
+- Integration gates:
+  [`muldiv-multicycle-2026-10-15.log`](muldiv-multicycle-2026-10-15.log)
+  — lint, test, core-test (new `md_directed`, `md_irq_directed` at 72
+  timer-IRQ offsets plus exception kills of in-flight divides),
+  riscv-tests 123/123, ACT 2,577/2,578
+  ([`act-core-muldiv-multicycle-2026-10-15.csv`](act-core-muldiv-multicycle-2026-10-15.csv),
+  only the known `PMPSm_cfg_A_tor_zero-00` waiver; I,M regenerated
+  here 64/64), Verilator 5.020, `socrtl` + OpenSBI on `soc_rtl_tb`,
+  Yosys `read_slang` of the SoC, and the `soc_tb` Linux boot.
+- `core_tb` now clears its `--irq-timer-after` line only on an
+  interrupt trap (mcause bit 63), not on any trap: a synchronous
+  exception taken while the IRQ is pending used to drop it silently
+  (found by `md_irq_directed` at offset 168).

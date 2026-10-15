@@ -50,10 +50,9 @@ stage 2 reused the same modules inside a classic 5-stage pipeline
 one load-use bubble, all control transfers resolved in EX
 (predict not-taken, two flushed slots), and exceptions carried to
 WB so a trapping instruction and everything younger perform no
-writes. The M-unit divider is combinational in stage 2 (a
-correctness vehicle; an iterative divider with an EX stall
-replaces it before any synthesis target — the multi-cycle
-replacement `muserisc_muldiv_mc` exists, see "M unit" below).
+writes. The M-unit divider was combinational in stage 2 (a
+correctness vehicle); the multi-cycle `muserisc_muldiv_mc` with
+an EX stall has since replaced it (see "M unit" below).
 Pipeline performance
 beyond correctness is not yet a goal at this stage.
 
@@ -61,8 +60,8 @@ beyond correctness is not yet a goal at this stage.
 
 The scalar FPU (`rtl/core/muserisc_fpu.sv`) is a multi-cycle
 unit: the FP instruction stays in EX until the unit completes.
-The handshake is generic so other EX units (an iterative
-`muldiv` next) reuse it unchanged:
+The handshake is generic so other EX units (the multi-cycle M
+unit, see "M unit" below) reuse it unchanged:
 
 | Signal | Driver | Meaning |
 |---|---|---|
@@ -78,9 +77,10 @@ Core side (`muserisc_core.sv`):
   element-serial vector unit, which uses its own start/ack
   handshake, `ack = !freeze && !mem_stall`, equivalent to
   `ex_advance` for a done vector op since a trap kills
-  first). The FPU and the vector unit are never in flight
-  together: each serves only the instruction in EX (FP ops
-  have `fp_op`, vector ops `vec`, never both) and drops
+  first). The FPU, the M unit and the vector unit are never in
+  flight together: each serves only the instruction in EX (FP
+  ops have `fp_op`, M ops `muldiv`, vector ops `vec`, never
+  two of them) and drops
   busy when that instruction leaves EX or is killed;
   simulation asserts this. While `ex_hold`, PC, IF/ID and
   ID/EX keep their contents, a bubble enters EX/MEM, and the
@@ -283,25 +283,31 @@ element for segment loads and 1 final cycle.
 
 ## M unit: `muserisc_muldiv_mc` (multi-cycle)
 
-`rtl/core/muserisc_muldiv_mc.sv` is the synthesis-target RV64M unit
-that replaces the combinational `muserisc_muldiv` in EX. Phase 1
-(this module, its unit TB and block synthesis) is standalone; the
-core still instantiates `muserisc_muldiv` until it is wired to the
-generic EX multi-cycle handshake (`req`/`done`/`ack`/`kill`, the
-same protocol as `muserisc_fpu`: the core stalls EX while
-`req && !done`, a done result is held until `ack`, `kill` or a
-dropped `req` squashes it). Operands are sampled in the issue cycle,
-so later forwarding changes are ignored; `done_o`/`result_o` come
-only from unit registers.
+`rtl/core/muserisc_muldiv_mc.sv` is the RV64M unit in EX
+(`u_muldiv`), on the generic multi-cycle handshake above:
+`muldiv_req = idex_valid && muldiv && !idex_exc && !ex_illegal`,
+its `req && !done` term is ORed into `ex_mc_busy`, `ack =
+ex_advance`, `kill = trap_take`. Operands are sampled in the
+issue cycle, so later forwarding changes are ignored;
+`done_o`/`result_o` come only from unit registers. The unit
+returns to IDLE on ack, kill or a dropped `req`, and nothing is
+registered in a done state, so a done result can never be seen
+by the next op (which always starts from IDLE). The FPU, the M
+unit and the vector unit are asserted (simulation) never to be
+in flight together. The vector unit's own integer mul/div are
+unaffected. An interrupt waits for a held M op like any EX hold;
+an older instruction's exception kills it (re-executed after the
+handler returns).
 
-| op | cycles to `done` (issue = 0) |
-|----|------------------------------|
-| MUL, MULH, MULHSU, MULHU, MULW | 2 |
-| DIV/REM(U)(W) by zero, signed overflow | 1 |
-| other DIV/REM(U)(W) | 2 + n, n = max(0, ceil((clz\|b\| − clz\|a\| + 1)/2)) |
+| op | cycles in EX (1 = no stall) |
+|----|-----------------------------|
+| MUL, MULH, MULHSU, MULHU, MULW | 3 |
+| DIV/REM(U)(W) by zero, signed overflow | 2 |
+| other DIV/REM(U)(W) | 3 + n, n = max(0, ceil((clz\|b\| − clz\|a\| + 1)/2)) |
 
 n is 0..32 (0..16 for W forms): |a| < |b| with a different MSB
-position takes 2 cycles, a full 64-bit quotient 34. Multiplier: 65×65
+position takes 3 cycles, a full 64-bit quotient 35 (the unit's
+`done` is in cycle 2 / 1 / 2 + n counting the issue cycle as 0). Multiplier: 65×65
 signed (per-op sign/zero extension) as four 33×33 signed partial
 products registered in MUL1 (2×2 DSP48 tiles on FPGA, Booth arrays on
 ASIC), summed in MUL2. Divider: radix-4 restoring recurrence on

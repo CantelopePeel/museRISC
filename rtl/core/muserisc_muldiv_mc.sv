@@ -50,7 +50,7 @@
 // = req_i, no state. Kept as a reference and fallback.
 `default_nettype none
 module muserisc_muldiv_mc #(
-    parameter bit COMB = 1'b0
+    parameter int unsigned COMB = 0   // 1: legacy single-cycle mode
 ) (
     input  wire         clk_i,
     input  wire         rst_ni,
@@ -65,7 +65,7 @@ module muserisc_muldiv_mc #(
     output logic [63:0] result_o
 );
 
-  if (COMB) begin : g_comb
+  if (COMB != 0) begin : g_comb
     // Legacy single-cycle unit; clocks/handshake unused.
     /* verilator lint_off UNUSEDSIGNAL */
     logic unused_hs;
