@@ -1541,4 +1541,8 @@ stages 4c/5:
   aborting if any vector instruction reaches EX — none did)
   livelocks identically: all 37 PC/data-address samples
   taken every 5M cycles from 450M to 630M match this
-  branch's run exactly. Pre-existing; to be fixed separately.
+  branch's run exactly. Pre-existing (#3), since fixed on
+  `main` by PR #6. With that fix (`af31588`) cherry-picked
+  onto this branch's 26a2480 head, the boot passes:
+  `MUSERISC_LINUX_BOOT_OK`, `SOC TB PASS` at 508,685,709
+  cycles (8,033 s wall).
