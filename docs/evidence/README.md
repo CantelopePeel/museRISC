@@ -1297,3 +1297,31 @@ stages 4c/5:
   DRC 0, antenna 0, liberty max-cap/max-slew/
   max-fanout violators 0. `6_final.gds` (60 MB) is
   published as a GitHub release asset, not in git.
+
+## Synthesizable RTL SoC: core + fabric + crypto (2026-10-15, #4)
+
+- `rtl/soc/muserisc_soc_top.sv` now integrates the
+  in-house core with a synthesizable fabric, boot ROM
+  (0x1000), CLINT, PLIC (32 sources, UART=10), 16550
+  UART, and the crypto accelerator at `0x2000_0000`
+  behind a scalar-MMIO→AXI4-Lite bridge; the core
+  gains `dmem_stall_i` to park MEM during AXI
+  transactions. RAM is external at the `mem_*` ports
+  (simulation model here; ASIC SRAM wrapper / FPGA
+  BRAM-DDR later). Full log:
+  [`soc-rtl-4-2026-10-15.log`](soc-rtl-4-2026-10-15.log).
+- On-core crypto proof (`make -C sim socrtl`,
+  `sw/soc-tests/crypto_soc_test.c` on `soc_rtl_tb`):
+  `SOC CRYPTO PASS` at 11,097,819 cycles — SHA-256,
+  field-mul KAT, Jacobian 2·G, and secp256k1 ECDSA
+  verify of the `sw/ec_ops.py` frozen vector, all
+  field ops (incl. scalar inverse via custom
+  modulus n) on the accelerator. Ed25519 verify is
+  not yet ported and remains open on #4.
+- Platform proof: OpenSBI v1.9 boots on the RTL SoC
+  (ACLINT + uart8250 reported from the RTL devices)
+  and enters the S-mode payload: `HELLO FROM S-MODE`,
+  `SOC RTL TB PASS` at 5,978,097 cycles. This is
+  not a Linux boot on the RTL SoC — Linux evidence
+  remains the `soc_tb` C++ platform above; ASIC
+  timing is #11, FPGA hardware is #32.

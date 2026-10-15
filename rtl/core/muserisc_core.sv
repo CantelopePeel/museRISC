@@ -40,6 +40,13 @@ module muserisc_core import muserisc_pkg::*; (
     output logic [7:0]  dmem_be_o,
     output wire        dmem_re_o,
     input  wire [63:0] dmem_rdata_i,
+    // External scalar data stall: while asserted for a data
+    // access in MEM, the whole pipeline holds exactly as for a
+    // translation miss and the access completes in the cycle
+    // this drops (SoC fabric uses it for AXI/handshaked MMIO;
+    // tie to 0 for plain combinational SRAM). Vector LS and
+    // walker accesses do not consume it.
+    input  wire        dmem_stall_i,
     // Trap observability: pulses the cycle a trap is taken.
     output wire        trap_o,
     output wire [63:0] trap_cause_o,
@@ -1227,7 +1234,9 @@ module muserisc_core import muserisc_pkg::*; (
                        (exmem_ctrl_q.mem_read || exmem_ctrl_q.mem_write) &&
                        (!vls_is || vls_has_cur);
   assign mem_stall = (data_access && !mmu_d_ok && !mmu_d_fault) ||
-                     (vls_is && !vls_done && !vls_fault);
+                     (vls_is && !vls_done && !vls_fault) ||
+                     (data_access && mmu_d_ok && !vls_is &&
+                      dmem_stall_i);
   assign mem_trans_fault = data_access && mmu_d_fault;
   // PMP denial, or a physical address outside the 56-bit map.
   assign mem_pmp_fault = data_access && mmu_d_ok &&

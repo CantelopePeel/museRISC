@@ -6,15 +6,17 @@
 # This script re-checks the final routed database against liberty
 # limits only (max cap / slew / fanout) plus timing, which is the
 # signoff criterion used for the B3 evidence in docs/evidence/.
-# Usage: ./scripts/orfs_liberty_check.sh [results-base-dir]
+# Usage: [DESIGN=muse_crypto|muserisc_soc] \
+#          ./scripts/orfs_liberty_check.sh [results-base-dir]
 set -euo pipefail
 cd "$(dirname "$0")/.."
+DESIGN="${DESIGN:-muse_crypto}"
 BASE="${1:-build/orfs-results/nangate45/muse_crypto_top/base}"
 [ -f "$BASE/6_1_fill.odb" ] || { echo "no routed DB in $BASE (run make openroad first)"; exit 1; }
 docker info >/dev/null 2>&1 || { echo "docker daemon not running"; exit 1; }
 
 # SDC without the guardband line, so STA checks liberty limits only.
-grep -v "set_max_capacitance" flow/designs/nangate45/muse_crypto/constraint.sdc > /tmp/orfs_signoff.sdc
+grep -v "set_max_capacitance" "flow/designs/nangate45/$DESIGN/constraint.sdc" > /tmp/orfs_signoff.sdc
 cat > /tmp/orfs_liberty_signoff.tcl <<'EOF'
 read_liberty /OpenROAD-flow-scripts/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib
 read_db /results/6_1_fill.odb
