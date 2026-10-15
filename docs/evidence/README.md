@@ -1465,7 +1465,7 @@ stages 4c/5:
   comparison and every allowed source/destination overlap;
   plus host-IEEE FP directed checks, a kill-mid-op check
   and cycle probes. `make core-test` default: **VEC TB PASS
-  (61,314 checks, 22,880 random trials)**; a 600-per-op soak
+  (61,672 checks, 22,880 random trials, seed 0x5eed8a)**; 300-per-op runs at seeds 0x5eed8a and 0xc0ffee passed (26,400 trials each); an earlier 600-per-op soak
   passed 52,800 trials (141,362 checks).
 - Coverage (merged `make core-test`, Verilator line+toggle):
   `muserisc_vec.sv` every line hit and every toggle point
@@ -1500,7 +1500,8 @@ stages 4c/5:
   (origin/main) on the same ELFs gives the identical
   verdicts. Wall: 82 s on 32 parallel jobs with
   `sim/run_act_core_par.sh` (same per-ELF verdict as
-  `sim/run_act_core.sh`) vs 565 s on 24 jobs for the old RTL
+  `sim/run_act_core.sh`; one result file per ELF, row count
+  and uniqueness checked) vs 565 s on 24 jobs for the old RTL
   (the narrow datapath Verilates and simulates much faster).
   Simulated cycles: vector suites 2.4-5.9x the old
   single-cycle-per-instruction unit (element-serial by
@@ -1514,8 +1515,8 @@ stages 4c/5:
 
   | Block | Before (origin/main) | After (vec-serial) |
   |---|---|---|
-  | `muserisc_vec` std-cell area | Yosys could not finish elaboration (killed by a host-memory guard at 141 GiB after ~4 h) | **53,252 um^2** (42,567 cells, 1,357 flops) |
-  | `muserisc_vec` logic depth / STA | n/a (512-way unrolled element loops: 22 `*`/`/`/`%` and 15 `fp_eval`/`fp_estimate` sites per element) | **78** generic gates (ltp); worst path **3.18 ns** (inputs at 0 delay) at Nangate45 typical |
+  | `muserisc_vec` std-cell area | Yosys could not finish elaboration (killed by a host-memory guard at 141 GiB after ~4 h) | **52,735 um^2** (42,324 cells, 1,371 flops) |
+  | `muserisc_vec` logic depth / STA | n/a (512-way unrolled element loops: 22 `*`/`/`/`%` and 15 `fp_eval`/`fp_estimate` sites per element) | **76** generic gates (ltp); worst path **3.29 ns** (inputs at 0 delay) at Nangate45 typical |
   | `muserisc_vregfile` | **603,640 um^2** (16,384 flops + 3x4096-bit group muxes), depth 18 | **5,254 um^2** logic (731 flops: v0 shadow + bypass) + 3x 256x64 1R1W SRAM (black-boxed; fakeram45_512x64 is 17,302 um^2 as an upper bound each), depth 6 |
   | Multipliers / dividers / `fp_eval` calls | per element (up to 512 lanes unrolled) | 1x 64x16 multiplier, 0 dividers (iterative), 1 `fp_eval` + 1 `fp_estimate` |
 
