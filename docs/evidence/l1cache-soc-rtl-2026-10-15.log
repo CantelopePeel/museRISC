@@ -5,7 +5,7 @@
 
 === crypto-rand
 # Command: build/socrtl/soc_rtl_tb 400000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --load 0x80000000=build/soc-tests/crypto_soc_test.bin --uart-log build/socrtl/crypto-rand-uart.log --exit-string SOC CRYPTO PASS
-# Result: SOC RTL TB PASS (exit string at 18851904 cycles)   wall 106s
+# Result: SOC RTL TB PASS (exit string at 18851904 cycles)   wall 166s
 # ---- UART ----
 SOC CRYPTO START
 stage1 sha256 ok
@@ -20,7 +20,7 @@ SOC CRYPTO PASS
 
 === crypto-nocache
 # Command: build/socrtl/soc_rtl_tb 400000000 --no-cache --load 0x80000000=build/soc-tests/crypto_soc_test.bin --uart-log build/socrtl/crypto-nocache-uart.log --exit-string SOC CRYPTO PASS
-# Result: SOC RTL TB PASS (exit string at 34486744 cycles)   wall 178s
+# Result: SOC RTL TB PASS (exit string at 34486744 cycles)   wall 224s
 # ---- UART ----
 SOC CRYPTO START
 stage1 sha256 ok
@@ -35,7 +35,7 @@ SOC CRYPTO PASS
 
 === hello-lat1
 # Command: build/socrtl/soc_rtl_tb 200000000 --load 0x80000000=build/linux/fw_jump.bin --load 0x83000000=build/linux/muserisc.dtb --load 0x80200000=build/linux/s_hello.bin --uart-log build/socrtl/hello-lat1-uart.log --exit-string HELLO
-# Result: SOC RTL TB PASS (exit string at 11313284 cycles)   wall 60s
+# Result: SOC RTL TB PASS (exit string at 11313284 cycles)   wall 125s
 # ---- UART ----
 Boot HART Debug Triggers    : 1 triggers
 Boot HART MIDELEG           : 0x0000000000000666
@@ -44,7 +44,7 @@ HELLO
 
 === hello-rand
 # Command: build/socrtl/soc_rtl_tb 200000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --load 0x80000000=build/linux/fw_jump.bin --load 0x83000000=build/linux/muserisc.dtb --load 0x80200000=build/linux/s_hello.bin --uart-log build/socrtl/hello-rand-uart.log --exit-string HELLO
-# Result: SOC RTL TB PASS (exit string at 11359244 cycles)   wall 57s
+# Result: SOC RTL TB PASS (exit string at 11359244 cycles)   wall 134s
 # ---- UART ----
 Boot HART Debug Triggers    : 1 triggers
 Boot HART MIDELEG           : 0x0000000000000666
@@ -57,15 +57,15 @@ HELLO
 Build succeeded: 0 errors, 20 warnings
 # warnings (all pre-existing, none in cache/cpu/fabric files):
       1 Build succeeded: 0 errors, 20 warnings
-      1 core/muserisc_core.sv:1843:18: warning: asynchronous load value missing for variable '\exmem_vec_nf_q'
-      1 core/muserisc_core.sv:1843:18: warning: asynchronous load value missing for variable '\exmem_vec_stride_q'
-      1 core/muserisc_core.sv:1843:18: warning: asynchronous load value missing for variable '\exmem_vm_q'
-      1 core/muserisc_core.sv:1843:18: warning: asynchronous load value missing for variable '\exmem_vs2_q'
-      1 core/muserisc_core.sv:1843:18: warning: asynchronous load value missing for variable '\idex_frs1_q'
-      1 core/muserisc_core.sv:1843:18: warning: asynchronous load value missing for variable '\idex_frs2_q'
-      1 core/muserisc_core.sv:1843:18: warning: asynchronous load value missing for variable '\idex_frs3_q'
-      1 core/muserisc_core.sv:1843:18: warning: asynchronous load value missing for variable '\idex_rs3_addr_q'
-      1 core/muserisc_core.sv:1843:18: warning: asynchronous load value missing for variable '\memwb_fp_write_q'
+      1 core/muserisc_core.sv:1883:18: warning: asynchronous load value missing for variable '\exmem_vec_nf_q'
+      1 core/muserisc_core.sv:1883:18: warning: asynchronous load value missing for variable '\exmem_vec_stride_q'
+      1 core/muserisc_core.sv:1883:18: warning: asynchronous load value missing for variable '\exmem_vm_q'
+      1 core/muserisc_core.sv:1883:18: warning: asynchronous load value missing for variable '\exmem_vs2_q'
+      1 core/muserisc_core.sv:1883:18: warning: asynchronous load value missing for variable '\idex_frs1_q'
+      1 core/muserisc_core.sv:1883:18: warning: asynchronous load value missing for variable '\idex_frs2_q'
+      1 core/muserisc_core.sv:1883:18: warning: asynchronous load value missing for variable '\idex_frs3_q'
+      1 core/muserisc_core.sv:1883:18: warning: asynchronous load value missing for variable '\idex_rs3_addr_q'
+      1 core/muserisc_core.sv:1883:18: warning: asynchronous load value missing for variable '\memwb_fp_write_q'
       1 crypto/ec_field.sv:38:17: warning: asynchronous load value missing for variable '\aa'
       1 crypto/ec_field.sv:38:17: warning: asynchronous load value missing for variable '\bb'
       1 crypto/ec_field.sv:38:17: warning: asynchronous load value missing for variable '\mm'
