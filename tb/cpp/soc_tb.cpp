@@ -323,6 +323,8 @@ int main(int argc, char** argv) {
   std::vector<uint64_t> breakpoints;
   long trace_after_trap = 0;
   uint64_t sample_pc_every = 0, sample_pc_from = 0;
+  uint64_t trace_mmio_from = ~0ull;  // --trace-mmio-from CYCLE
+  uint64_t cur_cycle = 0;
   std::vector<std::pair<uint64_t, uint64_t>> dumps;
   bool cache_en = true;
   MbusConfig bus_cfg;
@@ -354,6 +356,9 @@ int main(int argc, char** argv) {
       const char* colon = std::strchr(spec, ':');
       dumps.push_back({std::strtoull(spec, nullptr, 0),
                        colon ? std::strtoull(colon + 1, nullptr, 0) : 64});
+    } else if (std::strcmp(argv[i], "--trace-mmio-from") == 0 && need(i)) {
+      // Log every single-beat (I/O) bus access from this cycle on.
+      trace_mmio_from = std::strtoull(argv[++i], nullptr, 0);
     } else if (std::strcmp(argv[i], "--sample-pc") == 0 && need(i)) {
       // FROM:EVERY guest fetch sampler for long-boot diagnosis.
       const char* spec = argv[++i];
@@ -407,7 +412,7 @@ int main(int argc, char** argv) {
   // devices exactly once.
   MbusModel bus(
       bus_cfg,
-      [&](uint64_t a, uint8_t, bool inst, bool burst) -> uint64_t {
+      [&](uint64_t a, uint8_t be, bool inst, bool burst) -> uint64_t {
         if (inst) {
           uint64_t w = 0;
           for (int i = 0; i < 8; ++i) {
@@ -415,9 +420,25 @@ int main(int argc, char** argv) {
           }
           return w;
         }
-        return burst ? plat.PeekWord(a) : plat.Read(a);
+        if (burst) return plat.PeekWord(a);
+        const uint64_t v = plat.Read(a);
+        if (cur_cycle >= trace_mmio_from) {
+          std::fprintf(stderr, "mmio cy=%llu R a=0x%llx be=%02x v=0x%016llx\n",
+                       static_cast<unsigned long long>(cur_cycle),
+                       static_cast<unsigned long long>(a), be,
+                       static_cast<unsigned long long>(v));
+        }
+        return v;
       },
-      [&](uint64_t a, uint8_t be, uint64_t wdata) { plat.Write(a, be, wdata); });
+      [&](uint64_t a, uint8_t be, uint64_t wdata) {
+        if (cur_cycle >= trace_mmio_from && !(a >= kRamBase && a - kRamBase < kRamSize)) {
+          std::fprintf(stderr, "mmio cy=%llu W a=0x%llx be=%02x v=0x%016llx\n",
+                       static_cast<unsigned long long>(cur_cycle),
+                       static_cast<unsigned long long>(a), be,
+                       static_cast<unsigned long long>(wdata));
+        }
+        plat.Write(a, be, wdata);
+      });
   dut->clk_i = 0;
   dut->rst_ni = 0;
   dut->boot_pc_i = boot_pc;
@@ -438,11 +459,25 @@ int main(int argc, char** argv) {
   size_t exit_match = 0;
   long pc_window = 0;
   for (uint64_t cycle = 0; cycle < max_cycles; ++cycle) {
+    cur_cycle = cycle;
     plat.mtime++;
     dut->irq_m_timer_i = plat.mtime >= plat.mtimecmp ? 1 : 0;
     dut->irq_m_soft_i = (plat.msip & 1) ? 1 : 0;
     dut->irq_m_ext_i = plat.PlicEip(0) ? 1 : 0;
     dut->irq_s_ext_i = plat.PlicEip(1) ? 1 : 0;
+    if (cycle >= trace_mmio_from) {
+      static int last_irq = -1;
+      const int now_irq = (dut->irq_m_ext_i << 2) | (dut->irq_s_ext_i << 1) |
+                          dut->irq_m_timer_i;
+      if (now_irq != last_irq) {
+        std::fprintf(stderr, "irq cy=%llu mext=%d sext=%d mtimer=%d uart_lvl=%d in_service=%d ier=%x\n",
+                     static_cast<unsigned long long>(cycle), dut->irq_m_ext_i,
+                     dut->irq_s_ext_i, dut->irq_m_timer_i,
+                     plat.UartIrqLevel() ? 1 : 0, plat.in_service ? 1 : 0,
+                     plat.ier);
+        last_irq = now_irq;
+      }
+    }
     // Clock-low phase: bus slave outputs, settle.
     dut->clk_i = 0;
     MbusDrive(&bus, dut.get());
