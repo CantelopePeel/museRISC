@@ -41,6 +41,11 @@ esac
 # SV2V_FLAGS passes extra defines (e.g. -DMUSERISC_FPU_DS_BITS=1).
 # shellcheck disable=SC2086
 [ -n "${SKIP_SYNTH:-}" ] || "$SV2V" ${SV2V_FLAGS:-} -DSYNTHESIS -I"$RTL" --top="$TOP" $SRCS -w "$OUT/$TOP.v"
+# sv2v turns elaboration-time $error (e.g. the FPU's div/sqrt
+# configuration guard) into an initial $display; fail here instead.
+if grep -q 'Error \[elaboration\]' "$OUT/$TOP.v"; then
+  grep 'Error \[elaboration\]' "$OUT/$TOP.v"; echo "elaboration check failed"; exit 1
+fi
 
 LIB=/OpenROAD-flow-scripts/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib
 PS=$(python3 -c "print(int(float('$PERIOD') * 1000))")

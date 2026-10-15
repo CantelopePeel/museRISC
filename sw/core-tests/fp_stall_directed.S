@@ -1,7 +1,7 @@
 // Multi-cycle FPU EX-stall interactions (fpu-multicycle):
 // traps and flushes around an in-flight FP op, an FP op that
 // completes while an older vector load holds MEM (mem_stall),
-// operand forwarding across a held EX (vec_wb_stall), precise
+// operand forwarding across a held EX (ex_hold), precise
 // commit of the older op when a younger one traps, and FS
 // dirtying. Arithmetic bit-exactness is the FPU unit TB's job.
 // Convention: t0 = test number, exit store 0 = pass.
@@ -123,7 +123,7 @@ _start:
     bne a1, a2, fail
 
     // ---- 4: operands of an instruction held in EX by
-    //      vec_wb_stall stay correct after their producer
+    //      ex_hold (here vec_ex_stall) stay correct after their producer
     //      retires (held-EX operand refresh).
     li t0, 4
     li a1, 1

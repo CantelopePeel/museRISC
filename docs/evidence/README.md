@@ -1685,8 +1685,9 @@ stages 4c/5:
   forwarding mux) are not in this figure. With `FPU_DS_BITS = 1`
   (div/sqrt 30/59 cycles instead of 17/32; simulated by
   `fpu-ds1`/`core-ds1`): 43,325 µm², 3.73 ns (268 MHz). A Kogge-Stone carry mapping was attempted but ABC
-  did not finish within an hour and was abandoned. The full
-  core does not yet synthesize in Yosys: after sv2v, Yosys
-  elaborates every module up to `muserisc_vec`, then stops on
-  its data-dependent loop bound (`for (i < (512 >> sew_i))`,
-  the combinational vector unit), outside this change.
+  did not finish within an hour and was abandoned. Full-core
+  synthesis was not run here; per the round-2 audit, Yosys
+  `read_slang` elaborates the whole SoC, and through sv2v +
+  Yosys the core passes `proc`/coarse synthesis once the sv2v
+  sensitivity lists over `muserisc_mmu`'s TLB array are
+  relaxed to `@(*)`.
