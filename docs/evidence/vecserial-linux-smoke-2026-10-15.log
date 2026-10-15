@@ -1,0 +1,59 @@
+# soc_tb Linux smoke on the vec-serial RTL, 2026-10-15 (sw/linux/README.md recipe;
+# OpenSBI v1.9 cbf9f67 and Linux 6.6 defconfig + embedded /init, both rebuilt today).
+# Result: SOC TB TIMEOUT after 1,000,000,000 cycles (wall 7,163 s). The kernel boots and
+# /init prints its uname line, then the hart livelocks in S-external interrupts (PLIC/UART):
+# ~344k S-ext IRQ traps after ~500M cycles; PCs sampled every 5M cycles from 450M to 645M
+# are all in do_irq / plic_handle_irq / handle_riscv_irq / _save_context.
+# An instrumented soc_tb (probes of vec_start and vls_is via --public-flat-rw) counted ZERO
+# vector-unit starts and ZERO vector load/store cycles through 550M cycles: the reworked
+# vector logic never activates in this workload, and with it idle the scalar pipeline is
+# the same as origin/main. The M-level trap trace is cycle-identical to origin/main RTL
+# over the first 12M cycles. Linux had not been re-run since misa.V landed (stage 8).
+# origin/main RTL (vector unit + VRF stubbed for simulation speed; the TB aborts if a vector
+# instruction reaches EX, none did) reaches uname at ~500M cycles and livelocks identically:
+# all 37 fetch-PA/data-address samples (every 5M cycles, 450M..630M) match this branch exactly.
+
+VECCOUNT cy=0 starts=0 vls_cycles=0
+VECCOUNT cy=50000000 starts=0 vls_cycles=0
+VECCOUNT cy=100000000 starts=0 vls_cycles=0
+VECCOUNT cy=150000000 starts=0 vls_cycles=0
+VECCOUNT cy=200000000 starts=0 vls_cycles=0
+VECCOUNT cy=250000000 starts=0 vls_cycles=0
+VECCOUNT cy=300000000 starts=0 vls_cycles=0
+VECCOUNT cy=350000000 starts=0 vls_cycles=0
+VECCOUNT cy=400000000 starts=0 vls_cycles=0
+VECCOUNT cy=450000000 starts=0 vls_cycles=0
+VECCOUNT cy=500000000 starts=0 vls_cycles=0
+VECCOUNT cy=550000000 starts=0 vls_cycles=0
+
+# UART log tail (vec-serial run):
+[   48.501618] calling  tcp_congestion_default+0x0/0x28 @ 1
+[   48.505513] initcall tcp_congestion_default+0x0/0x28 returned 0 after 26 usecs
+[   48.510032] calling  udp_tunnel_nic_init_module+0x0/0x9a @ 1
+[   48.515027] initcall udp_tunnel_nic_init_module+0x0/0x9a returned 0 after 905 usecs
+[   48.520897] calling  ip_auto_config+0x0/0x103e @ 1
+[   48.525659] initcall ip_auto_config+0x0/0x103e returned 0 after 866 usecs
+[   48.530471] calling  tcp_bpf_v4_build_proto+0x0/0xc4 @ 1
+[   48.534685] initcall tcp_bpf_v4_build_proto+0x0/0xc4 returned 0 after 131 usecs
+[   48.540130] calling  udp_bpf_v4_build_proto+0x0/0x4e @ 1
+[   48.544263] initcall udp_bpf_v4_build_proto+0x0/0x4e returned 0 after 42 usecs
+[   48.549004] calling  lockup_detector_check+0x0/0x86 @ 1
+[   48.554278] initcall lockup_detector_check+0x0/0x86 returned 0 after 1570 usecs
+[   48.559024] calling  acpi_gpio_handle_deferred_request_irqs+0x0/0x74 @ 1
+[   48.563044] initcall acpi_gpio_handle_deferred_request_irqs+0x0/0x74 returned 0 after 27 usecs
+[   48.568381] calling  clk_disable_unused+0x0/0xd2 @ 1
+[   48.572305] clk: Disabling unused clocks
+[   48.573929] initcall clk_disable_unused+0x0/0xd2 returned 0 after 1625 usecs
+[   48.578511] calling  regulator_init_complete+0x0/0x48 @ 1
+[   48.582798] initcall regulator_init_complete+0x0/0x48 returned 0 after 77 usecs
+[   48.588315] calling  of_platform_sync_state_init+0x0/0x1a @ 1
+[   48.591257] initcall of_platform_sync_state_init+0x0/0x1a returned 0 after 33 usecs
+[   48.750446] Freeing unused kernel image (initmem) memory: 2476K
+[   48.754262] Run /init as init process
+[   48.756112]   with arguments:
+[   48.757123]     /init
+[   48.758123]   with environment:
+[   48.759168]     HOME=/
+[   48.760860]     TERM=linux
+muserisc init: userspace alive
+uname: Linux 6.6.0 #1 SMP Thu Oct 15 07:58:47 UTC 2026 riscv64

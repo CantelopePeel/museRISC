@@ -1431,3 +1431,118 @@ stages 4c/5:
   The vector unit is idle for the whole boot. The same boot
   on this branch's own RTL was still running when this was
   written; its result will be posted on the PR.
+
+## Element-serial vector unit + banked VRF (2026-10-15, #32)
+
+- Change: `muserisc_vec.sv` rewritten from whole-group
+  combinational evaluation to a 4-stage element-serial
+  engine over a 64-bit datapath (iterative multiplier and
+  divider, one shared `fp_eval`/`fp_estimate` call);
+  `muserisc_vregfile.sv` from a 32x512 flop array with three
+  4096-bit group read ports to three 1R1W 256x64 byte-write
+  RAM replicas with synchronous read (SRAM/BRAM-mappable);
+  the MEM vector load/store sequencer in `muserisc_core.sv`
+  reads/writes VRF elements directly (no 4096-bit EX/MEM,
+  MEM/WB or capture registers, no address multiplier). See
+  [`docs/CORE.md`](../CORE.md) "Vector unit" for the design,
+  the stall/trap/interrupt contract, and per-op cycle counts.
+- Behavior changes (all spec-conformant): every completed
+  vector instruction now resets `vstart` to 0 (previously
+  only vset did); `vslidedown` offsets near 2^64 no longer
+  wrap; segment loads never leave a partially written
+  segment on a fault; a CSR access or vset right behind a
+  vector load/store observes its `vstart`/`vl` update.
+  Round-1 review fixes (pre-existing deviations on `main`):
+  fault-only-first now traps only on an element-0 fault
+  (trims `vl` for any later element, even with element 0
+  masked off); `vmv<nr>r.v` and whole-register loads/stores
+  now honor `vstart`.
+- Unit TB (`tb/cpp/vec_tb.cpp` on
+  `tb/sv/muserisc_vec_harness.sv` = unit + VRF): randomized
+  against an independent C++ RVV golden model over all 88
+  integer VOP classes x SEW x LMUL (1/8..8) x vl x vstart x
+  v0 masking x vta/vma x vxrm, with whole-VRF before/after
+  comparison and every allowed source/destination overlap;
+  plus host-IEEE FP directed checks, a kill-mid-op check
+  and cycle probes. `make core-test` default: **VEC TB PASS
+  (61,672 checks, 22,880 random trials, seed 0x5eed8a)**; 300-per-op runs at seeds 0x5eed8a and 0xc0ffee passed (26,400 trials each); an earlier 600-per-op soak
+  passed 52,800 trials (141,362 checks).
+- Coverage (merged `make core-test`, Verilator line+toggle):
+  `muserisc_vec.sv` every line hit and every toggle point
+  hit except some bits of `fl_q` (flags of intermediate
+  widening FP conversions, which are exact so OF/UF/DZ/NX
+  can never be raised — structurally unreachable);
+  `muserisc_vregfile.sv` 100% (no never-hit point).
+- New directed test `sw/core-tests/vec_trap_directed.S`
+  (in `make core-test`, `--irq-timer-after 2000`): M-timer
+  interrupt during a long `vmacc` taken at the next
+  instruction boundary with no replay; misaligned indexed
+  load partial commit + `vstart`; PMP-faulting segment load
+  with no partial segment, then handler-assisted resume from
+  `vstart`; fault-only-first segment `vl` trim observed by a
+  back-to-back `csrr vl` and `vsetvli x0,x0`; `vstart>0`
+  arithmetic; strided store fault; FOF with element 0 masked
+  off (trim, no trap); `vstart>0` on `vl1re32.v`, `vs1r.v`
+  and `vmv1r.v`.
+- Gates (all on the final RTL; wall-clock in parentheses):
+  `make lint` clean (1 s); `make test` `ALL PHASE-0 KATs PASS`
+  (22 s); `make core-test` all PASS (78 s);
+  `make riscv-tests`
+  [`riscv-tests-core-vecserial-2026-10-15.csv`](riscv-tests-core-vecserial-2026-10-15.csv)
+  **123/123** (29 s).
+- ACT, full core set regenerated in this worktree (I/M,
+  priv, A/F/D/B/K/Zicond, C, Vx8-64, Vls8-64, Vf32/Vf64;
+  2,578 ELFs, same 43 vector tests not generated as in
+  stage 8): [`act-core-vecserial-2026-10-15.csv`](act-core-vecserial-2026-10-15.csv)
+  **2,577/2,578** — Vx/Vls **1,872/1,872**, Vf32/Vf64
+  **162/162**, scalar+priv **543/544** with the same single
+  `PMPSm_cfg_A_tor_zero-00` PA0 waiver. The pre-rework RTL
+  (origin/main) on the same ELFs gives the identical
+  verdicts. Wall: 82 s on 32 parallel jobs with
+  `sim/run_act_core_par.sh` (same per-ELF verdict as
+  `sim/run_act_core.sh`; one result file per ELF, row count
+  and uniqueness checked) vs 565 s on 24 jobs for the old RTL
+  (the narrow datapath Verilates and simulates much faster).
+  Simulated cycles: vector suites 2.4-5.9x the old
+  single-cycle-per-instruction unit (element-serial by
+  design), scalar suites +5% (ACT prologue vector init).
+- Synthesis (`scripts/synth_vec.sh`; Yosys + OpenSTA from
+  `openroad/orfs:latest`, Nangate45 typical, Kogge-Stone
+  carry networks, ORFS `abc_speed` with buffering/sizing at
+  10 ns, no wire load; `fp_eval`/`fp_estimate` black-boxed by
+  `flow/vec-synth/fpu_stub_pkg.sv` in both designs, VRF RAM
+  replicas black-boxed as SRAM macros; sv2v v0.0.13, now pinned in the script):
+
+  | Block | Before (origin/main) | After (vec-serial) |
+  |---|---|---|
+  | `muserisc_vec` std-cell area | Yosys could not finish elaboration (killed by a host-memory guard at 141 GiB after ~4 h) | **52,735 um^2** (42,324 cells, 1,371 flops) |
+  | `muserisc_vec` logic depth / STA | n/a (512-way unrolled element loops: 22 `*`/`/`/`%` and 15 `fp_eval`/`fp_estimate` sites per element) | **76** generic gates (ltp); worst path **3.29 ns** (inputs at 0 delay) at Nangate45 typical |
+  | `muserisc_vregfile` | **603,640 um^2** (16,384 flops + 3x4096-bit group muxes), depth 18 | **5,254 um^2** logic (731 flops: v0 shadow + bypass) + 3x 256x64 1R1W SRAM (black-boxed; fakeram45_512x64 is 17,302 um^2 as an upper bound each), depth 6 |
+  | Multipliers / dividers / `fp_eval` calls | per element (up to 512 lanes unrolled) | 1x 64x16 multiplier, 0 dividers (iterative), 1 `fp_eval` + 1 `fp_estimate` |
+
+  Log: [`vec-serial-synth-2026-10-15.log`](vec-serial-synth-2026-10-15.log).
+  The FP datapath is excluded on both sides (stub); its
+  timing belongs to the multi-cycle FPU rework, which this
+  unit will call per element. FPGA (Vivado, VU47P) numbers
+  are not claimed (milestone F0 of #32).
+- Linux: soc_tb boot of a freshly built OpenSBI v1.9 + Linux 6.6
+  reaches `/init`'s `uname` line, then livelocks in
+  S-external (PLIC/UART) interrupts until the 1e9-cycle limit
+  ([`vecserial-linux-smoke-2026-10-15.log`](vecserial-linux-smoke-2026-10-15.log),
+  7,163 s wall). An instrumented run shows **zero**
+  vector-unit starts and zero vector load/store cycles
+  through 550M cycles, so the reworked logic never activates
+  and the scalar pipeline is unchanged; the trap trace is
+  cycle-identical to origin/main for the first 12M cycles.
+  Linux had not been re-run since `misa.V` landed (stage 8).
+  This is treated as pre-existing and is not fixed here; the
+  same boot on origin/main RTL (its unused vector unit and
+  VRF stubbed only for simulation speed, with the testbench
+  aborting if any vector instruction reaches EX — none did)
+  livelocks identically: all 37 PC/data-address samples
+  taken every 5M cycles from 450M to 630M match this
+  branch's run exactly. Pre-existing (#3), since fixed on
+  `main` by PR #6. With that fix (`af31588`) cherry-picked
+  onto this branch's 26a2480 head, the boot passes:
+  `MUSERISC_LINUX_BOOT_OK`, `SOC TB PASS` at 508,685,709
+  cycles (8,033 s wall).
