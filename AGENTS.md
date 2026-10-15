@@ -13,6 +13,15 @@ and `docs/evidence/`.
   Verilator and the GCC 15+ RISC-V toolchain first on `PATH`, sets
   `RISCV_TESTS_DIR`). With `--gcc15` that toolchain also builds the
   core tests, unlike CI (Ubuntu's GCC 13); all gates pass with both.
+- The `regression.yml` and `core-regression.yml` CI workflows
+  `apt-get install verilator` on `ubuntu-24.04`, which gives 5.020
+  (this changes if the runner image is bumped), not the pinned `deps/`
+  build. 5.020 rejects some constructs 5.048 accepts (e.g.
+  `%Error-IMPURE` on a variable-index write to a local inside a
+  package function). Before opening a PR that touches RTL or
+  testbenches, also lint and build with the CI version, e.g.
+  `docker run --rm -v "$PWD":/w -w /w ubuntu:24.04 sh -c 'apt-get update -qq && apt-get install -y -qq verilator make && make lint'`;
+  never install it system-wide.
 - Baseline gates: `make test`, `make lint`, `make core-test`,
   `make riscv-tests`; ACT on the core via `scripts/build_act4_core.sh`
   then `sim/run_act_core.sh`.
