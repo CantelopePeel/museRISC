@@ -1,0 +1,199 @@
+name: In-house core regression
+
+# Issue #28: exercise the in-house core (not just the crypto
+# macro) in CI. Fast jobs run on push/PR; the ACT generation
+# job is weekly/manual only because Sail-side generation is
+# the slow part. Full ACT (1872 vector ELFs) and the Linux
+# boot remain local/manual gates — see docs/evidence/.
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tbs:
+    name: Verilator unit + directed core TBs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out museRISC
+        uses: actions/checkout@v4
+
+      - name: Fetch pinned Berkeley SoftFloat (FPU TB oracle)
+        uses: actions/checkout@v4
+        with:
+          repository: ucb-bar/berkeley-softfloat-3
+          ref: a0c6494cdc11865811dec815d5c0049fba9d82a8
+          path: third_party/berkeley-softfloat-3
+
+      - name: Install Verilator and RISC-V toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator gcc-riscv64-unknown-elf \
+            build-essential python3
+          verilator --version
+          riscv64-unknown-elf-gcc --version
+
+      - name: Run unit TBs (incl. crypto KATs)
+        shell: bash
+        run: |
+          set -o pipefail
+          make -C sim alu muldiv decoder regfile csr mmu fpu \
+            bext rvc vec crypto 2>&1 | tee build-ci-unit.log
+          grep -E "TB PASS" build-ci-unit.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run directed-asm core harness
+        shell: bash
+        run: |
+          set -o pipefail
+          make -C sim core 2>&1 | tee build-ci-core.log
+          grep -E "CORE TB PASS" build-ci-core.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload core TB logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-tbs-${{ github.sha }}
+          path: |
+            build-ci-unit.log
+            build-ci-core.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  riscv-tests-smoke:
+    name: riscv-tests smoke subset on the core
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out museRISC
+        uses: actions/checkout@v4
+
+      - name: Fetch pinned riscv-tests
+        uses: actions/checkout@v4
+        with:
+          repository: riscv-software-src/riscv-tests
+          ref: eeacd5507db7a0f50ca8c4f27aff220fcbb60bdf
+          path: third_party/riscv-tests-ci
+
+      - name: Install Verilator and RISC-V toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator gcc-riscv64-unknown-elf \
+            build-essential python3
+          verilator --version
+
+      - name: Build core harness
+        run: make -C sim ../build/sim/core_tb
+
+      - name: Run smoke subset (26 tests, all suites)
+        shell: bash
+        env:
+          RISCV_TESTS_DIR: third_party/riscv-tests-ci
+          RISCV_TESTS_LIST: sim/riscv_tests_smoke.txt
+        run: |
+          set -o pipefail
+          bash sim/run_riscv_tests.sh build-ci-riscv-tests.csv \
+            2>&1 | tee build-ci-riscv-tests.log
+          tail -1 build-ci-riscv-tests.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload riscv-tests logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riscv-tests-smoke-${{ github.sha }}
+          path: |
+            build-ci-riscv-tests.log
+            build-ci-riscv-tests.csv
+          if-no-files-found: warn
+          retention-days: 30
+
+  act-smoke:
+    name: ACT I+M generation + run on the core (weekly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      RISCV_TOOLCHAIN_TAG: "2026.08.27"
+      RISCV_TOOLCHAIN_ASSET: riscv64-elf-ubuntu-24.04-gcc.tar.xz
+    steps:
+      - name: Check out museRISC
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y z3 curl git make python3 verilator \
+            build-essential
+          curl https://mise.run | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          verilator --version
+
+      # Same pinned GCC 15+ prebuilt as compliance.yml (ACT4
+      # requires GCC 15+; Ubuntu 24.04 ships GCC 13).
+      - name: Cache RISC-V GCC toolchain
+        id: riscv-toolchain-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/riscv-toolchain
+          key: riscv-gnu-toolchain-${{ env.RISCV_TOOLCHAIN_TAG }}-${{ env.RISCV_TOOLCHAIN_ASSET }}
+
+      - name: Install RISC-V GCC 15+ toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.riscv-toolchain-cache.outputs.cache-hit }}" != "true" ]; then
+            mkdir -p "$HOME/riscv-toolchain"
+            curl -fsSL \
+              "https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/${RISCV_TOOLCHAIN_TAG}/${RISCV_TOOLCHAIN_ASSET}" \
+              -o /tmp/riscv-toolchain.tar.xz
+            tar -xJf /tmp/riscv-toolchain.tar.xz -C "$HOME/riscv-toolchain"
+          fi
+          gcc_path=$(find "$HOME/riscv-toolchain" -path '*/bin/riscv64-unknown-elf-gcc' -print -quit)
+          test -n "$gcc_path"
+          dirname "$gcc_path" >> "$GITHUB_PATH"
+          "$gcc_path" --version
+
+      - name: Fetch pinned ACT4 and Sail sources
+        run: ./scripts/setup.sh --fetch-act
+
+      - name: Install ACT4 managed tools
+        working-directory: third_party/riscv-arch-test
+        run: |
+          mise trust
+          mise install
+
+      - name: Generate ACT I+M ELFs for the core config
+        run: EXTENSIONS=I,M bash scripts/build_act4_core.sh
+
+      - name: Build core harness
+        run: make -C sim ../build/sim/core_tb
+
+      - name: Run ACT ELFs on the core
+        shell: bash
+        run: |
+          set -o pipefail
+          bash sim/run_act_core.sh build-ci-act.csv \
+            2>&1 | tee build-ci-act.log
+          tail -1 build-ci-act.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload ACT logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act-smoke-${{ github.sha }}
+          path: |
+            build-ci-act.log
+            build-ci-act.csv
+          if-no-files-found: warn
+          retention-days: 30
