@@ -468,16 +468,8 @@ module muserisc_core import muserisc_pkg::*; (
   // The vector unit keeps its own start/ack handshake; it and
   // the FPU only ever serve the instruction in EX (vector and
   // FP-scalar decodes are disjoint), so they are never in
-  // flight together (asserted below in simulation).
+  // flight together (asserted in simulation after vec_commit).
   assign ex_hold = vec_ex_stall || ex_mc_busy;
-`ifndef SYNTHESIS
-  always_ff @(posedge clk_i) begin
-    if (rst_ni && vec_busy && fpu_req)
-      $error("muserisc_core: FPU request while the vector unit is busy");
-    if (rst_ni && fpu_req && vec_unit_op)
-      $error("muserisc_core: FP and vector op in EX together");
-  end
-`endif
   // EX contents move to EX/MEM this cycle.
   assign ex_advance = !trap_take && !freeze && !mem_stall && !ex_hold;
 
@@ -564,6 +556,15 @@ module muserisc_core import muserisc_pkg::*; (
                          (idex_ctrl_q.csr || idex_ctrl_q.vset));
   assign vec_commit = vec_unit_op && vec_done && !trap_fire &&
                       !mem_exc && !mem_stall;
+`ifndef SYNTHESIS
+  // The FPU and the vector unit are never in flight together.
+  always_ff @(posedge clk_i) begin
+    if (vec_busy && fpu_req)
+      $error("muserisc_core: FPU request while the vector unit is busy");
+    if (fpu_req && vec_unit_op)
+      $error("muserisc_core: FP and vector op in EX together");
+  end
+`endif
   // FP vector ops accrue fflags and dirty FS on commit.
   assign vec_fflags_we = vec_commit &&
       (idex_ctrl_q.bext_op >= VOP_FBIN) &&

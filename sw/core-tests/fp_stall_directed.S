@@ -217,6 +217,40 @@ _start:
     li a2, 3
     bne a1, a2, fail
 
+    // ---- 13: vector ops interleaved with multi-cycle FP ops:
+    //      a vector op waits in ID while fdiv.d holds EX, then
+    //      consumes its result (.vf scalar); the next fdiv.d
+    //      waits while the element-serial vector unit holds EX.
+    li t0, 13
+    li a1, 8
+    vsetvli a0, a1, e64, m1, ta, ma
+    la a3, vbuf2                  // {2.0, 0, ...}
+    vle64.v v4, (a3)
+    fdiv.d fa6, fs4, fs1          // 7/3
+    vfadd.vf v5, v4, fa6          // {2+7/3, 7/3, ...}
+    fdiv.d fa7, fa6, fs1          // 7/9
+    vfmul.vf v6, v5, fa7
+    vadd.vi v7, v4, 1             // integer vector op between FP ops
+    fsqrt.d ft9, fs4              // and an FP op right behind it
+    vfmv.f.s fa0, v6
+    fmv.x.d a1, fa0
+    li a2, 0x400AF684BDA12F69
+    bne a1, a2, fail
+    vslidedown.vi v8, v6, 1
+    vfmv.f.s fa0, v8
+    fmv.x.d a1, fa0
+    li a2, 0x3FFD097B425ED098
+    bne a1, a2, fail
+    fmv.x.d a1, fa7
+    li a2, 0x3FE8E38E38E38E39
+    bne a1, a2, fail
+    vmv.x.s a1, v7
+    li a2, 0x4000000000000001
+    bne a1, a2, fail
+    fmv.x.d a1, ft9
+    li a2, 0x40052A7FA9D2F8EA     // sqrt(7)
+    bne a1, a2, fail
+
 pass:
     li t1, 0x10000000
     sd x0, 0(t1)

@@ -10,8 +10,8 @@
 //
 //   datapath stages:
 //     add/sub : fp_align -> fp_addsub -> fp_norm
-//     mul     : mul_pp -> mul_sum -> fop_sum -> fp_norm
-//     fma     : mul_pp -> mul_sum -> fp_align -> fp_addsub -> fp_norm
+//     mul     : fp_mul_pp -> fp_mul_sum -> fop_sum -> fp_norm
+//     fma     : fp_mul_pp -> fp_mul_sum -> fp_align -> fp_addsub -> fp_norm
 //     div/sqrt: ds_init -> ds_step x N -> ds_fin   (radix-2 steps)
 //     i2f     : i2f_sum -> fp_norm
 //     f2f     : f2f_rnd
@@ -394,7 +394,7 @@ package muserisc_fpu_pkg;
                                           fop_unp(ub, op == FPU_SUB)), rm));
         FPU_MUL:
           rn = fp_norm(fop_sum(fop_prod(op, ua, ub,
-                                        mul_sum(mul_pp(ua.sig, ub.sig)))));
+                                        fp_mul_sum(fp_mul_pp(ua.sig, ub.sig)))));
         FPU_DIV, FPU_SQRT: begin
           ds = ds_init(op == FPU_SQRT, ua, ub);
           for (int i = 0; i < FPU_DS_N_D; i++) begin
@@ -408,7 +408,7 @@ package muserisc_fpu_pkg;
           rn = f2f_rnd(ua);
         default:  // FMA family
           rn = fp_norm(fp_addsub(fp_align(
-                   fop_prod(op, ua, ub, mul_sum(mul_pp(ua.sig, ub.sig))),
+                   fop_prod(op, ua, ub, fp_mul_sum(fp_mul_pp(ua.sig, ub.sig))),
                    fop_unp(uc, fma_neg_c(op))), rm));
       endcase
       r = fp_round(rn, fmt_d, rm);

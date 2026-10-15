@@ -285,14 +285,14 @@
   endfunction
 
 
-  function automatic fp_pp_t mul_pp(input logic [52:0] a, input logic [52:0] b);
+  function automatic fp_pp_t fp_mul_pp(input logic [52:0] a, input logic [52:0] b);
     fp_pp_t r;
     r.hi = 79'(a) * 79'(b[52:27]);
     r.lo = 80'(a) * 80'(b[26:0]);
     return r;
   endfunction
 
-  function automatic logic [105:0] mul_sum(input fp_pp_t pp);
+  function automatic logic [105:0] fp_mul_sum(input fp_pp_t pp);
     return 106'(pp.lo) + {pp.hi, 27'd0};
   endfunction
 

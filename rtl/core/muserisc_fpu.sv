@@ -208,13 +208,13 @@ module muserisc_fpu import muserisc_fpu_pkg::*; (
       end
       S_EX1: begin
         al_q  <= fp_align(fop_unp(ua_q, 1'b0), fop_unp(ub_q, op_q == FPU_SUB));
-        pp_q  <= mul_pp(ua_q.sig, ub_q.sig);
+        pp_q  <= fp_mul_pp(ua_q.sig, ub_q.sig);
         ds_q  <= ds_init(op_q == FPU_SQRT, ua_q, ub_q);
         cnt_q <= '0;
         f2i_q <= f2i_s1(ua_q, rm_q);
         rnd_q <= f2f_rnd(ua_q);
       end
-      S_MUL2:  sum_q <= fop_sum(fop_prod(op_q, ua_q, ub_q, mul_sum(pp_q)));
+      S_MUL2:  sum_q <= fop_sum(fop_prod(op_q, ua_q, ub_q, fp_mul_sum(pp_q)));
       S_ALIGN: al_q <= fp_align(prod_op, fop_unp(uc_q, fma_neg_c(op_q)));
       S_ADD:   sum_q <= fp_addsub(al_q, rm_q);
       S_NORM:  rnd_q <= fp_norm(sum_q);
