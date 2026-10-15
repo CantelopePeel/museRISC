@@ -26,7 +26,7 @@ test: ## Python golden self-check + Verilator C++ crypto KATs (needs python3, ve
 	@echo "ALL PHASE-0 KATs PASS"
 
 lint: ## Verilator lint on all synthesizable RTL
-	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module muserisc_soc_top $(CORE_RTL) $(RTL)
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_soc_top $(CORE_RTL) $(RTL)
 	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module keccak_f1600 rtl/crypto/keccak_f1600.sv
 	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module sha512_block rtl/crypto/sha512_block.sv
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_core $(CORE_RTL)

@@ -266,7 +266,7 @@ SOC_RTL   := $(CORE_RTL) $(CRYPTO)/sha256_block.sv \
 # Absolute: recipes below cd into $(BUILD), where ROOT-relative paths break.
 SOCFW     := $(abspath $(ROOT)/build/soc-tests)
 
-$(BUILD)/soc_rtl_tb: $(ROOT)/tb/cpp/soc_rtl_tb.cpp $(SOC_RTL) | $(BUILD) $(OBJ)
+$(BUILD)/soc_rtl_tb: $(ROOT)/tb/cpp/soc_rtl_tb.cpp $(SOC_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/socrtl --top-module muserisc_soc_top \
 	  -o $(abspath $(BUILD)/soc_rtl_tb) $(SOC_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/soc_rtl_tb.cpp)
