@@ -1715,3 +1715,175 @@ stages 4c/5:
   interrupt trap (mcause bit 63), not on any trap: a synchronous
   exception taken while the IRQ is pending used to drop it silently
   (found by `md_irq_directed` at offset 168).
+
+## In-house core L1 caches + latency-tolerant memory ports (2026-10-15, #32/#11/#4)
+
+- Scope: the core's combinational Harvard ports are replaced
+  by request/response ports; `muserisc_cpu` adds a blocking
+  8 KiB 2-way L1 I$, a blocking 16 KiB 4-way write-back +
+  write-allocate L1 D$ (single-port sync-read SRAM arrays),
+  and a 2:1 arbiter onto one valid/ready burst memory bus.
+  FENCE.I cleans the D$ and invalidates the I$; the PTW,
+  AMO/LR/SC and the element-serial vector load/store
+  sequencer go through the D$; the DRAM-only PMA keeps
+  ROM/CLINT/PLIC/UART uncached. Design, protocol and
+  parameters: [`docs/CORE.md`](../CORE.md#memory-interface-and-l1-caches).
+  All results below are on the branch rebased onto `main`
+  2789d95 (element-serial vector unit, mip RMW fix #6,
+  synthesizable SoC #4, multi-cycle FPU #5, multi-cycle M unit
+  #14, ORFS memory guard #16); the SoC now
+  instantiates `muserisc_cpu` behind the new
+  `muserisc_soc_fabric`, and IF consumes fetch words only when
+  the generic `ex_hold` is low.
+- `make core-test` (255 s wall):
+  [`l1cache-core-test-2026-10-15.log`](l1cache-core-test-2026-10-15.log).
+  All 36 directed tests (30 existing + 6 new:
+  `smc_fencei_directed`, `amo_cache_directed`,
+  `mmio_bypass_directed` incl. vector stride-0 loads/stores to
+  the side-effect device, `vm_sfence_cache_directed`,
+  `fp_hold_cache_directed`: fdiv.d/fsqrt.d and full-width
+  div/rem/divuw on the multi-cycle units followed by
+  straight-line code on cold I$ lines, `ptw_drop_directed`:
+  a trap while a fetch walk's PTE read is in flight must drop
+  the stale walker response) pass twice — caches on with seeded
+  random bus latency 1–6, inter-beat gaps 0–2 and 70 %
+  `req_ready` backpressure, and caches off — including
+  `fp_stall_directed`, `md_directed`, `md_kill_directed`, the
+  48-offset `fp_irq_directed` and the 72-offset
+  `md_irq_directed` timer-IRQ sweeps in both configurations;
+  `core-ds1` (FPU_DS_BITS=1) and `core-mdcomb` (combinational M
+  unit) builds with random latency. 108 `CORE TB PASS` lines,
+  no failures. New unit TBs:
+  `icache_tb` 30,000 checked fetches (2,167 FENCE.I
+  invalidations, 1,770 with a request outstanding), and
+  `dcache_tb` 141,535 checks (16,565 loads, 17,951 stores,
+  1,484 cleans, 6,250 I/O accesses), each over 10–12 bus
+  timing profiles incl. a cache-disabled phase; both verify
+  against a golden memory and check the bus protocol (I/O
+  as exact in-order single beats, line bursts only for
+  cacheable lines, no lost write-back after CLEAN).
+  Mutation checks during development (dirty bit not set for
+  byte stores; refill kill on invalidate removed; I$
+  invalidate tied off; D$ clean skipped) were each caught by
+  the unit TBs or `smc_fencei_directed`; removing the stale
+  walker-response drop fails `ptw_drop_directed` (random
+  latency); reverting the arbiter offer-hold fires both the
+  new `a_req_stable` SVA and the `MbusModel` every-cycle
+  request-stability check (`MBUS PROTOCOL ERROR`, exit 4) in
+  `vm_directed` at `--mem-ready 50`.
+- Coverage (Verilator line+toggle+branch; `scripts/cov_report.py`):
+  cache unit TBs alone: `muserisc_dcache` line 41/41,
+  branch 58/58, toggle 99.55 %; `muserisc_icache` line
+  26/26, branch 44/44, toggle 98.48 %; `muserisc_sram_sp`
+  line 2/2, toggle 99.85 %. Line coverage is 100 % with the
+  two unreachable FSM `default:` recovery arms excluded via
+  `coverage_off`. The uncovered toggles are structurally
+  constant: `bus_req_len_o[7:2]` (fixed burst length),
+  I$ fetch address bits [1:0] (always 0 by protocol), one
+  SRAM data bit. `muserisc_bus_arb` (exercised only through
+  `muserisc_cpu`): line 5/5, branch 16/16. Merged over all
+  runs, the new core memory-port logic is fully line- and
+  branch-covered; the remaining uncovered core lines/branches
+  are pre-existing (vector LS corner cases, AMO min/max
+  32-bit arms, guest-fault causes).
+- riscv-tests: **123/123** with caches + random latency
+  ([`riscv-tests-core-l1cache-2026-10-15.csv`](riscv-tests-core-l1cache-2026-10-15.csv),
+  `make riscv-tests`, 22 s) and **123/123** uncached
+  ([`riscv-tests-core-l1cache-nocache-2026-10-15.csv`](riscv-tests-core-l1cache-nocache-2026-10-15.csv),
+  25 s).
+- ACT (all 2,578 generated self-checking ELFs: 544 scalar/
+  priv + 1,872 Vx/Vls + 162 Vf, generated in this worktree
+  with the recorded `EXTENSIONS` lists) via
+  `sim/run_act_core_par.sh` (now takes `CORE_TB_ARGS`), 20
+  jobs: **2,577/2,578** with caches + random latency (seed 3,
+  [`act-core-l1cache-2026-10-15.csv`](act-core-l1cache-2026-10-15.csv),
+  282 s) and **2,577/2,578** uncached
+  ([`act-core-l1cache-nocache-2026-10-15.csv`](act-core-l1cache-nocache-2026-10-15.csv),
+  330 s). The only failure is the known
+  `PMPSm_cfg_A_tor_zero-00` PA-0 waiver, as on `main`
+  ([`act-core-muldiv-multicycle-2026-10-15.csv`](act-core-muldiv-multicycle-2026-10-15.csv)).
+- Stress (not a make target; `core_tb` directly, with the
+  every-cycle request-stability check): all 123 riscv-tests
+  ELFs and 23 `*_directed` binaries (`fp_irq_directed`/
+  `md_irq_directed` excluded: their IRQ must land inside a
+  specific window, swept separately in core-test) under 6 new
+  seeds (201-206) x 5 bus profiles — latency 1–20 + gaps 0–5 +
+  30 % ready; latency 1–3 + 50 % ready; fixed latency 8;
+  latency 1–6 + gaps 0–2 + 50 % ready; latency 2–30 + gaps 0–6
+  + 20 % ready — with a timer IRQ asserted at cycle 2000:
+  **4,380 runs, 0 failures, 0 protocol errors** (1,451 s).
+- GitHub-CI toolchain reproduction (Docker `ubuntu:24.04`, apt
+  Verilator 5.020 + `gcc-riscv64-unknown-elf` 13, clean export
+  of the branch): `make lint` clean; unit TBs (`alu muldiv
+  muldiv_mc decoder regfile csr mmu fpu bext rvc vec icache
+  dcache crypto`) all PASS and `make -C sim core` all PASS (72
+  `CORE TB PASS` lines); `soc_rtl_tb`/`soc_tb` build; riscv-tests smoke
+  26/26. Verilator 5.020's intermittent internal "destroy
+  locked Thread Pool" abort at the end of a `--build -j 0`
+  (seen on unchanged unit TBs and on `core_tb`) needed a make
+  retry; it is a tool flake, not an RTL error.
+- RTL SoC ([`l1cache-soc-rtl-2026-10-15.log`](l1cache-soc-rtl-2026-10-15.log)):
+  `soc_rtl_tb` with RAM behind the memory bus — on-core crypto
+  driver + secp256k1 ECDSA verify **SOC CRYPTO PASS** with
+  caches + random latency (18,851,904 cycles; upstream
+  combinational-RAM SoC 11,097,819) and uncached (34,486,744);
+  OpenSBI + `s_hello` from the RTL boot ROM **HELLO** at bus
+  latency 1 (11,317,000 cycles; upstream 5,978,097) and with
+  random latency (11,362,632). Slang elaboration of
+  `muserisc_soc_top` with the ORFS Yosys `read_slang` (same
+  flags and 34-file list as `flow/designs/nangate45/
+  muserisc_soc/config.mk`): **0 errors**, 20 warnings, all
+  pre-existing ("asynchronous load value missing" in core/
+  crypto), none in the cache/CPU/fabric files.
+- Cycle cost (blocking caches, two cycles per hit, correctness
+  first) vs the combinational-memory core on `main`: riscv-tests
+  2.74x total cycles with caches + random latency (median
+  3.09x; vs the `fpu-multicycle` riscv-tests CSV), 3.64x uncached at latency 1 (every access a bus round
+  trip plus the registered response); ACT 1.55x / 1.71x (the
+  element-serial vector unit already dominates the vector
+  suites); SoC crypto firmware 1.70x.
+- Linux 6.6 (`soc_tb`, same OpenSBI v1.9 / Image / DTB as
+  `muldiv-multicycle-linux-boot-2026-10-15.log`, which reaches
+  the marker at 510,301,199 cycles on `main`), after the
+  audit-round-1 arbiter fix: with caches on,
+  `MUSERISC_LINUX_BOOT_OK` / `SOC TB PASS` at bus latency 1 in
+  **1,614,840,462 cycles** (3.16x, 6,004 s;
+  [`l1cache-linux-boot-lat1-2026-10-16.log`](l1cache-linux-boot-lat1-2026-10-16.log)),
+  with random latency 1–6 + gaps 0–2 + 70 % ready (seed 7) in
+  **2,115,195,513 cycles** (7,725 s;
+  [`l1cache-linux-boot-rand-seed7-2026-10-16.log`](l1cache-linux-boot-rand-seed7-2026-10-16.log)),
+  and with 50 % `req_ready` backpressure (seed 23) in
+  **2,186,201,121 cycles** (8,131 s;
+  [`l1cache-linux-boot-rand-bp50-2026-10-16.log`](l1cache-linux-boot-rand-bp50-2026-10-16.log));
+  the random-latency runs exercise the arbiter's offer-hold and
+  the every-cycle bus stability check throughout the boot.
+  Uncached (`--no-cache`) Linux: a run with a phase-spread sampler (`--sample-pc
+  0:50024721`) is still in progress at the time of writing: at
+  2.35G cycles it is in jitterentropy's SHA-3 self-test and
+  scheduler/tick paths, with samples spread across the kernel;
+  the audit's projection for a full uncached boot is about
+  4.5–6G cycles. The uncached mode is a bring-up strap, also
+  gated by the directed tests, riscv-tests, ACT and the RTL-SoC
+  runs above.
+  An earlier note in this PR claimed the uncached boot was stuck
+  in the scheduler's PELT update; that was a sampling artefact
+  (the `--sample-pc` periods, 20M and 100M cycles, are multiples
+  of the 40,000-cycle timer tick, so every sample hit the same
+  point of the tick handler; `soc_tb` now documents that the
+  period must not be a tick multiple). The audit measured a
+  constant 24,656-cycle tick cost (62 % of the period, every
+  tick taken) and progress through initramfs unpack and the
+  jitterentropy SHA-3 self-test. (Before the #6 mip fix reached
+  `main`, seed 7 hit the #3 SEI livelock right after `/init`'s
+  first line; the fix, not this branch, resolved it.)
+- Synthesis check (Yosys 0.68 in `openroad/orfs:latest`, sv2v
+  v0.0.13, Nangate45 typical, arrays black-boxed):
+  [`synth-caches-nangate45-2026-10-15.log`](synth-caches-nangate45-2026-10-15.log).
+  Logic area excluding SRAM arrays: I$ 2,928 um2 (1,508
+  cells, 270 flops), D$ 13,796 um2 (7,086 cells, 1,299
+  flops, 47 % sequential — valid/dirty bits, the 64 B
+  write-back line buffer and the registered uncached
+  response), arbiter 191 um2 (103 cells, 4 flops incl. the
+  offer-hold selection). Arrays: I$
+  2 x (512 x 64 b data + 64 x 44 b tag); D$ 4 x (512 x
+  64 b data with byte write mask + 64 x 44 b tag).

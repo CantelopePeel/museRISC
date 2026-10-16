@@ -10,7 +10,9 @@
 set -u
 cd "$(dirname "$0")/.."
 
-CORE_TB=build/sim/core_tb
+CORE_TB=${CORE_TB:-build/sim/core_tb}
+# Extra harness options (e.g. bus latency) for every run.
+CORE_TB_ARGS=${CORE_TB_ARGS:-}
 ELF_DIR=${2:-third_party/riscv-arch-test/work/muserisc-core/elfs}
 JOBS=${JOBS:-1}
 [ -d "$ELF_DIR" ] || { echo "no ELFs in $ELF_DIR; run ./scripts/build_act4_core.sh first"; exit 1; }
@@ -19,7 +21,8 @@ JOBS=${JOBS:-1}
 run_one() {
   local elf=$1 name out rc cycles
   name=$(basename "$elf" .elf)
-  out=$("$CORE_TB" "$elf" 5000000 2>&1)
+  # shellcheck disable=SC2086
+  out=$("$CORE_TB" "$elf" 5000000 $CORE_TB_ARGS 2>&1)
   rc=$?
   cycles=$(echo "$out" | sed -n 's/.* \([0-9][0-9]*\) cycles.*/\1/p')
   if [ $rc -eq 0 ]; then
@@ -30,7 +33,7 @@ run_one() {
   fi
 }
 export -f run_one
-export CORE_TB
+export CORE_TB CORE_TB_ARGS
 
 pass=0 fail=0 total=0
 [ $# -ge 1 ] && echo "test,result,cycles" > "$1"

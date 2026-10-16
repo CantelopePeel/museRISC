@@ -1,0 +1,79 @@
+# RTL SoC (muserisc_soc_top = muserisc_cpu with L1 I$/D$ + muserisc_soc_fabric + ROM/CLINT/PLIC/UART/crypto)
+# 2026-10-15, branch l1-cache on main 2789d95. Harness: tb/cpp/soc_rtl_tb.cpp (external RAM on the
+# memory bus via tb/cpp/mbus_model.h). Binary: make -C sim ../build/sim/soc_rtl_tb (no coverage).
+# Upstream (combinational RAM, no caches) reference: crypto PASS at 11,097,819 cycles; s_hello at 5,978,097.
+
+=== crypto-rand
+# Command: build/socrtl/soc_rtl_tb 400000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --load 0x80000000=build/soc-tests/crypto_soc_test.bin --uart-log build/socrtl/crypto-rand-uart.log --exit-string SOC CRYPTO PASS
+# Result: SOC RTL TB PASS (exit string at 18851904 cycles)   wall 62s
+# ---- UART ----
+SOC CRYPTO START
+stage1 sha256 ok
+stage2 field mul ok
+stage3 2G ok
+stage4a scalar inv ok
+........
+stage4b u1*G ok
+........
+stage4c u2*Q ok
+SOC CRYPTO PASS
+
+=== crypto-nocache
+# Command: build/socrtl/soc_rtl_tb 400000000 --no-cache --load 0x80000000=build/soc-tests/crypto_soc_test.bin --uart-log build/socrtl/crypto-nocache-uart.log --exit-string SOC CRYPTO PASS
+# Result: SOC RTL TB PASS (exit string at 34486744 cycles)   wall 104s
+# ---- UART ----
+SOC CRYPTO START
+stage1 sha256 ok
+stage2 field mul ok
+stage3 2G ok
+stage4a scalar inv ok
+........
+stage4b u1*G ok
+........
+stage4c u2*Q ok
+SOC CRYPTO PASS
+
+=== hello-lat1
+# Command: build/socrtl/soc_rtl_tb 200000000 --load 0x80000000=build/linux/fw_jump.bin --load 0x83000000=build/linux/muserisc.dtb --load 0x80200000=build/linux/s_hello.bin --uart-log build/socrtl/hello-lat1-uart.log --exit-string HELLO
+# Result: SOC RTL TB PASS (exit string at 11317000 cycles)   wall 38s
+# ---- UART ----
+Boot HART Debug Triggers    : 1 triggers
+Boot HART MIDELEG           : 0x0000000000000666
+Boot HART MEDELEG           : 0x0000000000f0b509
+HELLO
+
+=== hello-rand
+# Command: build/socrtl/soc_rtl_tb 200000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --load 0x80000000=build/linux/fw_jump.bin --load 0x83000000=build/linux/muserisc.dtb --load 0x80200000=build/linux/s_hello.bin --uart-log build/socrtl/hello-rand-uart.log --exit-string HELLO
+# Result: SOC RTL TB PASS (exit string at 11362632 cycles)   wall 38s
+# ---- UART ----
+Boot HART Debug Triggers    : 1 triggers
+Boot HART MIDELEG           : 0x0000000000000666
+Boot HART MEDELEG           : 0x0000000000f0b509
+HELLO
+
+=== Slang elaboration (ORFS Yosys read_slang, flow/designs/nangate45/muserisc_soc/config.mk file list)
+# docker openroad/orfs:latest; read_slang -D SYNTHESIS --keep-hierarchy --compat=vcs --ignore-assertions
+#   --top muserisc_soc_top --unroll-limit=200000 <33 files>; hierarchy -check -top muserisc_soc_top
+Build succeeded: 0 errors, 20 warnings
+# warnings (all pre-existing, none in cache/cpu/fabric files):
+      1 Build succeeded: 0 errors, 20 warnings
+      1 core/muserisc_core.sv:1927:18: warning: asynchronous load value missing for variable '\exmem_vec_nf_q'
+      1 core/muserisc_core.sv:1927:18: warning: asynchronous load value missing for variable '\exmem_vec_stride_q'
+      1 core/muserisc_core.sv:1927:18: warning: asynchronous load value missing for variable '\exmem_vm_q'
+      1 core/muserisc_core.sv:1927:18: warning: asynchronous load value missing for variable '\exmem_vs2_q'
+      1 core/muserisc_core.sv:1927:18: warning: asynchronous load value missing for variable '\idex_frs1_q'
+      1 core/muserisc_core.sv:1927:18: warning: asynchronous load value missing for variable '\idex_frs2_q'
+      1 core/muserisc_core.sv:1927:18: warning: asynchronous load value missing for variable '\idex_frs3_q'
+      1 core/muserisc_core.sv:1927:18: warning: asynchronous load value missing for variable '\idex_rs3_addr_q'
+      1 core/muserisc_core.sv:1927:18: warning: asynchronous load value missing for variable '\memwb_fp_write_q'
+      1 crypto/ec_field.sv:38:17: warning: asynchronous load value missing for variable '\aa'
+      1 crypto/ec_field.sv:38:17: warning: asynchronous load value missing for variable '\bb'
+      1 crypto/ec_field.sv:38:17: warning: asynchronous load value missing for variable '\mm'
+      1 crypto/sha256_block.sv:94:17: warning: asynchronous load value missing for variable '\a'
+      1 crypto/sha256_block.sv:94:17: warning: asynchronous load value missing for variable '\b'
+      1 crypto/sha256_block.sv:94:17: warning: asynchronous load value missing for variable '\c'
+      1 crypto/sha256_block.sv:94:17: warning: asynchronous load value missing for variable '\d'
+      1 crypto/sha256_block.sv:94:17: warning: asynchronous load value missing for variable '\e'
+      1 crypto/sha256_block.sv:94:17: warning: asynchronous load value missing for variable '\f'
+      1 crypto/sha256_block.sv:94:17: warning: asynchronous load value missing for variable '\g'
+      1 crypto/sha256_block.sv:94:17: warning: asynchronous load value missing for variable '\hh'

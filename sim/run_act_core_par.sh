@@ -5,6 +5,8 @@
 # for exactly one row per ELF.
 #
 # Usage: run_act_core_par.sh <core_tb> <out.csv> [elf-dir] [jobs]
+# CORE_TB_ARGS (env) is appended to every core_tb run, e.g.
+# "--mem-lat 1:6 --mem-gap 2 --mem-ready 70" or "--no-cache".
 # Exit status: 0 only if every ELF passed and the row set is complete.
 set -u
 TB=$(readlink -f "$1"); OUT=$(readlink -f "$2")
@@ -19,13 +21,15 @@ trap 'rm -rf "$RES"' EXIT
 one() {
   elf=$1; tb=$2; res=$3
   name=$(basename "$elf" .elf)
-  out=$("$tb" "$elf" 5000000 2>&1); rc=$?
+  # shellcheck disable=SC2086
+  out=$("$tb" "$elf" 5000000 ${CORE_TB_ARGS:-} 2>&1); rc=$?
   cycles=$(echo "$out" | sed -n 's/.* \([0-9][0-9]*\) cycles.*/\1/p' | tail -1)
   if [ $rc -eq 0 ]; then v=PASS; else v=FAIL; fi
   # One file per ELF: no shared file offset between workers.
   printf '%s,%s,%s\n' "$name" "$v" "$cycles" > "$res/$(echo "$elf" | md5sum | cut -c1-32)"
 }
 export -f one
+export CORE_TB_ARGS="${CORE_TB_ARGS:-}"
 find "$ELF_DIR" -type f -name '*.elf' | sort > "$RES/.list"
 nelf=$(wc -l < "$RES/.list")
 [ "$nelf" -gt 0 ] || { echo "no ELFs found under $ELF_DIR"; exit 1; }

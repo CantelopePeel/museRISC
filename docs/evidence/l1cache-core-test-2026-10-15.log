@@ -1,0 +1,507 @@
+# make core-test on branch l1-cache (2026-10-15), wall 255s
+# Verilator 5.048, GCC 16 riscv64-unknown-elf; every directed test runs twice:
+#   [rand]    caches on, --mem-lat 1:6 --mem-gap 2 --mem-ready 70, --mem-seed = run index
+#   [nocache] caches off (--no-cache), bus latency 1
+ALU TB PASS (205642 checks)
+MULDIV TB PASS (165877 checks)
+MULDIV_MC TB PASS (985873 checks, 125137 squashes, 6393441 cycles)
+MULDIV_MC (COMB=1) TB PASS (203248 checks, 0 squashes, 265043 cycles)
+DECODER TB PASS (12343 checks)
+REGFILE TB PASS (4194 checks)
+CSR TB PASS (214 checks)
+MMU TB PASS (74 checks)
+FPU TB PASS (476563 checks)
+FPU TB PASS (476563 checks)
+BEXT TB PASS (60866 checks)
+RVC TB PASS (49152 checks)
+VEC TB PASS (61672 checks, 22880 random trials, 13220778 cycles, seed 0x5eed8a)
+icache_tb: 30000 checks, 30000 fetches, 2167 invals (1770 during a miss), 5263 I/O, 0 errors
+ICACHE TB PASS
+dcache_tb: 141535 checks, 16565 loads, 17951 stores, 1484 cleans, 6250 I/O, 0 errors
+DCACHE TB PASS
+[rand] core_tb rv64i_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 1
+CORE TB PASS rv64i_directed.bin (1267 cycles)
+[rand] core_tb rv64m_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 2
+CORE TB PASS rv64m_directed.bin (713 cycles)
+[rand] core_tb md_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 3
+CORE TB PASS md_directed.bin (2215 cycles)
+[rand] core_tb md_kill_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 4
+CORE TB PASS md_kill_directed.bin (716 cycles)
+[rand] core_tb md_irq_directed.bin --irq-timer-after 100 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 101 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 102 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 103 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 104 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 105 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 106 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 107 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 108 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 109 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 110 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 111 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 112 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 113 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 114 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 115 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 116 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 117 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 118 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 119 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 120 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 121 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 122 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 123 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 124 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 125 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 126 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 127 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 128 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 129 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 130 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 131 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 132 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 133 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 134 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 135 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 136 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 137 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 138 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 139 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 140 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 141 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 142 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 143 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 144 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 145 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 146 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 147 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 148 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 149 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 150 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 151 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 152 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 153 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 154 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 155 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 156 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 157 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 158 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 159 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 160 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 161 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 162 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 163 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 164 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 165 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 166 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 167 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 168 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 169 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 170 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+[rand] core_tb md_irq_directed.bin --irq-timer-after 171 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 5
+CORE TB PASS md_irq_directed.bin [rand] (72/72 IRQ offsets 100..171)
+[rand] core_tb amo_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 6
+CORE TB PASS amo_directed.bin (1185 cycles)
+[rand] core_tb fp_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 7
+CORE TB PASS fp_directed.bin (2022 cycles)
+[rand] core_tb fp_stall_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 8
+CORE TB PASS fp_stall_directed.bin (2489 cycles)
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 100 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 101 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 102 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 103 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 104 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 105 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 106 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 107 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 108 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 109 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 110 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 111 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 112 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 113 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 114 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 115 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 116 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 117 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 118 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 119 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 120 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 121 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 122 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 123 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 124 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 125 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 126 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 127 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 128 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 129 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 130 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 131 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 132 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 133 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 134 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 135 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 136 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 137 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 138 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 139 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 140 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 141 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 142 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 143 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 144 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 145 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 146 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+[rand] core_tb fp_irq_directed.bin --irq-timer-after 147 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 9
+CORE TB PASS fp_irq_directed.bin [rand] (48/48 IRQ offsets 100..147)
+[rand] core_tb bext_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 10
+CORE TB PASS bext_directed.bin (1330 cycles)
+[rand] core_tb rvc_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 11
+CORE TB PASS rvc_directed.bin (509 cycles)
+[rand] core_tb pipeline_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 12
+CORE TB PASS pipeline_directed.bin (1331 cycles)
+[rand] core_tb priv_directed.bin 6000000 --irq-timer-after 2000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 13
+CORE TB PASS priv_directed.bin (1202630 cycles)
+[rand] core_tb vm_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 14
+CORE TB PASS vm_directed.bin (19862 cycles)
+[rand] core_tb trap_illegal.bin 100000 --expect-trap 2 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 15
+CORE TB PASS trap_illegal.bin (expected trap cause 2 at pc 0x4, 27 cycles)
+[rand] core_tb trap_misalign.bin 100000 --expect-trap 4 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 16
+CORE TB PASS trap_misalign.bin (expected trap cause 4 at pc 0x4, 27 cycles)
+[rand] core_tb trap_ecall.bin 100000 --expect-trap 11 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 17
+CORE TB PASS trap_ecall.bin (expected trap cause 11 at pc 0x4, 30 cycles)
+[rand] core_tb trap_ebreak.bin 100000 --expect-trap 3 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 18
+CORE TB PASS trap_ebreak.bin (expected trap cause 3 at pc 0x4, 29 cycles)
+[rand] core_tb trap_store_misalign.bin 100000 --expect-trap 6 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 19
+CORE TB PASS trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 26 cycles)
+[rand] core_tb trap_younger_store.bin 100000 --expect-trap 4 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 20
+CORE TB PASS trap_younger_store.bin (expected trap cause 4 at pc 0x4, 22 cycles)
+[rand] core_tb trap_younger_csr.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 21
+CORE TB PASS trap_younger_csr.bin (199 cycles)
+[rand] core_tb irq_seip_rmw.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 22
+CORE TB PASS irq_seip_rmw.bin (491 cycles)
+[rand] core_tb irq_mip_rmw_variants.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 23
+CORE TB PASS irq_mip_rmw_variants.bin (515 cycles)
+[rand] core_tb counter_time_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 24
+CORE TB PASS counter_time_directed.bin (12685 cycles)
+[rand] core_tb hyp_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 25
+CORE TB PASS hyp_directed.bin (3743 cycles)
+[rand] core_tb vec_directed.bin 4000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 26
+CORE TB PASS vec_directed.bin (3232 cycles)
+[rand] core_tb fpvec_directed.bin 4000000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 27
+CORE TB PASS fpvec_directed.bin (1180 cycles)
+[rand] core_tb vec_trap_directed.bin 4000000 --irq-timer-after 2000 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 28
+CORE TB PASS vec_trap_directed.bin (14497 cycles)
+[rand] core_tb trap_pa_fetch.bin 100000 --expect-trap 1 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 29
+CORE TB PASS trap_pa_fetch.bin (expected trap cause 1 at pc 0x100000000000000, 34 cycles)
+[rand] core_tb trap_pa_load.bin 100000 --expect-trap 5 --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 30
+CORE TB PASS trap_pa_load.bin (expected trap cause 5 at pc 0x8, 28 cycles)
+[rand] core_tb smc_fencei_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 31
+CORE TB PASS smc_fencei_directed.bin (8514 cycles)
+[rand] core_tb amo_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 32
+CORE TB PASS amo_cache_directed.bin (3486 cycles)
+[rand] core_tb mmio_bypass_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 33
+CORE TB PASS mmio_bypass_directed.bin (1783 cycles)
+[rand] core_tb vm_sfence_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 34
+CORE TB PASS vm_sfence_cache_directed.bin (23145 cycles)
+[rand] core_tb fp_hold_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 35
+CORE TB PASS fp_hold_cache_directed.bin (2783 cycles)
+[rand] core_tb ptw_drop_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 36
+CORE TB PASS ptw_drop_directed.bin (37580 cycles)
+[nocache] core_tb rv64i_directed.bin --no-cache --mem-seed 1
+CORE TB PASS rv64i_directed.bin (1450 cycles)
+[nocache] core_tb rv64m_directed.bin --no-cache --mem-seed 2
+CORE TB PASS rv64m_directed.bin (763 cycles)
+[nocache] core_tb md_directed.bin --no-cache --mem-seed 3
+CORE TB PASS md_directed.bin (2418 cycles)
+[nocache] core_tb md_kill_directed.bin --no-cache --mem-seed 4
+CORE TB PASS md_kill_directed.bin (791 cycles)
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 100 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 101 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 102 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 103 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 104 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 105 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 106 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 107 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 108 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 109 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 110 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 111 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 112 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 113 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 114 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 115 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 116 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 117 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 118 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 119 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 120 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 121 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 122 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 123 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 124 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 125 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 126 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 127 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 128 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 129 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 130 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 131 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 132 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 133 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 134 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 135 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 136 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 137 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 138 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 139 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 140 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 141 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 142 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 143 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 144 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 145 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 146 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 147 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 148 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 149 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 150 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 151 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 152 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 153 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 154 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 155 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 156 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 157 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 158 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 159 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 160 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 161 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 162 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 163 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 164 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 165 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 166 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 167 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 168 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 169 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 170 --no-cache --mem-seed 5
+[nocache] core_tb md_irq_directed.bin --irq-timer-after 171 --no-cache --mem-seed 5
+CORE TB PASS md_irq_directed.bin [nocache] (72/72 IRQ offsets 100..171)
+[nocache] core_tb amo_directed.bin --no-cache --mem-seed 6
+CORE TB PASS amo_directed.bin (1727 cycles)
+[nocache] core_tb fp_directed.bin --no-cache --mem-seed 7
+CORE TB PASS fp_directed.bin (2273 cycles)
+[nocache] core_tb fp_stall_directed.bin --no-cache --mem-seed 8
+CORE TB PASS fp_stall_directed.bin (2996 cycles)
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 100 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 101 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 102 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 103 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 104 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 105 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 106 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 107 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 108 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 109 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 110 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 111 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 112 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 113 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 114 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 115 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 116 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 117 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 118 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 119 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 120 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 121 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 122 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 123 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 124 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 125 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 126 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 127 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 128 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 129 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 130 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 131 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 132 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 133 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 134 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 135 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 136 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 137 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 138 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 139 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 140 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 141 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 142 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 143 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 144 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 145 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 146 --no-cache --mem-seed 9
+[nocache] core_tb fp_irq_directed.bin --irq-timer-after 147 --no-cache --mem-seed 9
+CORE TB PASS fp_irq_directed.bin [nocache] (48/48 IRQ offsets 100..147)
+[nocache] core_tb bext_directed.bin --no-cache --mem-seed 10
+CORE TB PASS bext_directed.bin (1599 cycles)
+[nocache] core_tb rvc_directed.bin --no-cache --mem-seed 11
+CORE TB PASS rvc_directed.bin (711 cycles)
+[nocache] core_tb pipeline_directed.bin --no-cache --mem-seed 12
+CORE TB PASS pipeline_directed.bin (2170 cycles)
+[nocache] core_tb priv_directed.bin 6000000 --irq-timer-after 2000 --no-cache --mem-seed 13
+CORE TB PASS priv_directed.bin (2404094 cycles)
+[nocache] core_tb vm_directed.bin --no-cache --mem-seed 14
+CORE TB PASS vm_directed.bin (31800 cycles)
+[nocache] core_tb trap_illegal.bin 100000 --expect-trap 2 --no-cache --mem-seed 15
+CORE TB PASS trap_illegal.bin (expected trap cause 2 at pc 0x4, 11 cycles)
+[nocache] core_tb trap_misalign.bin 100000 --expect-trap 4 --no-cache --mem-seed 16
+CORE TB PASS trap_misalign.bin (expected trap cause 4 at pc 0x4, 11 cycles)
+[nocache] core_tb trap_ecall.bin 100000 --expect-trap 11 --no-cache --mem-seed 17
+CORE TB PASS trap_ecall.bin (expected trap cause 11 at pc 0x4, 11 cycles)
+[nocache] core_tb trap_ebreak.bin 100000 --expect-trap 3 --no-cache --mem-seed 18
+CORE TB PASS trap_ebreak.bin (expected trap cause 3 at pc 0x4, 11 cycles)
+[nocache] core_tb trap_store_misalign.bin 100000 --expect-trap 6 --no-cache --mem-seed 19
+CORE TB PASS trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 15 cycles)
+[nocache] core_tb trap_younger_store.bin 100000 --expect-trap 4 --no-cache --mem-seed 20
+CORE TB PASS trap_younger_store.bin (expected trap cause 4 at pc 0x4, 11 cycles)
+[nocache] core_tb trap_younger_csr.bin --no-cache --mem-seed 21
+CORE TB PASS trap_younger_csr.bin (223 cycles)
+[nocache] core_tb irq_seip_rmw.bin --no-cache --mem-seed 22
+CORE TB PASS irq_seip_rmw.bin (607 cycles)
+[nocache] core_tb irq_mip_rmw_variants.bin --no-cache --mem-seed 23
+CORE TB PASS irq_mip_rmw_variants.bin (647 cycles)
+[nocache] core_tb counter_time_directed.bin --no-cache --mem-seed 24
+CORE TB PASS counter_time_directed.bin (25287 cycles)
+[nocache] core_tb hyp_directed.bin --no-cache --mem-seed 25
+CORE TB PASS hyp_directed.bin (3214 cycles)
+[nocache] core_tb vec_directed.bin 4000000 --no-cache --mem-seed 26
+CORE TB PASS vec_directed.bin (4007 cycles)
+[nocache] core_tb fpvec_directed.bin 4000000 --no-cache --mem-seed 27
+CORE TB PASS fpvec_directed.bin (1237 cycles)
+[nocache] core_tb vec_trap_directed.bin 4000000 --irq-timer-after 2000 --no-cache --mem-seed 28
+CORE TB PASS vec_trap_directed.bin (16015 cycles)
+[nocache] core_tb trap_pa_fetch.bin 100000 --expect-trap 1 --no-cache --mem-seed 29
+CORE TB PASS trap_pa_fetch.bin (expected trap cause 1 at pc 0x100000000000000, 18 cycles)
+[nocache] core_tb trap_pa_load.bin 100000 --expect-trap 5 --no-cache --mem-seed 30
+CORE TB PASS trap_pa_load.bin (expected trap cause 5 at pc 0x8, 15 cycles)
+[nocache] core_tb smc_fencei_directed.bin --no-cache --mem-seed 31
+CORE TB PASS smc_fencei_directed.bin (7014 cycles)
+[nocache] core_tb amo_cache_directed.bin --no-cache --mem-seed 32
+CORE TB PASS amo_cache_directed.bin (2493 cycles)
+[nocache] core_tb mmio_bypass_directed.bin --no-cache --mem-seed 33
+CORE TB PASS mmio_bypass_directed.bin (1917 cycles)
+[nocache] core_tb vm_sfence_cache_directed.bin --no-cache --mem-seed 34
+CORE TB PASS vm_sfence_cache_directed.bin (28947 cycles)
+[nocache] core_tb fp_hold_cache_directed.bin --no-cache --mem-seed 35
+CORE TB PASS fp_hold_cache_directed.bin (2597 cycles)
+[nocache] core_tb ptw_drop_directed.bin --no-cache --mem-seed 36
+CORE TB PASS ptw_drop_directed.bin (50994 cycles)
+CORE TB PASS fp_directed.bin (2400 cycles)
+CORE TB PASS fp_stall_directed.bin (2737 cycles)
+CORE TB PASS fpvec_directed.bin (1144 cycles)
+done; echo "CORE TB PASS fp_irq_directed.bin on FPU_DS_BITS=1 (25 IRQ offsets 100..172)"
+CORE TB PASS fp_irq_directed.bin on FPU_DS_BITS=1 (25 IRQ offsets 100..172)
+  tail -1 mdcomb.log | sed 's/^CORE TB PASS/CORE TB PASS [M COMB=1]/'; \
+CORE TB PASS [M COMB=1] rv64i_directed.bin (1267 cycles)
+CORE TB PASS [M COMB=1] rv64m_directed.bin (543 cycles)
+CORE TB PASS [M COMB=1] md_directed.bin (1715 cycles)
+CORE TB PASS [M COMB=1] md_kill_directed.bin (661 cycles)
+CORE TB PASS [M COMB=1] amo_directed.bin (1153 cycles)
+CORE TB PASS [M COMB=1] fp_directed.bin (1998 cycles)
+CORE TB PASS [M COMB=1] fp_stall_directed.bin (2451 cycles)
+CORE TB PASS [M COMB=1] bext_directed.bin (1307 cycles)
+CORE TB PASS [M COMB=1] rvc_directed.bin (491 cycles)
+CORE TB PASS [M COMB=1] pipeline_directed.bin (1293 cycles)
+CORE TB PASS [M COMB=1] priv_directed.bin (1202605 cycles)
+CORE TB PASS [M COMB=1] vm_directed.bin (19877 cycles)
+CORE TB PASS [M COMB=1] trap_illegal.bin (expected trap cause 2 at pc 0x4, 24 cycles)
+CORE TB PASS [M COMB=1] trap_misalign.bin (expected trap cause 4 at pc 0x4, 24 cycles)
+CORE TB PASS [M COMB=1] trap_ecall.bin (expected trap cause 11 at pc 0x4, 24 cycles)
+CORE TB PASS [M COMB=1] trap_ebreak.bin (expected trap cause 3 at pc 0x4, 24 cycles)
+CORE TB PASS [M COMB=1] trap_store_misalign.bin (expected trap cause 6 at pc 0x8, 26 cycles)
+CORE TB PASS [M COMB=1] trap_younger_store.bin (expected trap cause 4 at pc 0x4, 24 cycles)
+CORE TB PASS [M COMB=1] trap_younger_csr.bin (207 cycles)
+CORE TB PASS [M COMB=1] irq_seip_rmw.bin (469 cycles)
+CORE TB PASS [M COMB=1] irq_mip_rmw_variants.bin (503 cycles)
+CORE TB PASS [M COMB=1] counter_time_directed.bin (12687 cycles)
+CORE TB PASS [M COMB=1] hyp_directed.bin (3737 cycles)
+CORE TB PASS [M COMB=1] vec_directed.bin (3215 cycles)
+CORE TB PASS [M COMB=1] fpvec_directed.bin (1144 cycles)
+CORE TB PASS [M COMB=1] vec_trap_directed.bin (14459 cycles)
+CORE TB PASS [M COMB=1] trap_pa_fetch.bin (expected trap cause 1 at pc 0x100000000000000, 29 cycles)
+CORE TB PASS [M COMB=1] trap_pa_load.bin (expected trap cause 5 at pc 0x8, 26 cycles)
+done; echo "CORE TB PASS [M COMB=1] md_irq_directed.bin (11 IRQ offsets 100..170)"
+CORE TB PASS [M COMB=1] md_irq_directed.bin (11 IRQ offsets 100..170)
+
+# verilator_coverage --annotate summary (all modules; a line counts only if every point on it is hit)
+  lines with all attached points covered : 55.00%  (3182/5716)
+
+# per-file coverage, all core-test runs merged (scripts/cov_report.py build/sim/cov_merged.dat)
+muserisc_bus_arb.sv          branch       20/20     100.00%
+muserisc_bus_arb.sv          line          6/6      100.00%
+muserisc_bus_arb.sv          toggle      624/782     79.80%
+muserisc_core.sv             branch      259/276     93.84%
+muserisc_core.sv             line        173/182     95.05%
+muserisc_core.sv             toggle    11417/18094   63.10%
+muserisc_cpu.sv              toggle     1604/2310    69.44%
+muserisc_dcache.sv           branch       58/58     100.00%
+muserisc_dcache.sv           line         41/41     100.00%
+muserisc_dcache.sv           toggle     3524/4202    83.86%
+muserisc_icache.sv           branch       44/44     100.00%
+muserisc_icache.sv           line         26/26     100.00%
+muserisc_icache.sv           toggle     1623/1842    88.11%
+muserisc_sram_sp.sv          branch        6/6      100.00%
+muserisc_sram_sp.sv          line          2/2      100.00%
+muserisc_sram_sp.sv          toggle      685/686     99.85%
+
+# cache unit TBs alone (cov_icache.dat + cov_dcache.dat; 4 sets x 2 ways x 32 B lines)
+muserisc_dcache.sv           branch       58/58     100.00%
+muserisc_dcache.sv           line         41/41     100.00%
+muserisc_dcache.sv           toggle     2664/2676    99.55%
+muserisc_icache.sv           branch       44/44     100.00%
+muserisc_icache.sv           line         26/26     100.00%
+muserisc_icache.sv           toggle     1550/1574    98.48%
+muserisc_sram_sp.sv          branch        6/6      100.00%
+muserisc_sram_sp.sv          line          2/2      100.00%
+muserisc_sram_sp.sv          toggle      675/676     99.85%
+# uncovered points in the unit-TB view (all structurally constant, see evidence README):
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[2]:0->1
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[2]:1->0
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[3]:0->1
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[3]:1->0
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[4]:0->1
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[4]:1->0
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[5]:0->1
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[5]:1->0
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[6]:0->1
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[6]:1->0
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[7]:0->1
+  uncovered muserisc_dcache.sv:51 toggle bus_req_len_o[7]:1->0
+  uncovered muserisc_icache.sv:31 toggle req_addr_i[0]:0->1
+  uncovered muserisc_icache.sv:31 toggle req_addr_i[0]:1->0
+  uncovered muserisc_icache.sv:31 toggle req_addr_i[1]:0->1
+  uncovered muserisc_icache.sv:31 toggle req_addr_i[1]:1->0
+  uncovered muserisc_icache.sv:37 toggle bus_req_addr_o[0]:0->1
+  uncovered muserisc_icache.sv:37 toggle bus_req_addr_o[0]:1->0
+  uncovered muserisc_icache.sv:37 toggle bus_req_addr_o[1]:0->1
+  uncovered muserisc_icache.sv:37 toggle bus_req_addr_o[1]:1->0
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[2]:0->1
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[2]:1->0
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[3]:0->1
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[3]:1->0
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[4]:0->1
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[4]:1->0
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[5]:0->1
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[5]:1->0
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[6]:0->1
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[6]:1->0
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[7]:0->1
+  uncovered muserisc_icache.sv:38 toggle bus_req_len_o[7]:1->0
+  uncovered muserisc_icache.sv:69 toggle r_addr_q[0]:0->1
+  uncovered muserisc_icache.sv:69 toggle r_addr_q[0]:1->0
+  uncovered muserisc_icache.sv:69 toggle r_addr_q[1]:0->1
+  uncovered muserisc_icache.sv:69 toggle r_addr_q[1]:1->0
+  uncovered muserisc_sram_sp.sv:27 toggle mem_q[2][48]:1->0
