@@ -52,7 +52,7 @@ CACHE_RTL := $(RTL)/muserisc_cache_pkg.sv $(RTL)/muserisc_sram_sp.sv \
              $(RTL)/muserisc_bus_arb.sv
 CPU_RTL  := $(CORE_RTL) $(filter-out $(RTL)/muserisc_cache_pkg.sv,$(CACHE_RTL)) \
             $(RTL)/muserisc_cpu.sv
-TESTS    := rv64i_directed rv64m_directed md_directed md_irq_directed md_kill_directed irq_exc_race_directed amo_directed fp_directed fp_stall_directed fp_irq_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed vec_directed fpvec_directed \
+TESTS    := rv64i_directed rv64m_directed md_directed md_irq_directed md_kill_directed irq_exc_race_directed amo_directed fp_directed fp_stall_directed fp_irq_directed bext_directed rvc_directed pipeline_directed priv_directed counter_time_directed hyp_directed vec_directed fpvec_directed vec_trap_directed \
             vm_directed \
             trap_illegal trap_misalign trap_ecall trap_ebreak \
             trap_store_misalign trap_younger_store trap_younger_csr \
@@ -203,13 +203,16 @@ rvc: $(BUILD)/rvc_tb
 	cd $(BUILD) && COV_FILE=cov_rvc.dat ./rvc_tb
 
 ## ---- Vector unit test ------------------------------------------------------
+# Harness = muserisc_vec + banked muserisc_vregfile + TB backdoor.
 $(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(FPU_INC) \
                  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
-                 $(RTL)/muserisc_vec.sv | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/vec --top-module muserisc_vec \
+                 $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
+                 $(ROOT)/tb/sv/muserisc_vec_harness.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/vec --top-module muserisc_vec_harness \
 	  -o $(abspath $(BUILD)/vec_tb) $(PKG) \
 	  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
-	  $(RTL)/muserisc_vec.sv \
+	  $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
+	  $(ROOT)/tb/sv/muserisc_vec_harness.sv \
 	  $(abspath $(ROOT)/tb/cpp/vec_tb.cpp)
 
 vec: $(BUILD)/vec_tb
@@ -374,7 +377,7 @@ MDCOMB_RUNS := rv64i_directed.bin rv64m_directed.bin md_directed.bin md_kill_dir
   "trap_ebreak.bin 100000 --expect-trap 3" "trap_store_misalign.bin 100000 --expect-trap 6" \
   "trap_younger_store.bin 100000 --expect-trap 4" trap_younger_csr.bin \
   counter_time_directed.bin hyp_directed.bin vec_directed.bin \
-  fpvec_directed.bin \
+  fpvec_directed.bin "vec_trap_directed.bin --irq-timer-after 2000" \
   "trap_pa_fetch.bin 100000 --expect-trap 1" "trap_pa_load.bin 100000 --expect-trap 5"
 $(BUILD)/core_tb_mdcomb: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/core_mdcomb --top-module muserisc_cpu \
