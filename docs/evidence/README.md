@@ -1981,3 +1981,19 @@ stages 4c/5:
   pass; Vf cycles 1.02x), `socrtl` and OpenSBI on `soc_rtl_tb`,
   Verilator 5.020 and the `soc_tb` Linux boot (details in the
   log).
+
+## PLIC spec claim/complete semantics, 3-bit priorities (2026-10-16, branch `plic-spec`, #21)
+
+- Artifact: [`plic-spec-2026-10-16.log`](plic-spec-2026-10-16.log),
+  Linux boot [`plic-spec-linux-boot-2026-10-16.log`](plic-spec-linux-boot-2026-10-16.log).
+- RTL PLIC and the `soc_tb` C++ model now follow the RISC-V PLIC
+  spec: a claim returns the best pending enabled source with
+  priority > 0 regardless of the threshold (which gates only the
+  EIP notification); a completion for a source not enabled for
+  the context is ignored; priorities and thresholds are WARL with
+  3 implemented bits. `plic_tb` checks each (the previous RTL
+  fails it). `muserisc_plic` 32,860 → 4,940 µm², 3.32 → 1.76 ns.
+- Gates: lint, test, core-test (incl. `plic_tb`, second seed),
+  `socrtl`, OpenSBI on `soc_rtl_tb`, Verilator 5.020, and the
+  `soc_tb` Linux boot (`MUSERISC_LINUX_BOOT_OK`, 1,612,954,759
+  cycles).
