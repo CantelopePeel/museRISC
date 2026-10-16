@@ -242,12 +242,18 @@ module muserisc_fpu import muserisc_fpu_pkg::*; (
   logic [63:0] chk_a, chk_b, chk_c;
   fp_eval_result_t chk_ref;
   assign chk_ref = fp_eval(chk_op, chk_d, chk_rm, chk_a, chk_b, chk_c, chk_aux);
+  // Armed by the first reset edge: before reset the state is
+  // arbitrary (e.g. under +verilator+rand+reset+2).
+  logic chk_armed;
+  initial chk_armed = 1'b0;
+  always @(posedge clk_i or negedge rst_ni) if (!rst_ni) chk_armed <= 1'b1;
   always_ff @(posedge clk_i) begin
     if ((state_q == S_IDLE) && req_i) begin
       chk_op <= op_i; chk_d <= fmt_d_i; chk_rm <= rm_i; chk_aux <= aux_i;
       chk_a <= a_i; chk_b <= b_i; chk_c <= c_i;
     end
-    if (done_o && (state_q != S_IDLE) && (state_q != S_HOLD) && !kill_i &&
+    if (chk_armed && done_o && (state_q != S_IDLE) &&
+        (state_q != S_HOLD) && !kill_i &&
         ((chk_ref.result != result_o) || (chk_ref.flags != flags_o)))
       $error("muserisc_fpu: op %0d d=%0d rm=%0d a=%h b=%h c=%h: got %h/%h, fp_eval %h/%h",
              chk_op, chk_d, chk_rm, chk_a, chk_b, chk_c, result_o, flags_o,
