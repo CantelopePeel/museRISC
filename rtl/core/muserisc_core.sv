@@ -1547,11 +1547,14 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
   // A MEM access in flight is never abandoned: nothing older can
   // trap while it waits (WB is frozen behind mem_stall).
 `ifndef SYNTHESIS
-  logic chk_live_q;
   // Low until reset: pre-reset state is arbitrary under
-  // +verilator+rand+reset+2.
+  // +verilator+rand+reset+2. A plain always, not always_ff, so the
+  // initial block may also write it (IEEE 1800 9.2.2.4: an
+  // always_ff variable has no other writer; a declaration
+  // initialiser trips Verilator's PROCASSINIT instead).
+  logic chk_live_q;
   initial chk_live_q = 1'b0;
-  always_ff @(posedge clk_i or negedge rst_ni) begin
+  always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) chk_live_q <= 1'b0;
     else chk_live_q <= 1'b1;
   end
