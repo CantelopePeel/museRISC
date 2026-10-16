@@ -264,7 +264,9 @@ resume_m3:
     csrw pmpaddr0, x0
 
     // 11: timer interrupt taken precisely between instructions;
-    //     interrupted loop completes afterwards.
+    //     the interrupted loop resumes and exits once the handler
+    //     has set irq_flag (200k iterations is only the timeout,
+    //     so the test is short at any bus latency).
     li t0, 11
     la a0, irq_flag
     sd x0, 0(a0)
@@ -274,10 +276,13 @@ resume_m3:
     csrs mie, a0
     csrsi mstatus, 0x8             // MIE
     li a0, 0
-    li a1, 200000                  // spin long enough for the IRQ
+    li a1, 200000                  // timeout bound for the IRQ
+    la a3, irq_flag
 1:  addi a0, a0, 1
+    ld a2, 0(a3)
+    bnez a2, 2f                    // IRQ taken and handled
     bltu a0, a1, 1b
-    csrci mstatus, 0x8
+2:  csrci mstatus, 0x8
     csrw mie, x0
     la a0, irq_flag
     ld a1, 0(a0)
