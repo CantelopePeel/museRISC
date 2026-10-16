@@ -1,9 +1,9 @@
 museRISC SoC synthesis with all large arrays on SRAM macros (branch soc-sram-synth, 2026-10-16)
 =================================================================================================
 
-Base: fork main 3bf8965 (#15 L1 caches + fabric, #19 CSR VLMAX shift + PLIC
-tree, #18, #20 vector FP on the shared FPU, #22, #23). Round-3 state of
-PR #17.
+Base: fork main b634ffc (#15 L1 caches + fabric, #19 CSR VLMAX shift + PLIC
+tree, #18, #20 vector FP on the shared FPU, #22, #23, #24 PLIC spec fixes).
+Round-3 state of PR #17.
 
 RTL changes in this branch:
   - muserisc_vrf_bank (VRF) and muserisc_sram_sp (L1 data/tag ways)
@@ -35,10 +35,10 @@ L1 tag way 64x44       6      fakeram45_64x44 (generated, 1RW)       sky130_sram
                               2,628.08 um2 each                      105,706.655 um2 each
 
 == Runs (make synth; wall / peak RSS of the whole make) ==
-nangate45 flat (base)        1:16:42  2.73 GB   OK   abc 3,878 s, extract_fa 291 s
-sky130hd flat (base)         1:08:19  2.72 GB   OK   abc 3,372 s, extract_fa 286 s
-nangate45 hier               0:24:39  2.35 GB   OK   abc 926 s, extract_fa 220 s
-sky130hd hier                0:24:19  2.36 GB   OK   abc 911 s, extract_fa 221 s
+nangate45 flat (base)        1:22:52  2.68 GB   OK   abc 4,084 s, extract_fa 335 s
+sky130hd flat (base)         1:07:42  2.71 GB   OK   abc 3,179 s, extract_fa 326 s
+nangate45 hier               0:28:01  2.21 GB   OK   abc 945 s, extract_fa 309 s
+sky130hd hier                0:27:31  2.22 GB   OK   abc 917 s, extract_fa 303 s
 All four with ORFS's default SYNTH_MEMORY_MAX_BITS=4096 (no override).
 Yosys read_slang of the whole SoC with each define
 (soc-sram-synth-slang-memguard-2026-10-16.log): 15 macro instances per
@@ -46,38 +46,39 @@ platform, 22 inferred memories, largest 2048 bits.
 
 == Area (synth_stat.txt, flat) ==
                           nangate45            sky130hd
-std-cell area             536,637 um2          2,502,929 um2
+std-cell area             504,350 um2          2,364,368 um2
 macros                    158,051 um2          6,225,284 um2
-chip area                 694,687.728 um2      8,728,213.447 um2
-cells (incl. 15 macros)   316,548              275,790
-flops                     DFFR 13,985 + DFFS 22 + DFF 13,426 = 27,433
-                                               dfrtp 13,985 + dfstp 22 + dfxtp 876
-                                               + edfxtp 12,556 = 27,439
-std-cell ratio sky130/nangate45: 4.66
-Hierarchical totals: nangate45 717,618.524 um2 (27,641 flops); sky130hd
-8,854,059.143 um2 (27,679 flops). Per-module tables: docs/SOC_AREA.md.
+chip area                 662,400.914 um2      8,589,651.805 um2
+cells (incl. 15 macros)   296,459              260,033
+flops                     DFFR 12,999 + DFFS 22 + DFF 13,426 = 26,447
+                                               dfrtp 12,999 + dfstp 22 + dfxtp 876
+                                               + edfxtp 12,556 = 26,453
+std-cell ratio sky130/nangate45: 4.69
+Hierarchical totals: nangate45 689,218.236 um2 (26,652 flops); sky130hd
+8,712,017.914 um2 (26,690 flops). Per-module tables: docs/SOC_AREA.md.
 
 == Timing (OpenSTA on 1_synth.odb, wire-load model, no repair) ==
 flow/designs/nangate45/muserisc_soc/sta_synth.tcl; full reports in
 soc-sram-synth-{n45,sky130}-sta-2026-10-16.log (flat netlists). Fmax by
 bisection of the clock period.
                                    nangate45 (SDC 10 ns)   sky130hd (SDC 25 ns)
-min period / fmax, all paths       5.91 ns / 169.2 MHz     84.12 ns / 11.89 MHz
+min period / fmax, all paths       6.19 ns / 161.7 MHz     81.37 ns / 12.29 MHz
   limiting path                    vls_started_q ->        VRF u_ram dout1 (fall) ->
-                                   D$ tag-way rd_q         u_fpu.prod_op[0] DE:
-                                                           clk->q 0.379 + logic 39.749
-                                                           + setup 1.422 + unc 0.5 = P/2
-  largest stage on it              -                       a2111oi_0, fanout 145, 22.446 ns
+                                   u_vec.cnt_ok_q          u_fpu.prod_op[0] DE:
+                                                           clk->q 0.379 + logic 38.382
+                                                           + setup 1.421 + unc 0.5 = P/2
+  largest stage on it              -                       a2111oi_0, fanout 145, 22.379 ns
                                                            (unbuffered, unrepaired netlist)
-VRF-launched paths excluded        5.91 ns / 169.2 MHz     55.26 ns / 18.10 MHz
+VRF-launched paths excluded        6.19 ns / 161.7 MHz     54.29 ns / 18.42 MHz
 (= VRF outputs registered)                                 D$ tag-way dout0 (fall) -> same DE:
-                                                           0.319 + 25.380 + 1.422 + 0.5 = P/2
-rising-edge launches only          5.91 ns / 169.2 MHz     45.01 ns / 22.21 MHz
+                                                           0.319 + 24.901 + 1.421 + 0.5 = P/2
+rising-edge launches only          6.19 ns / 161.7 MHz     43.52 ns / 22.98 MHz
 (= all 15 macro outputs registered)                        vls_started_q -> u_fpu.prod_op DE
+worst block slack at the 10 ns SDC (nangate45): u_vec 3.842 ns
 Per-block req_depth_ns (= SDC period - 0.5 - slack; includes setup and,
 for falling-edge launches, the half period): see the STA logs.
-(hierarchical netlists: nangate45 6.34 ns; sky130 66.03 ns all paths,
-34.55 ns without VRF launches / rising only.)
+(hierarchical netlists: nangate45 6.25 ns; sky130 62.74 ns all paths,
+34.49 ns without VRF launches, 32.26 ns rising only.)
 
 == VRF collision handling (vector TB, scratch counters, not committed) ==
 same-row read+write cycles: 136,168 (port A 20,584, B 20,671, C 94,913),
@@ -102,28 +103,28 @@ Earlier mutations (wrapper RTL unchanged since): VRF capture register
 removed -> FAIL on both families; sky130 L1 half select stuck -> cache
 tests FAIL; L1 capture register removed -> still PASS (kept by design).
 
-== Simulation gates (Verilator 5.048 deps/, this branch on 3bf8965) ==
-make lint (incl. SoC under both SRAM defines)          PASS        11 s
+== Simulation gates (Verilator 5.048 deps/, this branch on b634ffc) ==
+make lint (incl. SoC under both SRAM defines)          PASS        12 s
 Docker ubuntu:24.04 Verilator 5.020, non-root, ro mount:
   make lint PASS; vec_tb, vec_tb_fakeram45, vec_tb_sky130 PASS
   (13,232,168 cycles); core_tb_fakeram45 / core_tb_sky130 build
 make test                                              ALL PHASE-0 KATs PASS
-make core-test                                         EXIT 0, 11 min 10 s (incl. srammacro)
+make core-test                                         EXIT 0, 17 min 43 s (incl. srammacro)
   srammacro (fakeram45 and sky130 models, collision garbage on):
     VEC TB PASS (61743 checks, 22880 random trials, 13232168 cycles)
     run_directed.sh on core_tb_<m>: 36 PASS lines, 0 FAIL
     soc_rtl_tb_<m> crypto firmware: PASS at 18,851,904 cycles (= behavioural)
   no "muserisc_vregfile: ... partial write" assertion in any run
-make riscv-tests                                       123/123 PASS   36 s
+make riscv-tests                                       123/123 PASS   38 s
 make -C sim socrtl (cached)                            PASS at 18,851,904 cycles
 soc_rtl_tb --no-cache, crypto                          PASS at 34,486,744 cycles
 OpenSBI fw_jump + DTB + s_hello, cached / --no-cache   HELLO FROM S-MODE at 11,495,124 / 24,192,161
   on soc_rtl_tb_fakeram45 / soc_rtl_tb_sky130          11,495,124 / 11,495,124
 ACT I,M regenerated                                    64/64
-ACT full (2,578 ELFs, read-only set, JOBS=12)          2577/2578, only PMPSm_cfg_A_tor_zero-00  7 min 2 s
+ACT full (2,578 ELFs, read-only set, JOBS=12)          2577/2578, only PMPSm_cfg_A_tor_zero-00  6 min 17 s
   CSV: act-core-soc-sram-synth-2026-10-16.csv
 flow/designs/sky130hd/muserisc_soc/sram/vendor_model_check.sh
   (vendor OpenRAM .v; $display stripped; posedge dout X non-blocking):
-  VEC TB PASS on X seeds 1/2/3; run_directed 36 PASS lines      1 min 16 s
+  VEC TB PASS on X seeds 1/2/3; run_directed 36 PASS lines      1 min 21 s
   --as-shipped (blocking posedge dout X, races the capture flop):
   VEC TB FAIL (3329 / 3326 / 3322 failures); run_directed exit 1

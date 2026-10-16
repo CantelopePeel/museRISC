@@ -2000,21 +2000,21 @@ stages 4c/5:
 
 ## SoC synthesis with all large arrays on SRAM macros (2026-10-16, branch `soc-sram-synth`)
 
-- ORFS synthesis of the whole `muserisc_soc_top` on main 3bf8965. All
+- ORFS synthesis of the whole `muserisc_soc_top` on main b634ffc. All
   15 large arrays are macros: 3 VRF banks, 6 L1 data ways and 6 L1 tag
   ways.
   - On Nangate45 the macros are fakeram45, partly generated.
   - On sky130hd they are the OpenRAM macros prebuilt in ORFS.
 - Flat results:
-  - Nangate45: 536,637 µm² std cells + 158,051 µm² macros, 27,433
+  - Nangate45: 504,350 µm² std cells + 158,051 µm² macros, 26,447
     flops.
-  - sky130hd: 2,502,929 µm² + 6,225,284 µm², 27,439 flops.
+  - sky130hd: 2,364,368 µm² + 6,225,284 µm², 26,453 flops.
 - Unrepaired fmax (period bisection in OpenSTA):
-  - Nangate45: 169 MHz.
-  - sky130hd: 11.9 MHz. It is set by the OpenRAM half-cycle reads: 18.1
-    MHz with the VRF outputs registered, 22.2 MHz with all 15
+  - Nangate45: 162 MHz.
+  - sky130hd: 12.3 MHz. It is set by the OpenRAM half-cycle reads: 18.4
+    MHz with the VRF outputs registered, 23.0 MHz with all 15
     registered.
-- The rough sky130 placed core size is 12.0–13.9 mm².
+- The rough sky130 placed core size is 11.8–13.5 mm².
 - The VRF never presents a same-address read and write to a macro:
   S3 write combining, a full-word bypass, and a retry for partial
   writes. The `srammacro` models return whole-word garbage for that

@@ -1,11 +1,12 @@
 # SoC area and timing estimate (synthesis, 2026-10-16)
 
 This is ORFS synthesis of the whole `muserisc_soc_top` on fork main
-3bf8965. That covers the core, the L1 I$/D$ with bus arbiter (#15),
+b634ffc. That covers the core, the L1 I$/D$ with bus arbiter (#15),
 the SoC fabric, CLINT/PLIC/UART/boot ROM and crypto. The core
 includes the element-serial vector unit, whose FP runs on the shared
 multi-cycle FPU (#20), the multi-cycle M unit, and the CSR VLMAX shift
-and PLIC tournament tree (#19).
+and PLIC tournament tree (#19)
+with the PLIC spec fixes (#24, 3-bit priorities).
 
 Every large array is an SRAM macro, 15 per SoC:
 
@@ -25,7 +26,7 @@ Evidence: [`evidence/soc-sram-synth-2026-10-16.log`](evidence/soc-sram-synth-202
 
 Flat synthesis (the ORFS default) gives the totals. A second,
 hierarchical run (`SYNTH_HIERARCHICAL=1`) gives the per-module split;
-it keeps module boundaries, so it comes out 1–3 % larger.
+it keeps module boundaries, so it comes out 1–4 % larger.
 
 Both flows read the RTL with `-D SYNTHESIS`, so simulation-only
 checks are dropped. ORFS passes that define itself, and the configs
@@ -33,19 +34,19 @@ repeat it.
 
 | | Nangate45 | sky130hd |
 |---|---:|---:|
-| Std-cell area | 0.537 mm² (536,637 µm²) | 2.503 mm² (2,502,929 µm²) |
+| Std-cell area | 0.504 mm² (504,350 µm²) | 2.364 mm² (2,364,368 µm²) |
 | SRAM macros (15) | 0.158 mm² (158,051 µm²) | 6.225 mm² (6,225,284 µm²) |
 |   VRF banks (3) | 38,473 µm² | 1,258,388 µm² |
 |   L1 data ways (6) | 103,809 µm² | 4,332,656 µm² |
 |   L1 tag ways (6) | 15,769 µm² | 634,240 µm² |
-| Total synthesized area | 0.695 mm² | 8.728 mm² |
-| Cells (incl. macros) | 316,548 | 275,790 |
-| Flip-flops | 27,433 | 27,439 |
-| **Fmax (unrepaired, wire-load)** | **169 MHz** (5.91 ns) | **11.9 MHz** (84.1 ns) |
-| Limiting path | `vls_started_q` → D$ tag-way read capture (5.4 ns) | VRF OpenRAM `dout1`, launched on the falling edge → FPU operand enable: 0.38 ns clk→q + 39.75 ns logic + 1.42 ns setup + 0.5 ns uncertainty = half the period |
-| Fmax with only the 3 VRF macro outputs registered | (same) | **18.1 MHz** (55.3 ns): D$ tag-way OpenRAM `dout0` (falling edge) → same FPU enable, 25.4 ns of logic in half a cycle |
-| Fmax with all 15 macro outputs registered | (same) | **22.2 MHz** (45.0 ns): `vls_started_q` → FPU operand enable, full cycle |
-| Yosys wall time / peak RSS (whole make) | 1 h 17 min / 2.73 GB | 1 h 08 min / 2.72 GB |
+| Total synthesized area | 0.662 mm² | 8.590 mm² |
+| Cells (incl. macros) | 296,459 | 260,033 |
+| Flip-flops | 26,447 | 26,453 |
+| **Fmax (unrepaired, wire-load)** | **162 MHz** (6.19 ns) | **12.3 MHz** (81.4 ns) |
+| Limiting path | `vls_started_q` → vector unit `cnt_ok_q` | VRF OpenRAM `dout1`, launched on the falling edge → FPU operand enable: 0.38 ns clk→q + 38.38 ns logic + 1.42 ns setup + 0.5 ns uncertainty = half the period |
+| Fmax with only the 3 VRF macro outputs registered | (same) | **18.4 MHz** (54.3 ns): D$ tag-way OpenRAM `dout0` (falling edge) → same FPU enable, 24.9 ns of logic in half a cycle |
+| Fmax with all 15 macro outputs registered | (same) | **23.0 MHz** (43.5 ns): `vls_started_q` → FPU operand enable, full cycle |
+| Yosys wall time / peak RSS (whole make) | 1 h 23 min / 2.68 GB | 1 h 08 min / 2.71 GB |
 
 Fmax is found by bisecting the clock period in OpenSTA, which is the
 `min_period_*` lines of `sta_synth.tcl`. A period-minus-WNS figure
@@ -54,30 +55,30 @@ budget is half the period.
 
 **The sky130 fmax is set by the OpenRAM half-cycle read paths.**
 - Registering only the VRF outputs (a VRF read pipeline stage)
-  leaves the L1 macros' half-cycle paths, which give 18.1 MHz.
-- About 22 MHz needs all 15 macro outputs registered, which costs one
+  leaves the L1 macros' half-cycle paths, which give 18.4 MHz.
+- About 23 MHz needs all 15 macro outputs registered, which costs one
   more cycle of latency on VRF reads and on cache hits.
 
 These are unrepaired wire-load numbers, and one gate dominates. Both
 FPU-enable paths go through a single `sky130_fd_sc_hd__a2111oi_0`
 that drives 145 loads unbuffered, and it alone is 22.4 ns of the
-39.75 ns. That is an artefact of the unrepaired netlist (repair would
+38.4 ns. That is an artefact of the unrepaired netlist (repair would
 buffer or upsize it), so these fmax figures mostly reflect fanout,
 not logic depth.
 
-On Nangate45 every block has at least 4.1 ns of slack at 100 MHz.
+On Nangate45 every block has at least 3.8 ns of slack at 100 MHz.
 
 The sky130 column comes from a direct sky130hd synthesis run (the
 platform and the OpenRAM macros ship in `openroad/orfs:latest`), not
 from scaling:
-- Std-cell area scales 4.66× from Nangate45 to sky130hd (flat runs).
+- Std-cell area scales 4.69× from Nangate45 to sky130hd (flat runs).
 - The macros do not scale that way: sky130 OpenRAM is 33–42× the
   fakeram45 area for the same array.
-- So on sky130 the macros are 71 % of the synthesized area.
+- So on sky130 the macros are 72 % of the synthesized area.
 
-Where the Yosys time went: mostly in `abc` (Nangate45 3,878 s, sky130
-3,372 s), with `extract_fa` at ~290 s, on a loaded host. The
-hierarchical runs took ~25 min each at 2.35 GB.
+Where the Yosys time went: mostly in `abc` (Nangate45 4,084 s, sky130
+3,179 s), with `extract_fa` at ~330 s, on a loaded host. The
+hierarchical runs took ~28 min each at 2.2 GB.
 
 ### Area by module (hierarchical runs)
 
@@ -92,24 +93,24 @@ arbiter into the top.
 | L1 data ways (6 × `muserisc_sram_sp`) | 6 × 17,735 | 6 × 724,923 | 6 × 66 | macro + read capture + half select |
 | L1 tag ways (6 × `muserisc_sram_sp`) | ² | 6 × 107,366 | 6 × 45 | macro + read capture |
 | VRF banks (3 × `muserisc_vrf_bank`) | 3 × 13,252 | 3 × 421,852 | 3 × 65 | macro + read capture |
-| `muserisc_vec` | 62,965 | 289,330 | 1,645 | element-serial vector unit; FP on the shared FPU; VRF write combining |
-| `muserisc_csr` | 57,284 | 271,229 | 3,063 | |
-| `muserisc_mmu` | 64,327 | 305,088 | 4,557 | TLBs + walker |
-| `muserisc_fpu` | 52,480 | 244,698 | 1,394 | multi-cycle FPU, shared by scalar and vector |
-| `muserisc_core` pipeline | 95,876 ³ | 203,017 | 2,730 | |
+| `muserisc_vec` | 62,231 | 287,563 | 1,645 | element-serial vector unit; FP on the shared FPU; VRF write combining |
+| `muserisc_csr` | 57,009 | 268,990 | 3,063 | |
+| `muserisc_mmu` | 65,119 | 304,394 | 4,557 | TLBs + walker |
+| `muserisc_fpu` | 51,448 | 244,190 | 1,391 | multi-cycle FPU, shared by scalar and vector |
+| `muserisc_core` pipeline | 95,212 ³ | 203,206 | 2,730 | |
 | `muserisc_fpregfile` / `regfile` | ³ | 106,162 / 96,927 | 2,048 / 2,048 | 32×64 flops each |
-| `muserisc_alu`, `decoder`, `rvc` | ³ | 31,109 | 0 | |
-| `muserisc_muldiv_mc` | 38,740 | 185,249 | 276 | multi-cycle M unit |
-| `muserisc_bext` | 27,709 | 140,013 | 0 | bit-manip / scalar crypto |
+| `muserisc_alu`, `decoder`, `rvc` | ³ | 31,051 | 0 | |
+| `muserisc_muldiv_mc` | 39,147 | 183,755 | 276 | multi-cycle M unit |
+| `muserisc_bext` | 27,565 | 139,955 | 0 | bit-manip / scalar crypto |
 | `muserisc_vregfile` logic | 5,177 | 27,850 | 707 | v0 shadow + full-word collision bypass |
-| `muserisc_dcache` logic | 26,712 ² | 68,910 | 1,299 | |
+| `muserisc_dcache` logic | 26,805 ² | 69,953 | 1,299 | |
 | `muserisc_icache` logic | 9,221 ² | 16,638 | 270 | |
-| `ec_field` | 42,260 | 197,387 | 1,291 | crypto field unit |
-| `sha256_block` | ⁴ | 159,019 | 2,569 | |
+| `ec_field` | 43,708 | 197,387 | 1,291 | crypto field unit |
+| `sha256_block` | ⁴ | 159,156 | 2,569 | |
 | `muse_crypto_top` + bridge | 45,895 ⁴ | 49,926 | 1,098 | |
-| `muserisc_plic` | 33,472 | 160,669 | 1,184 | 32 sources, tournament tree |
-| fabric, arbiter, CLINT, UART, boot ROM, top | 9,334 | 41,547 | 639 | |
-| **Total** | **717,619** | **8,854,059** | **27,679** | |
+| `muserisc_plic` | 5,181 | 23,930 | 198 | 32 sources, tournament tree, 3-bit priorities |
+| fabric, arbiter, CLINT, UART, boot ROM, top | 9,334 | 41,690 | 639 | |
+| **Total** | **689,218** | **8,712,018** | **26,690** | |
 
 ² The Nangate45 D$ / I$ rows include their 4 / 2 tag ways
 (macros 4 / 2 × 2,628 µm²). ³ The Nangate45 "pipeline" row includes
@@ -187,10 +188,10 @@ on silicon. The cost:
 after the falling edge. So everything from `dout` through the capture
 mux to the first flop gets half a clock period, and the period must be
 at least 2 × (clk→q + logic + setup + uncertainty).
-- The VRF read into the FPU operand enables is 39.75 ns of logic,
-  which gives 11.9 MHz.
-- The L1 tag read into the same enables is 25.4 ns, which gives
-  18.1 MHz once the VRF outputs are registered.
+- The VRF read into the FPU operand enables is 38.4 ns of logic,
+  which gives 12.3 MHz.
+- The L1 tag read into the same enables is 24.9 ns, which gives
+  18.4 MHz once the VRF outputs are registered.
 
 A full cycle would need a read pipeline stage (one more cycle of
 latency) or a macro with rising-edge output.
@@ -332,17 +333,17 @@ than as an achievable fmax.
      multi-cycle on the shared FPU in #20.
    - The CSR VLMAX divider (39 ns) became a shift in #19.
    - PLIC arbitration became a log-depth tree in #19.
-2. **Nangate45: 169 MHz unrepaired.** The worst paths run from
-   `vls_started_q` (vector load/store sequencing) into the D$ read
-   capture and the EX/MEM result, ~5.4 ns. Every block has at least
-   4.1 ns of slack at 100 MHz (`u_dcache` 4.12 ns).
+2. **Nangate45: 162 MHz unrepaired.** The worst paths run from
+   `vls_started_q` (vector load/store sequencing) into the vector
+   unit and the D$ read capture, ~5.7 ns. Every block has at least
+   3.8 ns of slack at 100 MHz (`u_vec` 3.84 ns).
 3. **sky130hd: the OpenRAM half-cycle reads limit fmax.**
 
    | Registered macro outputs | Fmax | Limiting path |
    |---|---:|---|
-   | none | 11.9 MHz | VRF read into the FPU operand enables |
-   | the 3 VRF macros (VRF read pipeline stage) | 18.1 MHz | L1 tag read into the same enables |
-   | all 15 macros | 22.2 MHz | full-cycle FPU-enable path |
+   | none | 12.3 MHz | VRF read into the FPU operand enables |
+   | the 3 VRF macros (VRF read pipeline stage) | 18.4 MHz | L1 tag read into the same enables |
+   | all 15 macros | 23.0 MHz | full-cycle FPU-enable path |
 
    Most of the FPU-enable delay is one 145-fanout gate that repair
    would buffer.
@@ -352,17 +353,17 @@ than as an achievable fmax.
 
 ## sky130 chip-size estimate (rough)
 
-- **Synthesized (flat):** 2.50 mm² std cells + 6.23 mm² SRAM macros.
-- **Placed std-cell region:** 4.2–5.0 mm² at 50–60 % utilization.
+- **Synthesized (flat):** 2.36 mm² std cells + 6.23 mm² SRAM macros.
+- **Placed std-cell region:** 3.9–4.7 mm² at 50–60 % utilization.
   Timing repair and CTS typically add another 0–20 %, giving
-  4.2–6.0 mm².
+  3.9–5.7 mm².
 - **Macros with a 40 µm halo:** ≈ 7.85 mm² in total.
   - VRF: 3 × 0.541 mm² = 1.62 mm².
   - L1 data: 6 × 0.870 mm² = 5.22 mm².
   - L1 tags: 6 × 0.167 mm² = 1.00 mm².
-- **Core with caches ≈ 12.0–13.9 mm².** That is above Caravel's
+- **Core with caches ≈ 11.8–13.5 mm².** That is above Caravel's
   ~10 mm². Without the L1 arrays (VRF only, caches' logic kept) the
-  figure is ~5.8–7.6 mm².
+  figure is ~5.6–7.3 mm².
 
 Assumptions: typical-corner libraries (sky130 tt 1.8 V / 25 °C);
 utilization as in typical ORFS sky130hd designs (50–60 %); no IO
@@ -376,8 +377,8 @@ are:
   instead of the 1rw1r ones, or DFFRAM;
 - fewer VRF replicas (each 256×64 is 0.54 mm² placed).
 
-On Nangate45 (for comparison, not a target) the same SoC is 0.69 mm²
-synthesized and reaches 169 MHz before repair.
+On Nangate45 (for comparison, not a target) the same SoC is 0.66 mm²
+synthesized and reaches 162 MHz before repair.
 
 ## Reproduce
 
