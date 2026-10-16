@@ -191,7 +191,8 @@ int main(int argc, char** argv) {
                    static_cast<unsigned long long>(dut->trap_pc_o));
     }
     MbusModel::Req req{};
-    req.fire = dut->mem_req_valid_o && dut->mem_req_ready_i;
+    req.valid = dut->mem_req_valid_o;
+    req.fire = req.valid && dut->mem_req_ready_i;
     req.addr = dut->mem_req_addr_o;
     req.write = dut->mem_req_write_o;
     req.len = dut->mem_req_len_o;

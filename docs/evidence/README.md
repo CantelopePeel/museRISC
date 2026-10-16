@@ -1841,13 +1841,17 @@ stages 4c/5:
   [`l1cache-linux-boot-rand-seed7-2026-10-16.log`](l1cache-linux-boot-rand-seed7-2026-10-16.log))
   and **2,124,624,648 cycles** (seed 11, 9,022 s;
   [`l1cache-linux-boot-rand-seed11-2026-10-16.log`](l1cache-linux-boot-rand-seed11-2026-10-16.log)).
-  Not a gate: an uncached (`--no-cache`) Linux boot was
-  stopped at 2.3G cycles with no kernel console output; every
-  PC sample from 0.9G to 2.3G cycles fell in the scheduler's
-  PELT update (`__update_load_avg_cfs_rq`), consistent with the
-  timer tick (40,000 cycles at the DT's 10 MHz timebase) being
-  consumed by tick processing when every access is a bus round
-  trip; the uncached mode is a bring-up strap and is gated by
+  Uncached (`--no-cache`) Linux: UNCACHED_LINUX_RESULT
+  An earlier note in this PR claimed the uncached boot was stuck
+  in the scheduler's PELT update; that was a sampling artefact
+  (the `--sample-pc` periods, 20M and 100M cycles, are multiples
+  of the 40,000-cycle timer tick, so every sample hit the same
+  point of the tick handler; `soc_tb` now documents that the
+  period must not be a tick multiple). The audit measured a
+  constant 24,656-cycle tick cost (62 % of the period, every
+  tick taken) and progress through initramfs unpack and the
+  jitterentropy SHA-3 self-test; the uncached mode is a
+  bring-up strap, also gated by
   the directed tests, riscv-tests and ACT above. (Before the #6 mip fix reached `main`, seed 7
   hit the #3 SEI livelock right after `/init`'s first line,
   while latency 1 and seed 11 passed: the fix, not this branch,

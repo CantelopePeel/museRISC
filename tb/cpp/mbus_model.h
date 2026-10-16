@@ -106,11 +106,36 @@ class MbusModel {
   // Rising edge: apply the request beat (if it fired) and retire
   // the response beat driven this cycle.
   struct Req {
-    bool fire, write, last, inst;
+    bool valid, fire, write, last, inst;
     uint64_t addr, wdata;
     uint8_t be, len;
   };
+  // Request-channel protocol check, every cycle: a beat offered
+  // with valid && !ready must be offered again next cycle with
+  // the identical payload (AXI-style stability). A violation is
+  // fatal (exit 4) so no harness can miss it.
+  void CheckStable(const Req& r) {
+    if (offer_pending_) {
+      const Req& p = offer_;
+      if (!r.valid || r.addr != p.addr || r.write != p.write ||
+          r.len != p.len || r.be != p.be || r.last != p.last ||
+          r.inst != p.inst || (r.write && r.wdata != p.wdata)) {
+        std::fprintf(stderr,
+            "MBUS PROTOCOL ERROR at bus cycle %llu: offered beat changed "
+            "before acceptance (valid %d->%d addr 0x%llx->0x%llx inst %d->%d "
+            "write %d->%d len %u->%u be 0x%02x->0x%02x)\n",
+            static_cast<unsigned long long>(now_), p.valid, r.valid,
+            static_cast<unsigned long long>(p.addr),
+            static_cast<unsigned long long>(r.addr), p.inst, r.inst,
+            p.write, r.write, p.len, r.len, p.be, r.be);
+        std::exit(4);
+      }
+    }
+    offer_pending_ = r.valid && !r.fire;
+    offer_ = r;
+  }
   void Edge(const Req& r) {
+    CheckStable(r);
     if (last_.rsp_valid) {
       Txn& t = q_.front();
       if (++t.idx == t.data.size()) {
@@ -171,6 +196,8 @@ class MbusModel {
   WriteFn wr_;
   std::deque<Txn> q_;
   Drive last_{};
+  bool offer_pending_ = false;
+  Req offer_{};
   uint64_t now_ = 0, reads_ = 0, bursts_ = 0, writes_ = 0;
 };
 
@@ -202,7 +229,8 @@ void MbusDrive(MbusModel* m, Top* dut) {
 template <typename Top>
 MbusModel::Req MbusSample(Top* dut) {
   MbusModel::Req r{};
-  r.fire = dut->bus_req_valid_o && dut->bus_req_ready_i;
+  r.valid = dut->bus_req_valid_o;
+  r.fire = r.valid && dut->bus_req_ready_i;
   r.addr = dut->bus_req_addr_o;
   r.be = dut->bus_req_be_o;
   r.len = dut->bus_req_len_o;

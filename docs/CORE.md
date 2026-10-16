@@ -264,9 +264,10 @@ Write-back was chosen over write-through because every store
 would otherwise be a bus transaction (and, with blocking
 caches, a pipeline stall of a full DDR round trip on F2); the
 costs are a dirty-victim buffer and a clean-all walk on
-FENCE.I (one cycle per line plus write-backs, ~256 cycles for
-the default D$), which Linux issues only when it maps new
-executable pages.
+FENCE.I: it visits every line (SETS x WAYS = 256 cycles at
+least for the default D$) and adds a line write-back burst per
+dirty line; Linux issues FENCE.I when it maps new executable
+pages.
 
 ### Cacheability (PMA)
 

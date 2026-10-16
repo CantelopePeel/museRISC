@@ -1454,7 +1454,7 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
   assign walk_issue = walk_req && pmp_allow_walk && !dq_pend_q &&
                       !mem_needs_port && !trap_fire && !freeze;
   assign walk_skip = walk_req && !pmp_allow_walk && !dq_pend_q &&
-                     !mem_needs_port;
+                     !mem_needs_port && !trap_fire && !freeze;
   assign walk_rsp = drsp_valid_i && dq_pend_q && dq_walk_q && !dq_drop_q;
   assign walk_grant = walk_skip || walk_rsp;
   assign dreq_valid_o = mem_issue || walk_issue;

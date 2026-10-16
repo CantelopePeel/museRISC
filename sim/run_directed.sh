@@ -72,3 +72,4 @@ run amo_cache amo_cache_directed.bin
 run mmio_bypass mmio_bypass_directed.bin
 run vm_sfence_cache vm_sfence_cache_directed.bin
 run fp_hold_cache fp_hold_cache_directed.bin
+run ptw_drop ptw_drop_directed.bin

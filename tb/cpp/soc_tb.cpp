@@ -361,6 +361,10 @@ int main(int argc, char** argv) {
       trace_mmio_from = std::strtoull(argv[++i], nullptr, 0);
     } else if (std::strcmp(argv[i], "--sample-pc") == 0 && need(i)) {
       // FROM:EVERY guest fetch sampler for long-boot diagnosis.
+      // EVERY must not be a multiple of the timer-tick period
+      // (40,000 cycles for the DT 10 MHz timebase at HZ=250),
+      // or every sample lands at the same point of the tick
+      // handler; use e.g. 5024721.
       const char* spec = argv[++i];
       const char* colon = std::strchr(spec, ':');
       sample_pc_from = std::strtoull(spec, nullptr, 0);

@@ -4,6 +4,10 @@
 // locked to the granted master from its first request beat
 // until the response beat flagged last, so transactions are
 // never interleaved (one transaction in flight on the bus).
+// A request beat offered to the slave but not yet accepted
+// (valid && !ready) keeps its master selected (hold_q), so the
+// offered payload stays stable until the handshake (AXI rule)
+// even if the other master raises its valid meanwhile.
 `default_nettype none
 module muserisc_bus_arb (
     input  wire        clk_i,
@@ -38,8 +42,8 @@ module muserisc_bus_arb (
     input  wire        rsp_valid_i,
     input  wire        rsp_last_i
 );
-  logic busy_q, owner_q, sel;
-  assign sel = busy_q ? owner_q : m1_req_valid_i;
+  logic busy_q, owner_q, sel, hold_q, hold_sel_q;
+  assign sel = busy_q ? owner_q : hold_q ? hold_sel_q : m1_req_valid_i;
 
   always_comb begin
     req_valid_o = sel ? m1_req_valid_i : m0_req_valid_i;
@@ -54,6 +58,17 @@ module muserisc_bus_arb (
     m1_req_ready_o = sel && req_ready_i;
     m0_rsp_valid_o = busy_q && !owner_q && rsp_valid_i;
     m1_rsp_valid_o = busy_q && owner_q && rsp_valid_i;
+  end
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      hold_q <= 1'b0;
+      hold_sel_q <= 1'b0;
+    end else begin
+      // An offered, unaccepted first beat pins the selection.
+      hold_q <= !busy_q && req_valid_o && !req_ready_i;
+      hold_sel_q <= sel;
+    end
   end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -78,6 +93,14 @@ module muserisc_bus_arb (
   a_rsp: assert property (@(posedge clk_i) disable iff (!chk_live_q)
       rsp_valid_i |-> busy_q)
     else $error("bus_arb: response with no transaction");
+  // Request-channel stability: an offered beat that is not
+  // accepted is offered again, unchanged, in the next cycle.
+  a_req_stable: assert property (@(posedge clk_i) disable iff (!chk_live_q)
+      (req_valid_o && !req_ready_i) |=>
+      (req_valid_o && $stable(req_addr_o) && $stable(req_write_o) &&
+       $stable(req_len_o) && $stable(req_wdata_o) &&
+       $stable(req_be_o) && $stable(req_last_o) && $stable(req_inst_o)))
+    else $error("bus_arb: request changed while valid && !ready");
 `endif
 endmodule
 `default_nettype wire

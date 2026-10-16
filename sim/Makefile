@@ -58,7 +58,7 @@ TESTS    := rv64i_directed rv64m_directed md_directed md_irq_directed md_kill_di
             trap_store_misalign trap_younger_store trap_younger_csr irq_seip_rmw irq_mip_rmw_variants \
             trap_pa_fetch trap_pa_load \
             smc_fencei_directed amo_cache_directed mmio_bypass_directed \
-            vm_sfence_cache_directed fp_hold_cache_directed
+            vm_sfence_cache_directed fp_hold_cache_directed ptw_drop_directed
 
 .PHONY: all alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec icache dcache core core-ds1 sw coverage clean riscv-tests \
         crypto sha256 sha512 keccak ecfield cryptotop core-mdcomb
