@@ -508,28 +508,40 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
   assign ex_mc_busy = (fpu_req && !fpu_done) ||
                       (muldiv_req && !muldiv_done);
   // EX holds for a busy multi-cycle unit or the vector unit.
-  // The vector unit keeps its own start/ack handshake; it and
-  // the FPU only ever serve the instruction in EX (vector and
-  // FP-scalar decodes are disjoint), so they are never in
-  // flight together (asserted in simulation after vec_commit).
+  // The vector unit keeps its own start/ack handshake. It and
+  // a scalar FP op only ever serve the instruction in EX
+  // (vector and FP-scalar decodes are disjoint), so the FPU is
+  // free for the vector unit's FP sub-steps while it is busy
+  // (asserted in simulation after vec_commit).
   assign ex_hold = vec_ex_stall || ex_mc_busy;
   // EX contents move to EX/MEM this cycle.
   assign ex_advance = !trap_take && !freeze && !mem_stall && !ex_hold;
 
+  // The vector unit runs its FP element sub-steps on this FPU
+  // (vfpu_*): while the unit is busy the FPU serves only it
+  // (no scalar FP op can be in EX then), and the vector unit
+  // takes each result the cycle it completes.
+  logic        vfpu_req, vfpu_fmt_d;
+  logic [4:0]  vfpu_op;
+  logic [2:0]  vfpu_rm;
+  logic [63:0] vfpu_a, vfpu_b, vfpu_c;
+  logic [1:0]  vfpu_aux;
+  logic        vec_busy;
   muserisc_fpu u_fpu (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
-      .req_i     (fpu_req),
-      .ack_i     (ex_advance),
+      .req_i     (vec_busy ? vfpu_req : fpu_req),
+      .ack_i     (vec_busy || ex_advance),
       .kill_i    (trap_take),
       .done_o    (fpu_done),
-      .op_i      (idex_ctrl_q.fpu_op),
-      .fmt_d_i   (idex_ctrl_q.fmt_d),
-      .rm_i      (fpu_rm),
-      .a_i       (idex_ctrl_q.fp_rs1 ? ex_frs1 : ex_rs1),
-      .b_i       (ex_frs2),
-      .c_i       (ex_frs3),
-      .aux_i     (idex_ctrl_q.fpu_aux),
+      .op_i      (vec_busy ? vfpu_op : idex_ctrl_q.fpu_op),
+      .fmt_d_i   (vec_busy ? vfpu_fmt_d : idex_ctrl_q.fmt_d),
+      .rm_i      (vec_busy ? vfpu_rm : fpu_rm),
+      .a_i       (vec_busy ? vfpu_a :
+                  (idex_ctrl_q.fp_rs1 ? ex_frs1 : ex_rs1)),
+      .b_i       (vec_busy ? vfpu_b : ex_frs2),
+      .c_i       (vec_busy ? vfpu_c : ex_frs3),
+      .aux_i     (vec_busy ? vfpu_aux : idex_ctrl_q.fpu_aux),
       .result_o  (fpu_result),
       .flags_o   (fpu_flags)
   );
@@ -580,7 +592,7 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
   logic [1:0]    csr_vxrm;
   logic          vset_en, vec_sat;
   logic [4:0]    vec_fflags;
-  logic          vec_unit_op, vec_busy, vec_done, vec_start, vec_commit;
+  logic          vec_unit_op, vec_done, vec_start, vec_commit;
   logic          vls_is;  // MEM holds a vector load/store
   // EX holds an instruction the vector unit executes.
   assign vec_unit_op = idex_valid_q && idex_ctrl_q.vec &&
@@ -604,6 +616,11 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
   // flight together: each serves only the instruction in EX
   // (fp_op, muldiv and vec decodes are disjoint) and returns to
   // idle when that instruction leaves EX or is killed.
+  logic vec_busy_q;
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) vec_busy_q <= 1'b0;
+    else         vec_busy_q <= vec_busy;
+  end
   always_ff @(posedge clk_i) begin
     if (vec_busy && fpu_req)
       $error("muserisc_core: FPU request while the vector unit is busy");
@@ -615,8 +632,20 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
       $error("muserisc_core: M-unit op in EX together with an FP/vector op");
     // Unit state (hierarchical, simulation only): a non-idle
     // unit means an operation is in flight or its result held.
-    if ((u_fpu.state_q != u_fpu.S_IDLE) && (muldiv_req || vec_busy))
-      $error("muserisc_core: FPU in flight with the M/vector unit");
+    // The vector unit drives the FPU only while busy.
+    if ((u_fpu.state_q != u_fpu.S_IDLE) && muldiv_req)
+      $error("muserisc_core: FPU in flight with the M unit");
+    if (vfpu_req && !vec_busy)
+      $error("muserisc_core: vector FPU request while the unit is idle");
+    // The FPU is shared: a vector op starts only on an idle FPU,
+    // the vector unit always takes its results (never HOLD), and
+    // hands the FPU back idle when it finishes.
+    if (vec_start && (u_fpu.state_q != u_fpu.S_IDLE))
+      $error("muserisc_core: vector op starts with the FPU busy");
+    if (vec_busy && (u_fpu.state_q == u_fpu.S_HOLD))
+      $error("muserisc_core: FPU parked in HOLD while the vector unit is busy");
+    if (vec_busy_q && !vec_busy && (u_fpu.state_q != u_fpu.S_IDLE))
+      $error("muserisc_core: vector unit finished with the FPU not idle");
   end
   // The multi-cycle M unit's state exists only with COMB = 0 (the
   // legacy single-cycle mode has none). S_IDLE is encoding 0 (the
@@ -979,7 +1008,18 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
       .done_o    (vec_done),
       .scalar_o  (vec_scalar),
       .sat_o     (vec_sat),
-      .fflags_o  (vec_fflags)
+      .fflags_o  (vec_fflags),
+      .fpu_req_o    (vfpu_req),
+      .fpu_op_o     (vfpu_op),
+      .fpu_fmt_d_o  (vfpu_fmt_d),
+      .fpu_rm_o     (vfpu_rm),
+      .fpu_a_o      (vfpu_a),
+      .fpu_b_o      (vfpu_b),
+      .fpu_c_o      (vfpu_c),
+      .fpu_aux_o    (vfpu_aux),
+      .fpu_done_i   (fpu_done),
+      .fpu_result_i (fpu_result),
+      .fpu_flags_i  (fpu_flags)
   );
 
   logic [63:0] bext_result;

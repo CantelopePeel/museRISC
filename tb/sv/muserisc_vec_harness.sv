@@ -1,6 +1,6 @@
 // Unit-test harness for the element-serial vector unit:
-// muserisc_vec wired to the banked VRF exactly as in the
-// core, plus a testbench backdoor that loads (write port)
+// muserisc_vec wired to the banked VRF and to a multi-cycle
+// FPU (muserisc_fpu) exactly as in the core, plus a testbench backdoor that loads (write port)
 // and dumps (read port C) VRF words while the unit is idle.
 `default_nettype none
 module muserisc_vec_harness (
@@ -49,6 +49,11 @@ module muserisc_vec_harness (
   logic [7:0]  u_ra_c, u_wa, u_wbe;
   logic [63:0] u_wd;
   logic        tb_own;
+  logic        f_req, f_d, f_done;
+  logic [4:0]  f_op, f_flags;
+  logic [2:0]  f_rm;
+  logic [1:0]  f_aux;
+  logic [63:0] f_a, f_b, f_c, f_res;
   assign tb_own = !busy_o;
   assign re_c = tb_own ? tb_re_i : u_re_c;
   assign ra_c = tb_own ? tb_raddr_i : u_ra_c;
@@ -118,7 +123,36 @@ module muserisc_vec_harness (
       .done_o    (done_o),
       .scalar_o  (scalar_o),
       .sat_o     (sat_o),
-      .fflags_o  (fflags_o)
+      .fflags_o  (fflags_o),
+      .fpu_req_o    (f_req),
+      .fpu_op_o     (f_op),
+      .fpu_fmt_d_o  (f_d),
+      .fpu_rm_o     (f_rm),
+      .fpu_a_o      (f_a),
+      .fpu_b_o      (f_b),
+      .fpu_c_o      (f_c),
+      .fpu_aux_o    (f_aux),
+      .fpu_done_i   (f_done),
+      .fpu_result_i (f_res),
+      .fpu_flags_i  (f_flags)
+  );
+
+  muserisc_fpu u_fpu (
+      .clk_i     (clk_i),
+      .rst_ni    (rst_ni),
+      .req_i     (f_req),
+      .ack_i     (1'b1),
+      .kill_i    (kill_i),
+      .done_o    (f_done),
+      .op_i      (f_op),
+      .fmt_d_i   (f_d),
+      .rm_i      (f_rm),
+      .a_i       (f_a),
+      .b_i       (f_b),
+      .c_i       (f_c),
+      .aux_i     (f_aux),
+      .result_o  (f_res),
+      .flags_o   (f_flags)
   );
 endmodule
 `default_nettype wire

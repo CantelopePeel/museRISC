@@ -28,7 +28,7 @@ if [ "$SV2V_PIN" != any ] && [ "$SV2V_HAVE" != "$SV2V_PIN" ]; then
 fi
 echo "sv2v $SV2V_HAVE" > "$OUT/tool-versions.txt"
 LIB=/OpenROAD-flow-scripts/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib
-"$SV2V" rtl/core/muserisc_pkg.sv rtl/core/muserisc_vec_pkg.sv \
+"$SV2V" -DSYNTHESIS rtl/core/muserisc_pkg.sv rtl/core/muserisc_vec_pkg.sv \
   flow/vec-synth/fpu_stub_pkg.sv "$RTL/muserisc_vec.sv" > "$OUT/muserisc_vec.v"
 "$SV2V" rtl/core/muserisc_pkg.sv "$RTL/muserisc_vregfile.sv" > "$OUT/muserisc_vregfile.v"
 for top in $TOPS; do

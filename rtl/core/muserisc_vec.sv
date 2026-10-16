@@ -21,10 +21,13 @@
 //       reduction accumulators, or a multi-cycle sub-unit:
 //       radix-2^16 iterative multiplier (1-4 steps by SEW),
 //       radix-2 restoring divider (SEW steps), or the FP
-//       element step(s) through ONE shared fp_eval /
-//       fp_estimate call (widening FP ops take 2-3 steps:
-//       source conversions, then the operation). The
-//       element result is written with byte enables.
+//       element sub-step(s) (widening FP ops take 2-3:
+//       source conversions, then the operation), each one
+//       operation on the core's multi-cycle scalar FPU
+//       through the fpu_* ports, or a two-cycle
+//       vfrec7/vfrsqrt7 estimate here; every sub-step
+//       result is registered before use. The element
+//       result is written with byte enables.
 // Mask-destination ops accumulate 64 result bits in a word
 // register (seeded from the old vd word) and write it once
 // per 64 elements. Prestart, tail and inactive elements are
@@ -83,7 +86,24 @@ module muserisc_vec
     output logic         done_o,
     output logic [63:0]  scalar_o,   // vmv.x.s / vcpop / vfirst / vfmv.f.s
     output logic         sat_o,      // an active element saturated
-    output logic [4:0]   fflags_o    // accrued FP flags
+    output logic [4:0]   fflags_o,   // accrued FP flags
+
+    // Shared scalar FPU (muserisc_fpu EX handshake). The core
+    // routes these to its FPU while the unit is busy (the FPU
+    // is otherwise idle then: it only serves the instruction in
+    // EX). req stays high until done; the result is taken (ack)
+    // the cycle done is seen.
+    output logic         fpu_req_o,
+    output logic [4:0]   fpu_op_o,
+    output logic         fpu_fmt_d_o,
+    output logic [2:0]   fpu_rm_o,
+    output logic [63:0]  fpu_a_o,
+    output logic [63:0]  fpu_b_o,
+    output logic [63:0]  fpu_c_o,
+    output logic [1:0]   fpu_aux_o,
+    input  wire          fpu_done_i,
+    input  wire  [63:0]  fpu_result_i,
+    input  wire  [4:0]   fpu_flags_i
 );
 
   // Agnostic policies behave as undisturbed in this
@@ -550,9 +570,12 @@ module muserisc_vec
     end
   end
 
-  // ---- FP element step (one shared fp_eval / fp_estimate) ----
-  // Vector elements are raw SEW-bit values; SEW=32 operands are
-  // presented to fp_eval NaN-boxed (the scalar convention).
+  // ---- FP element sub-steps (shared multi-cycle FPU) ----
+  // Each FP sub-step is one operation on the core's scalar FPU
+  // (fpu_* ports), or for vfrec7/vfrsqrt7 a two-cycle estimate
+  // here (unpack, then table and pack). Vector elements are raw
+  // SEW-bit values; SEW=32 operands are presented NaN-boxed
+  // (the scalar convention).
   logic [6:0]  fp_nst;       // sub-steps for this element
   logic        fp_last;
   logic [4:0]  fp_op;
@@ -560,7 +583,7 @@ module muserisc_vec
   logic [2:0]  fp_rm;
   logic [63:0] fp_a, fp_b, fp_c;
   logic [1:0]  fp_aux;
-  fp_eval_result_t fp_r, fp_er, fp_res;
+  fp_eval_result_t fp_res;   // registered sub-step result (fr_q)
   logic [63:0] nb_a, nb_b, nb_old;
   assign nb_a = (sew_q == 3'd2) ? {32'hffff_ffff, a[31:0]} : a;
   assign nb_b = ((form_q == VFORM_VV) && (sew_q == 3'd2))
@@ -694,11 +717,71 @@ module muserisc_vec
       default: ;
     endcase
   end
-  assign fp_r = fp_eval(fp_op, fp_dbl, fp_rm, fp_a, fp_b, fp_c, fp_aux);
-  assign fp_er = fp_estimate(fp_rsqrt, fp_dbl, fp_rm, fp_a);
-  always_comb begin
-    fp_res = fp_est ? fp_er : fp_r;
+  // Sub-step sequencing. An active FP element (fp_need) waits
+  // (fp_wait) until its sub-step result is registered in fr_q
+  // (fr_v_q); that result is consumed the next cycle, either by
+  // an intermediate step (fa_q/fb_q, step + 1) or by the element
+  // completion (fp_ok). Operands come from S2 registers only and
+  // stay stable while the FPU works (it samples them at issue).
+  logic            fp_need, fp_wait, fp_ok;
+  logic            fr_v_q, est_v_q;
+  fp_eval_result_t fr_q;
+  unpacked_t       eu_q;      // estimate operand, unpacked
+  assign fp_need = s2_v_q && (s2_kind_q == K_ELEM) && is_fp && src_act;
+  assign fp_wait = fp_need && !fr_v_q;
+  assign fp_ok = fr_v_q && fp_last;
+  assign fp_res = fr_q;
+  assign fpu_req_o = fp_wait && !fp_est;
+  assign fpu_op_o = fp_op;
+  assign fpu_fmt_d_o = fp_dbl;
+  assign fpu_rm_o = fp_rm;
+  assign fpu_a_o = fp_a;
+  assign fpu_b_o = fp_b;
+  assign fpu_c_o = fp_c;
+  assign fpu_aux_o = fp_aux;
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      fr_v_q <= 1'b0;
+      est_v_q <= 1'b0;
+    end else if (kill_i) begin
+      fr_v_q <= 1'b0;
+      est_v_q <= 1'b0;
+    end else begin
+      // A registered result is always consumed the next cycle.
+      fr_v_q <= (fpu_req_o && fpu_done_i) || est_v_q;
+      est_v_q <= fp_wait && fp_est && !est_v_q;
+    end
   end
+  always_ff @(posedge clk_i) begin
+    if (fpu_req_o && fpu_done_i) begin
+      fr_q.result <= fpu_result_i;
+      fr_q.flags <= fpu_flags_i;
+    end else if (est_v_q) begin
+      fr_q <= fp_est_fin(fp_rsqrt, fp_dbl, fp_rm, eu_q);
+    end
+    if (fp_wait && fp_est && !est_v_q) eu_q <= unpack(fp_a, fp_dbl);
+  end
+`ifndef SYNTHESIS
+  // Simulation cross-check: every FP sub-step result equals the
+  // combinational reference (fp_eval / fp_estimate) on the
+  // operands it was issued with.
+  always_ff @(posedge clk_i) begin
+    fp_eval_result_t chk;
+    if (!kill_i && fpu_req_o && fpu_done_i) begin
+      chk = fp_eval(fp_op, fp_dbl, fp_rm, fp_a, fp_b, fp_c, fp_aux);
+      if ((chk.result != fpu_result_i) || (chk.flags != fpu_flags_i))
+        $error("muserisc_vec: FPU op %0d d=%0d rm=%0d a=%h b=%h c=%h aux=%0d: got %h/%h, fp_eval %h/%h",
+               fp_op, fp_dbl, fp_rm, fp_a, fp_b, fp_c, fp_aux,
+               fpu_result_i, fpu_flags_i, chk.result, chk.flags);
+    end
+    if (!kill_i && est_v_q) begin
+      chk = fp_estimate(fp_rsqrt, fp_dbl, fp_rm, fp_a);
+      if (chk != fp_est_fin(fp_rsqrt, fp_dbl, fp_rm, eu_q))
+        $error("muserisc_vec: estimate rsqrt=%0d d=%0d a=%h mismatch",
+               fp_rsqrt, fp_dbl, fp_a);
+    end
+  end
+`endif
 
   // ---- S2 control / write-back ----
   logic active;       // element-wise op: element written
@@ -746,7 +829,7 @@ module muserisc_vec
             // Scalar results and reduction folds write nothing
             // per element (multi-step FP folds hold S2).
             s2_done = !((op_q == VOP_FRED) || (op_q == VOP_FWRED)) ||
-                      !src_act || fp_last;
+                      !src_act || fp_ok;
           end else if (is_mask_dest) begin
             if (op_q == VOP_FCMP) begin
               bit_v = fp_res.result[0] ^ (imm_q[2:0] == 3'd1);
@@ -758,8 +841,9 @@ module muserisc_vec
               bit_wr = src_act;  // compares and vmsbf family
             end
             if (bit_wr) mword[s2_i_q[5:0]] = bit_v;
-            s2_done = 1'b1;
-            if (s2_last_q || (s2_i_q[5:0] == 6'd63)) begin
+            // An active vmf* element waits for its FPU compare.
+            s2_done = (op_q != VOP_FCMP) || !src_act || fp_ok;
+            if (s2_done && (s2_last_q || (s2_i_q[5:0] == 6'd63))) begin
               s2_we = 1'b1;
               s2_waddr = bit_addr(vd_q, s2_i_q);
               s2_wfull = 1'b1;
@@ -780,7 +864,7 @@ module muserisc_vec
               s2_done = (s2_step_q == (div_n + 7'd1));
               r_el = r_div;
             end else if (is_fp && active) begin
-              s2_done = fp_last;
+              s2_done = fp_ok;
               r_el = fp_res.result;
             end else begin
               s2_done = 1'b1;
@@ -1031,7 +1115,7 @@ module muserisc_vec
         s2_last_q <= s1_last_q;
         s2_skip_q <= s1_skip_q;
         s2_step_q <= 7'd0;
-      end else if (s2_v_q && !s2_done) begin
+      end else if (s2_v_q && !s2_done && !fp_wait) begin
         s2_step_q <= s2_step_q + 7'd1;
       end
 
@@ -1064,7 +1148,7 @@ module muserisc_vec
             dquo_q <= {dquo_q[62:0], div_ge};
           end
         end
-        if (is_fp && !fp_last) begin
+        if (is_fp && fr_v_q && !fp_last) begin
           // Intermediate conversion results.
           if (((op_q == VOP_FBINW) && (fp_step == 7'd0)) ||
               ((op_q == VOP_FMACCW) && (s2_step_q == 7'd0)) ||
@@ -1144,7 +1228,7 @@ module muserisc_vec
   // Unused-by-design bits (lint).
   logic unused;
   assign unused = ^{s2_cw_q[0],
-                    fp_er.result[0], mul_pp[79:76]};
+                    mul_pp[79:76]};
 
 endmodule
 `default_nettype wire

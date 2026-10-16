@@ -1,0 +1,62 @@
+Vector FP on the shared multi-cycle FPU (branch timing-vecfp, 2026-10-16)
+========================================================================
+
+Base: fork main 910c023 (L1 caches, PR #15). Host load ~75-130 on 48 cores,
+so wall times are pessimistic.
+
+== Per-block synthesis (scripts/synth_block_orfs.sh) ==
+ORFS Yosys flow of the full-SoC run (slang, ORFS abc script), Nangate45
+typical, OpenSTA on the unrepaired netlist with the liberty wire-load model,
+10 ns clock, zero I/O delays. "before" = `git archive origin/main rtl`
+(2789d95; muserisc_vec/fpu sources are unchanged by 910c023).
+
+block                       rev     area (um^2)  worst reg->reg path                     delay
+muserisc_vec                before  148,417.6    op_q[1] -> w_d_q[56]                    125.906 ns
+                                                 (combinational fp_eval incl. div/sqrt)
+muserisc_vec                after    59,282.9    sew_q[0] -> mres_q[51] (multiplier)       3.249 ns
+muserisc_fpu (unchanged)            51,132.9    d_q -> res_q[43] (round)                   3.562 ns
+muserisc_vec_fpu_synth      after   110,925.2    u_fpu.d_q -> u_vec.fp_res[60]             4.161 ns
+  (flow/vec-synth wrapper: vec + shared FPU + the core's 2:1 port mux)
+  worst in->reg 1.474 ns (s_d_i -> u_fpu.ub_q), reg->out 4.143 ns
+Wall: vec before 3,088 s, after 226 s; wrapper 483 s; FPU 199 s.
+
+Area: before, vec (148,418) + scalar FPU (51,133) = 199,551 um^2; after,
+vec + shared FPU + mux = 110,925 um^2 (-88,626). A dedicated vector FPU
+instance would have added ~51k um^2 on top of the after-vec 59k.
+
+The SoC report (docs/SOC_AREA.md on soc-sram-synth) has the same before
+path: 128.0 ns, s2_step_q -> w_d_q, muserisc_vec own area 148,018 um^2.
+The scalar FPU there closes at 7.6 ns because its EX operands come through
+the core's forwarding network, which this block view does not include.
+
+== Bit-exactness ==
+Simulation asserts every vector FPU completion against fp_eval and every
+vfrec7/vfrsqrt7 estimate against fp_estimate on the issued operands
+(muserisc_vec), in addition to the FPU's own cross-check; no assertion
+fired in any run below.
+
+== Gates (rebased tree, Verilator 5.048 unless noted) ==
+make lint                                   PASS                     14 s
+make test                                   ALL PHASE-0 KATs PASS     7 s
+make core-test (cached+random and uncached) PASS, 108 TB PASS lines 647 s
+  incl. vec TB seed 0x5eed8a (61,688 checks; FP directed checks incl.
+  the new kill-during-vfdiv check), fpvec_directed, fp_stall_directed
+  (vector ops interleaved with fdiv.d/fsqrt.d), vec_trap_directed
+vec TB seed 0x1234abcd                      PASS (61,274 checks)     25 s
+make riscv-tests (caches + random latency)  123/123                  44 s
+riscv-tests --no-cache                      123/123                  43 s
+ACT caches + random latency (seed 3)        2,577/2,578             609 s
+ACT --no-cache                              2,577/2,578             594 s
+  only failure: PMPSm_cfg_A_tor_zero-00 (known PA-0 waiver); all
+  1,872 Vx/Vls and 162 Vf32/Vf64 pass. ELFs: the existing 2,578-ELF set,
+  read-only.
+  Simulated cycles vs main (cached): Vf 35,243,251 -> 36,017,588 (1.02x),
+  Vx/Vls and scalar identical.
+make -C sim socrtl                           SOC CRYPTO PASS @ 18,851,904 cycles 119 s
+soc_rtl_tb OpenSBI + s_hello (random lat.)  HELLO FROM S-MODE @ 11,537,310 cycles 113 s
+Verilator 5.020 (Docker, CI version)        make lint clean; vec TB PASS (61,688 checks);
+                                            make -C sim core: 72 CORE TB PASS lines
+                                            (cached+random and uncached)            654 s
+soc_tb Linux boot (caches on, latency 1)    MUSERISC_LINUX_BOOT_OK, SOC TB PASS @ 1,612,954,759 cycles
+                                            (PR #15 evidence, pre-audit: 1,614,840,462)   9,025 s
+                                            log: vecfp-shared-fpu-linux-boot-2026-10-16.log

@@ -740,7 +740,7 @@ int main(int argc, char** argv) {
     };
     auto frun = [&](int vop, int form, int sew_code, uint64_t vl, uint64_t vstart, bool vm,
                     uint64_t imm, uint64_t scalar, const G& vs2, const G& vs1, const G& old,
-                    const G& maskg) {
+                    const G& maskg, int frm = 0) {
       VRF s;
       std::memset(&s, 0, sizeof(s));
       for (int r = 0; r < 8; ++r) {
@@ -753,7 +753,7 @@ int main(int argc, char** argv) {
       Cfg c;
       c.op = vop; c.form = form; c.sewc = sew_code; c.lmulc = 0; c.vl = vl; c.vstart = vstart;
       c.vm = vm; c.imm = imm; c.scalar = scalar; c.vs2 = 8; c.vs1 = 16; c.vd = 24;
-      dut.Run(c);
+      dut.Run(c, 0, frm);
       flast = d->fflags_o;
       dut.Ack();
       const VRF o = dut.Dump();
@@ -781,6 +781,35 @@ int main(int argc, char** argv) {
         if (fop == 3) want = av[i] / bv[i];
         CHECK(GetEl(got, i, 32) == (act ? fbits(want) : 0xeeee0000u + i));
       }
+    }
+    // Kill while the shared FPU is in the middle of a vfdiv
+    // element, then rerun: the FPU and the FP sub-step state
+    // must restart cleanly.
+    for (int when = 3; when <= 40; when += 37) {
+      G a, b, old, mk;
+      const float av[4] = {1.5f, -2.25f, 9.0f, 100.0f};
+      const float bv[4] = {0.25f, 3.0f, -4.0f, 7.0f};
+      for (int i = 0; i < 4; ++i) {
+        SetEl(a, i, 32, fbits(av[i])); SetEl(b, i, 32, fbits(bv[i]));
+      }
+      VRF s;
+      std::memset(&s, 0, sizeof(s));
+      for (int r = 0; r < 8; ++r) {
+        std::memcpy(s.b[8 + r], &a.w[r * 8], 64);
+        std::memcpy(s.b[16 + r], &b.w[r * 8], 64);
+      }
+      dut.Load(s);
+      d->op_i = FBIN; d->form_i = VV; d->sew_i = S32; d->vl_i = 4; d->vstart_i = 0;
+      d->vlmax_i = 16; d->vm_i = 1; d->vs2_i = 8; d->vs1_i = 16; d->vd_i = 24;
+      d->nreg_i = 1; d->imm_i = 3; d->frm_i = 0;
+      d->start_i = 1; dut.Tick(); d->start_i = 0;
+      for (int k = 0; k < when; ++k) dut.Tick();
+      CHECK(d->busy_o && !d->done_o);
+      d->kill_i = 1; dut.Tick(); d->kill_i = 0;
+      CHECK(!d->busy_o);
+      G got = frun(FBIN, VV, S32, 4, 0, true, 3, 0, a, b, old, mk);
+      for (int i = 0; i < 4; ++i) CHECK(GetEl(got, i, 32) == fbits(av[i] / bv[i]));
+      CHECK(flast == 0x01);  // NX only (100/7 is inexact)
     }
     {
       G a, b, old, mk;
@@ -898,6 +927,74 @@ int main(int argc, char** argv) {
       for (int i = 0; i < 4; ++i)
         CHECK(GetEl(got, i, 64) == (i == 2 ? dbits(2.0)
               : dbits(std::fma(static_cast<double>(av[i]), static_cast<double>(bv[i]), 1.0 * i))));
+    }
+    // Every rounding mode reaches the FPU: 1 +/- 2^-24 is a tie
+    // at e32 (RNE/RTZ keep 1, RDN/RUP/RMM split by sign).
+    {
+      G a, b, old, mk;
+      SetEl(a, 0, 32, fbits(1.0f)); SetEl(b, 0, 32, 0x33800000u);   // +2^-24
+      SetEl(a, 1, 32, fbits(-1.0f)); SetEl(b, 1, 32, 0xb3800000u);  // -2^-24
+      const uint32_t want[5][2] = {{0x3f800000u, 0xbf800000u},   // RNE
+                                   {0x3f800000u, 0xbf800000u},   // RTZ
+                                   {0x3f800000u, 0xbf800001u},   // RDN
+                                   {0x3f800001u, 0xbf800000u},   // RUP
+                                   {0x3f800001u, 0xbf800001u}};  // RMM
+      for (int rm = 0; rm <= 4; ++rm) {
+        G got = frun(FBIN, VV, S32, 2, 0, true, 0, 0, a, b, old, mk, rm);
+        CHECK(GetEl(got, 0, 32) == want[rm][0]);
+        CHECK(GetEl(got, 1, 32) == want[rm][1]);
+        CHECK(flast == 0x01);
+        // Widening: the same operands are exact in binary64.
+        got = frun(FBINW, VV, S32, 2, 0, true, 0, 0, a, b, old, mk, rm);
+        CHECK(GetEl(got, 0, 64) == dbits(1.0 + std::ldexp(1.0, -24)));
+        CHECK(flast == 0x00);
+      }
+    }
+    // Widening-op fflags include the source-conversion step: an
+    // sNaN source raises NV only in its conversion (the operation
+    // then sees a quiet NaN); inexact comes from the operation.
+    {
+      const uint32_t snan = 0x7f800001u;
+      const uint64_t dnan = 0x7ff8000000000000ull;
+      G a, b, old, mk;
+      SetEl(a, 0, 32, snan); SetEl(b, 0, 32, fbits(1.0f));
+      SetEl(a, 1, 32, fbits(1.0f)); SetEl(b, 1, 32, 0x33800000u);
+      G got = frun(FBINW, VV, S32, 2, 0, true, 0, 0, a, b, old, mk);   // vfwadd.vv
+      CHECK(GetEl(got, 0, 64) == dnan);
+      CHECK(GetEl(got, 1, 64) == dbits(1.0 + std::ldexp(1.0, -24)));
+      CHECK(flast == 0x10);
+      G aw, bs;
+      SetEl(aw, 0, 64, dbits(2.0)); SetEl(bs, 0, 32, snan);
+      got = frun(FBINW, VV, S32, 1, 0, true, 1 << 7, 0, aw, bs, old, mk);  // vfwadd.wv
+      CHECK(GetEl(got, 0, 64) == dnan);
+      CHECK(flast == 0x10);
+      // vfwmacc.vv: element 0 inexact in the FMA, element 1 NV
+      // from converting vs2.
+      G ma, mb, cc;
+      SetEl(ma, 0, 32, 0x3f800001u); SetEl(mb, 0, 32, 0x3f800001u);
+      SetEl(cc, 0, 64, dbits(std::ldexp(1.0, -60)));
+      SetEl(ma, 1, 32, snan); SetEl(mb, 1, 32, fbits(1.0f));
+      SetEl(cc, 1, 64, dbits(0.0));
+      got = frun(FMACCW, VV, S32, 2, 0, true, 0, 0, ma, mb, cc, mk);
+      CHECK(GetEl(got, 0, 64) == 0x3ff0000040000040ull);
+      CHECK(GetEl(got, 1, 64) == dnan);
+      CHECK(flast == 0x11);
+      got = frun(FMACCW, VV, S32, 1, 0, true, 0, 0, ma, mb, cc, mk);
+      CHECK(flast == 0x01);
+      // vfwcvt.f.f.v (single-step widening conversion).
+      G ca;
+      SetEl(ca, 0, 32, snan); SetEl(ca, 1, 32, fbits(1.5f));
+      got = frun(FCVT, VV, S32, 2, 0, true, 12, 0, ca, b, old, mk);
+      CHECK(GetEl(got, 0, 64) == dnan);
+      CHECK(GetEl(got, 1, 64) == dbits(1.5));
+      CHECK(flast == 0x10);
+      // vfwredusum: NV from converting an element.
+      G ra, seed;
+      SetEl(ra, 0, 32, fbits(1.0f)); SetEl(ra, 1, 32, snan);
+      SetEl(seed, 0, 64, dbits(0.5));
+      got = frun(FWRED, VV, S32, 2, 0, true, 0, 0, ra, seed, old, mk);
+      CHECK(GetEl(got, 0, 64) == dnan);
+      CHECK(flast == 0x10);
     }
     {
       G a, b, old, mk;
