@@ -764,17 +764,22 @@ module muserisc_vec
 `ifndef SYNTHESIS
   // Simulation cross-check: every FP sub-step result equals the
   // combinational reference (fp_eval / fp_estimate) on the
-  // operands it was issued with.
+  // operands it was issued with. Armed by the first reset edge:
+  // before reset the state is arbitrary (e.g. under
+  // +verilator+rand+reset+2) and must not be checked.
+  logic chk_armed;
+  initial chk_armed = 1'b0;
+  always @(posedge clk_i or negedge rst_ni) if (!rst_ni) chk_armed <= 1'b1;
   always_ff @(posedge clk_i) begin
     fp_eval_result_t chk;
-    if (!kill_i && fpu_req_o && fpu_done_i) begin
+    if (chk_armed && !kill_i && fpu_req_o && fpu_done_i) begin
       chk = fp_eval(fp_op, fp_dbl, fp_rm, fp_a, fp_b, fp_c, fp_aux);
       if ((chk.result != fpu_result_i) || (chk.flags != fpu_flags_i))
         $error("muserisc_vec: FPU op %0d d=%0d rm=%0d a=%h b=%h c=%h aux=%0d: got %h/%h, fp_eval %h/%h",
                fp_op, fp_dbl, fp_rm, fp_a, fp_b, fp_c, fp_aux,
                fpu_result_i, fpu_flags_i, chk.result, chk.flags);
     end
-    if (!kill_i && est_v_q) begin
+    if (chk_armed && !kill_i && est_v_q) begin
       chk = fp_estimate(fp_rsqrt, fp_dbl, fp_rm, fp_a);
       if (chk != fp_est_fin(fp_rsqrt, fp_dbl, fp_rm, eu_q))
         $error("muserisc_vec: estimate rsqrt=%0d d=%0d a=%h mismatch",
