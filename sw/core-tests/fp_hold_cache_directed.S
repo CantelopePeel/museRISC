@@ -1,6 +1,7 @@
 // Long-latency EX ops followed by straight-line code under I$
-// misses: fdiv.d / fsqrt.d / div (candidates for multi-cycle
-// units that hold EX) whose results feed the next instructions,
+// misses: fdiv.d / fsqrt.d (multi-cycle FPU) and full-width
+// 64/32-bit divides and remainders (multi-cycle M unit), which
+// hold EX (ex_hold) whose results feed the next instructions,
 // with the following code spread over separate I$ lines and
 // the I$ invalidated (FENCE.I) before each pass, so fetches
 // miss while EX is busy. Any fetch word consumed while EX is
@@ -57,11 +58,36 @@ pass_loop:
     j 3f
     .balign 64
 3:  addi s0, s0, 7
+    // 4: longest 64-bit divides/remainders (full-width operands:
+    //    the most iterations of the multi-cycle divider), each
+    //    result consumed by the next instruction, then cold lines.
+    li t0, 4
+    li t1, -1                      // 0xffff_ffff_ffff_ffff
+    li t2, 3
+    divu t3, t1, t2                // 0x5555_5555_5555_5555
+    li t4, 0x5555555555555555
+    bne t3, t4, fail
+    remu t5, t1, t2                // 0
+    add s0, s0, t5
+    j 4f
+    .balign 64
+4:  li t1, 0x7fffffffffffffff
+    li t2, -7
+    div t3, t1, t2                 // -1317624576693539401
+    li t4, -1317624576693539401
+    bne t3, t4, fail
+    rem t5, t1, t2                 // 0
+    add s0, s0, t5
+    divuw t6, t1, t2               // 0xffffffff / 0xfffffff9 = 1
+    add s0, s0, t6
+    j 5f
+    .balign 64
+5:  addi s0, s0, 11
     addi s1, s1, -1
     bnez s1, pass_loop
-    // per pass: 4+1+2+3+4+5+142+7 = 168; 3 passes = 504
-    li t0, 4
-    li t1, 504
+    // per pass: 4+1+2+3+4+5+142+7+0+0+1+11 = 180; 3 passes = 540
+    li t0, 5
+    li t1, 540
     bne s0, t1, fail
 
 pass:
