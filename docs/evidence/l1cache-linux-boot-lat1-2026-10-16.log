@@ -1,10 +1,10 @@
-# Linux 6.6 boot on muserisc_cpu (core + L1 I$/D$), soc_tb, 2026-10-16, branch l1-cache on main bd03ef0
+# Linux 6.6 boot on muserisc_cpu (core + L1 I$/D$), soc_tb, 2026-10-16, branch l1-cache on main 2789d95
 # caches on (default PMA), bus latency 1, no gaps, no backpressure
-# Command: build/v9/soc_tb 4000000000 --load 0x1000=build/linux/boot_stub.bin --load 0x80000000=build/linux/fw_jump.bin --load 0x83000000=build/linux/muserisc.dtb --load 0x80200000=build/linux/Image --exit-string MUSERISC_LINUX_BOOT_OK --uart-log build/v9/lat1-uart.log
-# Result: SOC TB PASS (exit string at 1614840462 cycles)   wall 7398s
+# Command: build/v10/soc_tb 4000000000 --load 0x1000=build/linux/boot_stub.bin --load 0x80000000=build/linux/fw_jump.bin --load 0x83000000=build/linux/muserisc.dtb --load 0x80200000=build/linux/Image --exit-string MUSERISC_LINUX_BOOT_OK --uart-log build/v10/lat1-uart.log
+# Result: SOC TB PASS (exit string at 1614840462 cycles)   wall 6004s
 # Inputs: OpenSBI v1.9 fw_jump (scripts/build_opensbi.sh),
 #   Linux 6.6 Image with sw/linux/init.c (scripts/build_linux_kernel.sh), DTB from sw/linux/muserisc.dts.
-# Same Image/OpenSBI/DTB on main bd03ef0 without caches (docs/evidence/muldiv-multicycle-linux-boot-2026-10-15.log):
+# Same Image/OpenSBI/DTB on main 2789d95 without caches (docs/evidence/muldiv-multicycle-linux-boot-2026-10-15.log):
 #   SOC TB PASS (exit string at 510301199 cycles)
 # ---- UART log ----
 
