@@ -1952,3 +1952,32 @@ stages 4c/5:
   `PMPSm_cfg_A_tor_zero-00` waiver; all 1,872 Vx/Vls + 162 Vf
   pass), `socrtl` and OpenSBI on `soc_rtl_tb`, Verilator 5.020
   and the `soc_tb` Linux boot (details in the log).
+
+## Vector FP on the shared multi-cycle FPU (2026-10-16, branch `timing-vecfp`)
+
+- Artifact: [`vecfp-shared-fpu-2026-10-16.log`](vecfp-shared-fpu-2026-10-16.log).
+- Removes the worst path of the first SoC synthesis (128 ns,
+  `docs/SOC_AREA.md` on `soc-sram-synth`): the vector unit no
+  longer evaluates FP elements through one combinational
+  `fp_eval`. Each FP sub-step is one operation on the core's
+  scalar `muserisc_fpu`, which the vector unit drives while it is
+  busy (the two only ever serve the instruction in EX); the
+  `vfrec7`/`vfrsqrt7` estimate is split into two registered
+  stages in the vector unit. Results are registered before use.
+  Simulation asserts every sub-step result against
+  `fp_eval`/`fp_estimate`.
+- Shared rather than a second FPU instance: ~51k µm² saved for a
+  2:1 port mux in the core and a few registers in the vector unit.
+- Per-block synthesis (`scripts/synth_block_orfs.sh`, the SoC's
+  ORFS Yosys flow, Nangate45, unrepaired): `muserisc_vec`
+  **125.9 ns → 3.25 ns**, 148,418 → 59,283 µm²; vector unit +
+  shared FPU + mux (`flow/vec-synth/muserisc_vec_fpu_synth.sv`)
+  **4.16 ns**, 110,925 µm² vs 199,551 µm² for the old vec + FPU.
+- Gates on the rebased tree (main 910c023): lint, test,
+  core-test (cached + uncached), vec TB at two seeds,
+  riscv-tests 123/123 cached and uncached, ACT 2,577/2,578
+  cached (random latency) and uncached (only the known
+  `PMPSm_cfg_A_tor_zero-00` waiver; all 1,872 Vx/Vls + 162 Vf
+  pass; Vf cycles 1.02x), `socrtl` and OpenSBI on `soc_rtl_tb`,
+  Verilator 5.020 and the `soc_tb` Linux boot (details in the
+  log).

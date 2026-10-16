@@ -809,7 +809,7 @@ int main(int argc, char** argv) {
       CHECK(!d->busy_o);
       G got = frun(FBIN, VV, S32, 4, 0, true, 3, 0, a, b, old, mk);
       for (int i = 0; i < 4; ++i) CHECK(GetEl(got, i, 32) == fbits(av[i] / bv[i]));
-      CHECK(flast == 0x01);  // NX only (1.5/0.25 etc. include inexact quotients)
+      CHECK(flast == 0x01);  // NX only (100/7 is inexact)
     }
     {
       G a, b, old, mk;
