@@ -782,6 +782,35 @@ int main(int argc, char** argv) {
         CHECK(GetEl(got, i, 32) == (act ? fbits(want) : 0xeeee0000u + i));
       }
     }
+    // Kill while the shared FPU is in the middle of a vfdiv
+    // element, then rerun: the FPU and the FP sub-step state
+    // must restart cleanly.
+    for (int when = 3; when <= 40; when += 37) {
+      G a, b, old, mk;
+      const float av[4] = {1.5f, -2.25f, 9.0f, 100.0f};
+      const float bv[4] = {0.25f, 3.0f, -4.0f, 7.0f};
+      for (int i = 0; i < 4; ++i) {
+        SetEl(a, i, 32, fbits(av[i])); SetEl(b, i, 32, fbits(bv[i]));
+      }
+      VRF s;
+      std::memset(&s, 0, sizeof(s));
+      for (int r = 0; r < 8; ++r) {
+        std::memcpy(s.b[8 + r], &a.w[r * 8], 64);
+        std::memcpy(s.b[16 + r], &b.w[r * 8], 64);
+      }
+      dut.Load(s);
+      d->op_i = FBIN; d->form_i = VV; d->sew_i = S32; d->vl_i = 4; d->vstart_i = 0;
+      d->vlmax_i = 16; d->vm_i = 1; d->vs2_i = 8; d->vs1_i = 16; d->vd_i = 24;
+      d->nreg_i = 1; d->imm_i = 3; d->frm_i = 0;
+      d->start_i = 1; dut.Tick(); d->start_i = 0;
+      for (int k = 0; k < when; ++k) dut.Tick();
+      CHECK(d->busy_o && !d->done_o);
+      d->kill_i = 1; dut.Tick(); d->kill_i = 0;
+      CHECK(!d->busy_o);
+      G got = frun(FBIN, VV, S32, 4, 0, true, 3, 0, a, b, old, mk);
+      for (int i = 0; i < 4; ++i) CHECK(GetEl(got, i, 32) == fbits(av[i] / bv[i]));
+      CHECK(flast == 0x01);  // NX only (1.5/0.25 etc. include inexact quotients)
+    }
     {
       G a, b, old, mk;
       const double av[4] = {1.0, 0.0, -5.0, 2.5};
