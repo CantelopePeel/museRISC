@@ -1858,11 +1858,10 @@ stages 4c/5:
   the random-latency runs exercise the arbiter's offer-hold and
   the every-cycle bus stability check throughout the boot.
   Uncached (`--no-cache`) Linux: a run with a phase-spread sampler (`--sample-pc
-  0:50024721`) is still in progress at the time of writing: at
-  2.35G cycles it is in jitterentropy's SHA-3 self-test and
-  scheduler/tick paths, with samples spread across the kernel;
-  the audit's projection for a full uncached boot is about
-  4.5–6G cycles. The uncached mode is a bring-up strap, also
+  0:50024721`) **passes**: `MUSERISC_LINUX_BOOT_OK` at
+  6,303,080,388 cycles (29,301 s wall), 3.9x the cached boot at
+  latency 1 and somewhat above the audit's 4.5–6G projection
+  ([log](l1cache-linux-boot-nocache-2026-10-16.log)). The uncached mode is a bring-up strap, also
   gated by the directed tests, riscv-tests, ACT and the RTL-SoC
   runs above.
   An earlier note in this PR claimed the uncached boot was stuck
