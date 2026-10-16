@@ -1474,3 +1474,12 @@ stages 4c/5:
   riscv-tests smoke 26/26.
 - Not run on this base: the Linux boot (the combinational vector
   unit makes `soc_tb` too slow for a multi-billion-cycle boot).
+- `priv_directed` test 11 leaves its IRQ wait loop once `irq_flag`
+  is set (the test drops from 1.2M to 2,735 cycles with caches +
+  random latency). Re-run after that change: `make lint` clean
+  (5.048 and 5.020); `make core-test` 99 `CORE TB PASS`, 0 fail
+  (344 s); riscv-tests 123/123 cached + random latency and uncached;
+  stress at 20 % bus ready (seeds 401-402 x {lat 1-6 gap 2,
+  `--no-cache` lat 1-4, lat 2-30 gap 6}, riscv-tests + directed):
+  870 runs, 0 failures, 0 protocol errors; Verilator 5.020 unit TBs,
+  `make -C sim core`, SoC builds and riscv-tests smoke 26/26 PASS.
