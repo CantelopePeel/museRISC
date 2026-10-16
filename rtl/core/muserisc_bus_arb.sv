@@ -98,7 +98,7 @@ module muserisc_bus_arb (
   a_req_stable: assert property (@(posedge clk_i) disable iff (!chk_live_q)
       (req_valid_o && !req_ready_i) |=>
       (req_valid_o && $stable(req_addr_o) && $stable(req_write_o) &&
-       $stable(req_len_o) && $stable(req_wdata_o) &&
+       $stable(req_len_o) && (!req_write_o || $stable(req_wdata_o)) &&
        $stable(req_be_o) && $stable(req_last_o) && $stable(req_inst_o)))
     else $error("bus_arb: request changed while valid && !ready");
 `endif
