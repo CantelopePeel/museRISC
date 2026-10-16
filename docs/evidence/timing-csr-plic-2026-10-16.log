@@ -1,0 +1,62 @@
+CSR vsetvl VLMAX and PLIC claim arbitration timing fixes (branch timing-fixes, 2026-10-16)
+=========================================================================================
+
+Base: fork main 910c023 (L1 caches, PR #15). Host load ~75-130 on 48 cores,
+so wall times are pessimistic.
+
+== Per-block synthesis (scripts/synth_block_orfs.sh) ==
+ORFS Yosys flow of the full-SoC run (slang, ORFS abc script), Nangate45
+typical, OpenSTA on the unrepaired netlist with the liberty wire-load model,
+10 ns clock, zero I/O delays. "before" = `git archive origin/main rtl`
+(2789d95; muserisc_csr.sv / muserisc_plic.sv are unchanged by 910c023).
+
+block          rev     area (um^2)  worst path                                           delay
+muserisc_csr   before  74,032.1     vset_vtype_i[5] -> vl_o[36] (in->reg)                43.148 ns
+                                    vset_vtype_i -> vset_vl_o[36] (in->out)              43.108 ns
+               after   56,319.9     addr_i[1] -> pmpaddr_q[260] (in->reg)                 0.911 ns
+                                    (vsetvl: vset_vl_o no longer in the top paths;
+                                     worst in->out pmp_allow_b_o 1.001 ns)
+muserisc_plic  before  37,288.1     threshold_q[28] -> claimed_q[16] (reg->reg)          19.195 ns
+                                    irq_sources_i[1] -> claimed_q[16] (in->reg)          18.714 ns
+                                    -> rdata_o[34] (reg->out)                            19.081 ns
+               after   32,859.5     threshold_q[27] -> claimed_q[16] (reg->reg)           3.323 ns
+                                    irq_sources_i[23] -> claimed_q[16] (in->reg)          2.772 ns
+                                    -> rdata_o[33] (reg->out)                             3.176 ns
+Wall: csr 369 s / 99 s, plic 81 s / 56 s.
+
+The block flow reproduces the SoC report (docs/SOC_AREA.md on
+soc-sram-synth): CSR 40.3 ns / 73,742 um^2 there, PLIC ~21.4 ns there
+(that path also includes the external IRQ input timing and the fabric).
+The sv2v + Yosys `synth` flow of scripts/synth_fpu.sh does NOT show the
+divider (4.45 ns before): its ABC collapses the 6-input VLMAX function.
+
+== Equivalence ==
+- CSR: x / (8 << vsew) for x a power of two = x >> (vsew + 3) for every
+  vtype[5:0] (64 combinations, reserved LMUL 4 still 0 -> vill).
+- PLIC: lock-step random simulation of the old and new RTL (Verilator,
+  4,000,000 cycles; random priorities 0..3 / 0..7 / full 32-bit / all-ones,
+  so many ties; random enables, thresholds 0..5, claims and completes):
+  rdata_o, eip_o and claimed_q identical every cycle; 200,254 claim reads,
+  180,620 of them returning a source.
+
+== Gates (rebased tree, Verilator 5.048 unless noted) ==
+make lint                                   PASS                     14 s
+make test                                   ALL PHASE-0 KATs PASS     7 s
+make core-test (cached+random and uncached) PASS, 108 TB PASS lines 651 s
+  incl. vec TB seed 0x5eed8a (61,672 checks); CSR TB 214 checks
+vec TB seed 0x1234abcd                      PASS (61,258 checks)     21 s
+make riscv-tests (caches + random latency)  123/123                  44 s
+riscv-tests --no-cache                      123/123                  41 s
+ACT caches + random latency (seed 3)        2,577/2,578             624 s
+ACT --no-cache                              2,577/2,578             614 s
+  only failure: PMPSm_cfg_A_tor_zero-00 (known PA-0 waiver); all
+  1,872 Vx/Vls and 162 Vf32/Vf64 pass. ELFs: the existing 2,578-ELF set,
+  read-only. Cycle counts identical to main.
+make -C sim socrtl (RTL PLIC)               SOC CRYPTO PASS @ 18,851,904 cycles 158 s
+soc_rtl_tb OpenSBI + s_hello (random lat.)  HELLO FROM S-MODE @ 11,537,310 cycles 152 s
+Verilator 5.020 (Docker, CI version)        make lint clean; CSR TB PASS (214 checks);
+                                            soc_rtl_tb builds, OpenSBI + s_hello
+                                            HELLO FROM S-MODE @ 11,495,124 cycles   177 s
+soc_tb Linux boot (caches on, latency 1)    MUSERISC_LINUX_BOOT_OK, SOC TB PASS @ 1,612,954,759 cycles
+                                            (PR #15 evidence, pre-audit: 1,614,840,462)   9,138 s
+                                            log: timing-csr-plic-linux-boot-2026-10-16.log
