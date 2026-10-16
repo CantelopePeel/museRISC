@@ -1,0 +1,98 @@
+# muldiv-multicycle evidence (2026-10-15): muserisc_muldiv_mc integrated in
+# EX on the generic multi-cycle protocol; branch muldiv-multicycle rebased on
+# origin/main 633e888 (#5 FPU + EX hold protocol, #4 element-serial vector,
+# upstream RTL SoC, #6 mip RMW fix). Host: 48 cores shared with other agents
+# (load average ~90), Verilator 5.048 unless noted. Unit-level synthesis and
+# unit-TB evidence: muldiv-mc-nangate45-2026-10-15.log.
+
+== make lint ==  rc=0, 0 warnings  (9 s)
+== make test ==  ALL PHASE-0 KATs PASS  (4 s)
+
+== make core-test ==  rc=0  (211 s)
+unit TBs: ALU, MULDIV, MULDIV_MC (985,873 checks, 125,137 squashes),
+  MULDIV_MC COMB=1 (203,248 checks), DECODER, REGFILE, CSR, MMU, FPU,
+  FPU ds1, BEXT, RVC, VEC: all TB PASS
+directed core programs (new: md_directed, md_irq_directed):
+CORE TB PASS rv64m_directed.bin (335 cycles)
+CORE TB PASS md_directed.bin (1237 cycles)
+CORE TB PASS md_irq_directed.bin (72/72 IRQ offsets 100..171)
+CORE TB PASS fp_irq_directed.bin (48/48 IRQ offsets 100..147)
+... all 29 directed programs PASS, plus core-ds1 (3 FPU_DS_BITS=1 runs)
+
+Core-level coverage of muserisc_muldiv_mc.sv (core directed runs only,
+unit TBs excluded; scripts/coverage_summary.py):
+  line 39/39, branch 62/62, toggle 4939/4940
+Merged with the unit TBs: line 39/39, branch 62/62, toggle 4942/4942.
+
+== make riscv-tests ==  rv64ui+um+ua+uf+ud+uc+mi+si: 123/123 PASS  (43 s)
+
+== ACT on the core (JOBS=32 sim/run_act_core.sh) ==
+I,M regenerated in this tree (EXTENSIONS=I,M scripts/build_act4_core.sh):
+  ACT (muserisc-core): 64/64 PASS (I 51, M 13)
+Full stage-7 scalar + stage-8/9 vector ELF set (the 2,578 ELFs generated
+for fpu-multicycle from the same sw/act4-core config, unchanged here):
+  ACT (muserisc-core): 2577/2578 PASS, 1 FAIL  (219 s)
+  FAIL PMPSm_cfg_A_tor_zero-00 (known PA0 waiver; no new failures)
+  CSV: act-core-muldiv-multicycle-2026-10-15.csv
+M cycles (fpu-multicycle -> this branch; the M unit now stalls EX):
+  M-mul-00 8942 -> 10110, M-div-00 8934 -> 12505, M-divuw-00 8944 -> 11136
+
+== Verilator 5.020 (Ubuntu 24.04 apt, the CI version; Docker, tree copy) ==
+make lint rc=0 (0 warnings); make -C sim muldiv_mc PASS (both builds);
+make -C sim core: all 29 directed programs PASS incl. md_directed and
+md_irq_directed 72/72.  (462 s incl. apt)
+
+== RTL SoC ==
+make -C sim socrtl: SOC CRYPTO PASS, SOC RTL TB PASS (exit string at
+  11097819 cycles)  (321 s incl. build)
+soc_rtl_tb --boot 0x1000, fw_jump.bin @0x80000000, muserisc.dtb
+  @0x83000000, s_hello.bin @0x80200000: OpenSBI v1.9 banner,
+  HELLO FROM S-MODE, SOC RTL TB PASS (exit string at 6062907 cycles)  (110 s)
+Yosys read_slang (openroad/orfs:latest, ORFS flags -D SYNTHESIS
+  --keep-hierarchy --compat=vcs --ignore-assertions --unroll-limit=200000,
+  config.mk file list incl. muserisc_muldiv_mc.sv): rc=0, 5 s;
+  muserisc_muldiv_mc$muserisc_soc_top.u_core.u_muldiv elaborated
+  (441 coarse cells: 4 $mul, no $div). Also rc=0 without -D SYNTHESIS.
+
+== M unit block synthesis (scripts/synth_unit_nangate45.sh, final RTL) ==
+muserisc_muldiv_mc: 28,566 um^2, 274 flops, reg->reg 4.693 ns,
+  reg->result_o 4.249 ns, worst setup slack 5.247 ns @ 10 ns (21 s)
+muserisc_muldiv (old combinational): 49,787 um^2, in->out 115.824 ns
+
+== Linux boot (soc_tb, no-coverage --assert build, OpenSBI v1.9 + Linux 6.6) ==
+MUSERISC_LINUX_BOOT_OK; SOC TB PASS (exit string at 510301199 cycles),
+wall 3,235 s (54 min; host load ~90). Images: fw_jump.bin, muserisc.dtb and
+Image from the fpu-multicycle build (sw/linux/README.md recipe), boot_stub
+built here. The soc_tb binary was built from this branch's RTL before the
+last edit, which changed only the type of muserisc_muldiv_mc's COMB
+parameter (bit -> int unsigned, default 0; no logic change).
+UART capture: muldiv-multicycle-linux-boot-2026-10-15.log (fpu-multicycle
+reached the same exit at 502,782,909 cycles; the extra ~7.5M cycles are the
+M-unit EX stalls).
+
+== Round-1 audit fixes (2026-10-16), re-run on the new head ==
+RTL: the core's sim-only M-unit in-flight check moved into a generate
+block guarded by the M-unit mode, so a COMB=1 core elaborates
+(+define+MUSERISC_MULDIV_COMB; S_IDLE pinned to encoding 0, compared as
+nonzero: Verilator 5.020 hits an internal error on a hierarchical
+enum-item reference inside a generate block). No synthesizable change.
+New md_kill_directed.S: vector load faulting on element 8 (mem_stall
+~16 cycles) behind long divides (killed in ITER), mul / x/0 (result held
+through the stall, acked when it ends with the fault, flushed by the
+trap); x/0 behind a misaligned load (killed in its done state). Kill
+states confirmed with a debug build: ITER x2, PREP-done x2.
+make lint                 rc=0, 0 warnings (5 s)
+make test                 PASS (4 s)
+make core-test            rc=0 (263 s): all unit TBs, 30 directed programs
+                          incl. md_kill_directed, md_irq 72/72, core-ds1,
+                          and new core-mdcomb: the whole directed suite on
+                          the COMB=1 core (28 programs + md_irq 11 offsets)
+make riscv-tests          123/123 (34 s)
+ACT I,M regenerated       64/64 (2 s)
+ACT full (2,578 ELFs)     2577/2578, only PMPSm_cfg_A_tor_zero-00 (280 s)
+Verilator 5.020 (Docker)  make lint 0 warnings; muldiv_mc TBs PASS;
+                          make -C sim core 30/30 PASS; core-mdcomb PASS
+                          (669 s incl. apt)
+Yosys read_slang (ORFS flags) rc=0
+The Linux boot above ran on the pre-fix RTL (the fix is simulation-only
+code plus an explicit enum encoding equal to the implicit one).

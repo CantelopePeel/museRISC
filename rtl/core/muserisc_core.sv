@@ -100,6 +100,15 @@ module muserisc_core import muserisc_pkg::*; (
   logic [1:0]  walk_acc;
   logic        mem_stall;     // data translation miss: hold all regs
   logic        fpu_req, fpu_done;
+  logic        muldiv_req, muldiv_done;
+  // M unit mode: multi-cycle (default) or, with
+  // +define+MUSERISC_MULDIV_COMB, the legacy single-cycle unit
+  // behind the same handshake (done in the issue cycle).
+`ifdef MUSERISC_MULDIV_COMB
+  localparam int unsigned MuldivComb = 1;
+`else
+  localparam int unsigned MuldivComb = 0;
+`endif
   logic        ex_mc_busy;    // a multi-cycle EX unit is still working
   logic        ex_hold;       // EX holds (multi-cycle unit / vector WB)
   logic        ex_advance;    // EX contents move to EX/MEM this cycle
@@ -463,7 +472,12 @@ module muserisc_core import muserisc_pkg::*; (
   // ex_mc_busy and uses the same ack/kill.
   assign fpu_req = idex_valid_q && idex_ctrl_q.fp_op && !idex_exc_q &&
                    !ex_illegal;
-  assign ex_mc_busy = fpu_req && !fpu_done;
+  // M unit (muserisc_muldiv_mc): MUL* 3 EX cycles, DIV*/REM*
+  // 2 (x/0, overflow) or 3..35 (operand-dependent).
+  assign muldiv_req = idex_valid_q && idex_ctrl_q.muldiv && !idex_exc_q &&
+                      !ex_illegal;
+  assign ex_mc_busy = (fpu_req && !fpu_done) ||
+                      (muldiv_req && !muldiv_done);
   // EX holds for a busy multi-cycle unit or the vector unit.
   // The vector unit keeps its own start/ack handshake; it and
   // the FPU only ever serve the instruction in EX (vector and
@@ -557,12 +571,34 @@ module muserisc_core import muserisc_pkg::*; (
   assign vec_commit = vec_unit_op && vec_done && !trap_fire &&
                       !mem_exc && !mem_stall;
 `ifndef SYNTHESIS
-  // The FPU and the vector unit are never in flight together.
+  // The FPU, the M unit and the vector unit are never in
+  // flight together: each serves only the instruction in EX
+  // (fp_op, muldiv and vec decodes are disjoint) and returns to
+  // idle when that instruction leaves EX or is killed.
   always_ff @(posedge clk_i) begin
     if (vec_busy && fpu_req)
       $error("muserisc_core: FPU request while the vector unit is busy");
     if (fpu_req && vec_unit_op)
       $error("muserisc_core: FP and vector op in EX together");
+    if (vec_busy && muldiv_req)
+      $error("muserisc_core: M-unit request while the vector unit is busy");
+    if (muldiv_req && (vec_unit_op || fpu_req))
+      $error("muserisc_core: M-unit op in EX together with an FP/vector op");
+    // Unit state (hierarchical, simulation only): a non-idle
+    // unit means an operation is in flight or its result held.
+    if ((u_fpu.state_q != u_fpu.S_IDLE) && (muldiv_req || vec_busy))
+      $error("muserisc_core: FPU in flight with the M/vector unit");
+  end
+  // The multi-cycle M unit's state exists only with COMB = 0 (the
+  // legacy single-cycle mode has none). S_IDLE is encoding 0 (the
+  // enum item itself is not referenced: Verilator 5.020 fails on a
+  // hierarchical enum-item reference inside a generate block).
+  if (MuldivComb == 0) begin : g_md_inflight_chk
+    always_ff @(posedge clk_i) begin
+      if ((|u_muldiv.g_mc.state_q) &&
+          (fpu_req || vec_busy || (u_fpu.state_q != u_fpu.S_IDLE)))
+        $error("muserisc_core: M unit in flight with the FPU/vector unit");
+    end
   end
 `endif
   // FP vector ops accrue fflags and dirty FS on commit.
@@ -925,11 +961,19 @@ module muserisc_core import muserisc_pkg::*; (
       .result_o  (bext_result)
   );
 
-  muserisc_muldiv u_muldiv (
+  // Multi-cycle M unit on the generic EX handshake (see
+  // ex_mc_busy above); operands are sampled when it accepts.
+  muserisc_muldiv_mc #(.COMB(MuldivComb)) u_muldiv (
+      .clk_i     (clk_i),
+      .rst_ni    (rst_ni),
+      .req_i     (muldiv_req),
+      .ack_i     (ex_advance),
+      .kill_i    (trap_take),
       .funct3_i  (idex_ctrl_q.funct3),
       .word_op_i (idex_ctrl_q.word_op),
       .a_i       (ex_rs1),
       .b_i       (ex_rs2),
+      .done_o    (muldiv_done),
       .result_o  (muldiv_result)
   );
 

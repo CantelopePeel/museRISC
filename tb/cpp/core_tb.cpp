@@ -224,8 +224,12 @@ int main(int argc, char** argv) {
       dut->irq_m_timer_i = 1;
       irq_active = true;
     }
-    if (irq_active && dut->trap_o) {
-      dut->irq_m_timer_i = 0;  // level interrupt: clear once taken
+    // Level interrupt: clear once it is taken. Only an interrupt
+    // trap (mcause bit 63) counts: a synchronous exception taken
+    // while the IRQ is pending (e.g. md_irq_directed's misaligned
+    // loads) must leave the line raised.
+    if (irq_active && dut->trap_o && (dut->trap_cause_o >> 63) != 0) {
+      dut->irq_m_timer_i = 0;
       irq_active = false;
       irq_timer_after = -1;
     }
