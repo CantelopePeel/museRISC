@@ -1,0 +1,38 @@
+PLIC spec semantics + 3-bit WARL priorities (branch plic-spec, #21, 2026-10-16)
+===============================================================================
+
+Base: fork main 3feef0c (#22 plic_tb + #18). Changes in rtl/soc/muserisc_plic.sv,
+the soc_tb C++ PLIC model and plic_tb's reference model:
+- claim: highest-priority pending enabled source with priority > 0,
+  independent of the threshold (threshold gates only EIP);
+- completion for a source not enabled for the context: ignored;
+- priority/threshold registers WARL with 3 implemented bits.
+
+== plic_tb (proves the fix) ==
+New directed checks: claim of a source whose priority is <= threshold
+(returns it, EIP stays low), completion from a context the source is not
+enabled for (ignored, pending stays clear), WARL readback (0xffffffff -> 7,
+byte merge 0xfd -> 5, threshold 0x12345678 -> 0). The previous RTL
+(main) fails this plic_tb: 81,758 of 200,133 checks in a 100k-cycle run.
+plic_tb seed 0x91c (core-test)   PLIC TB PASS (4,000,133 checks, 2M cycles, 93,552 claim reads)
+plic_tb seed 0x5eed, 4M cycles   PLIC TB PASS (8,000,133 checks)
+
+== Block synthesis (scripts/synth_block_orfs.sh, Nangate45, unrepaired) ==
+muserisc_plic  main (32-bit priorities)  32,859.5 um^2  reg->reg 3.323 ns
+               this branch (3-bit)        4,940.4 um^2  reg->reg 1.756 ns
+                                                         (prio_q -> claimed_q),
+                                                         reg->rdata_o 1.644 ns
+
+== Gates (rebased tree, Verilator 5.048 unless noted) ==
+make lint                                   clean                         7 s
+make test                                   PASS                          4 s
+make core-test                              PASS (incl. plic_tb)        347 s
+make -C sim socrtl (RTL PLIC)               SOC CRYPTO PASS @ 18,851,904 79 s
+soc_rtl_tb OpenSBI + s_hello (random lat.)  HELLO FROM S-MODE @ 11,537,310 40 s
+Verilator 5.020 (Docker)                    make lint clean; plic_tb PASS;
+                                            soc_rtl_tb builds             29 s
+soc_tb Linux boot (C++ PLIC model changed)  MUSERISC_LINUX_BOOT_OK, SOC TB PASS @ 1,612,954,759 cycles
+                                            (same cycle count as the #19/#20 boots)
+                                            5,740 s;
+                                            log: plic-spec-linux-boot-2026-10-16.log
+Not run: ACT and riscv-tests (core_tb has no PLIC; no core RTL change).
