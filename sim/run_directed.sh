@@ -20,6 +20,18 @@ run() {
 }
 run rv64i rv64i_directed.bin
 run rv64m rv64m_directed.bin
+run md md_directed.bin
+run mdkill md_kill_directed.bin
+# Timer IRQ at every offset across a window wider than the
+# longest M op (64-bit divide), as the pre-cache core target.
+for o in $(seq 100 171); do
+  echo "[$TAG] core_tb md_irq_directed.bin --irq-timer-after $o ${EXTRA[*]} --mem-seed $seed"
+  COV_FILE="cov_mdirq_${o}_${TAG}.dat" ./core_tb md_irq_directed.bin \
+    --irq-timer-after "$o" "${EXTRA[@]}" --mem-seed "$seed" > "md_irq_${o}_${TAG}.log" 2>&1 ||
+    { cat "md_irq_${o}_${TAG}.log"; exit 1; }
+done
+echo "CORE TB PASS md_irq_directed.bin [$TAG] (72/72 IRQ offsets 100..171)"
+seed=$((seed + 1))
 run amo amo_directed.bin
 run fp fp_directed.bin
 run fpstall fp_stall_directed.bin
