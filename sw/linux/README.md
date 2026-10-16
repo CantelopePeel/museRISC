@@ -52,8 +52,9 @@ interrupt disabled between its claim and its EOI would stay
 claimed and never fire again. Mainline Linux later restored a guard
 in `plic_irq_eoi` that briefly re-enables a disabled source around
 the completion write.
-For anything beyond the boot gate, use a 6.6.y stable kernel that
-carries that fix, or treat it as a known risk.
+For anything beyond the boot gate, use Linux 6.6.20 or later on the
+6.6.y stable branch (the guard is absent in 6.6.10 and 6.6.15 and
+present from 6.6.20), or treat it as a known risk.
 
 ## KVM smoke (#22)
 
