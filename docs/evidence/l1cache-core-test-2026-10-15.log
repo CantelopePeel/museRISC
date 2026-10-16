@@ -1,4 +1,4 @@
-# make core-test on branch l1-cache (2026-10-15), wall 373s
+# make core-test on branch l1-cache (2026-10-15), wall 255s
 # Verilator 5.048, GCC 16 riscv64-unknown-elf; every directed test runs twice:
 #   [rand]    caches on, --mem-lat 1:6 --mem-gap 2 --mem-ready 70, --mem-seed = run index
 #   [nocache] caches off (--no-cache), bus latency 1
@@ -207,6 +207,8 @@ CORE TB PASS mmio_bypass_directed.bin (1783 cycles)
 CORE TB PASS vm_sfence_cache_directed.bin (23145 cycles)
 [rand] core_tb fp_hold_cache_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 35
 CORE TB PASS fp_hold_cache_directed.bin (2783 cycles)
+[rand] core_tb ptw_drop_directed.bin --mem-lat 1:6 --mem-gap 2 --mem-ready 70 --mem-seed 36
+CORE TB PASS ptw_drop_directed.bin (37580 cycles)
 [nocache] core_tb rv64i_directed.bin --no-cache --mem-seed 1
 CORE TB PASS rv64i_directed.bin (1450 cycles)
 [nocache] core_tb rv64m_directed.bin --no-cache --mem-seed 2
@@ -395,6 +397,8 @@ CORE TB PASS mmio_bypass_directed.bin (1917 cycles)
 CORE TB PASS vm_sfence_cache_directed.bin (28947 cycles)
 [nocache] core_tb fp_hold_cache_directed.bin --no-cache --mem-seed 35
 CORE TB PASS fp_hold_cache_directed.bin (2597 cycles)
+[nocache] core_tb ptw_drop_directed.bin --no-cache --mem-seed 36
+CORE TB PASS ptw_drop_directed.bin (50994 cycles)
 CORE TB PASS fp_directed.bin (2400 cycles)
 CORE TB PASS fp_stall_directed.bin (2737 cycles)
 CORE TB PASS fpvec_directed.bin (1144 cycles)
@@ -433,22 +437,22 @@ done; echo "CORE TB PASS [M COMB=1] md_irq_directed.bin (11 IRQ offsets 100..170
 CORE TB PASS [M COMB=1] md_irq_directed.bin (11 IRQ offsets 100..170)
 
 # verilator_coverage --annotate summary (all modules; a line counts only if every point on it is hit)
-  lines with all attached points covered : 55.00%  (3170/5709)
+  lines with all attached points covered : 55.00%  (3182/5716)
 
 # per-file coverage, all core-test runs merged (scripts/cov_report.py build/sim/cov_merged.dat)
-muserisc_bus_arb.sv          branch       16/16     100.00%
-muserisc_bus_arb.sv          line          5/5      100.00%
-muserisc_bus_arb.sv          toggle      620/778     79.69%
+muserisc_bus_arb.sv          branch       20/20     100.00%
+muserisc_bus_arb.sv          line          6/6      100.00%
+muserisc_bus_arb.sv          toggle      624/782     79.80%
 muserisc_core.sv             branch      259/276     93.84%
 muserisc_core.sv             line        173/182     95.05%
-muserisc_core.sv             toggle    11361/18094   62.79%
-muserisc_cpu.sv              toggle     1598/2310    69.18%
+muserisc_core.sv             toggle    11417/18094   63.10%
+muserisc_cpu.sv              toggle     1604/2310    69.44%
 muserisc_dcache.sv           branch       58/58     100.00%
 muserisc_dcache.sv           line         41/41     100.00%
 muserisc_dcache.sv           toggle     3524/4202    83.86%
 muserisc_icache.sv           branch       44/44     100.00%
 muserisc_icache.sv           line         26/26     100.00%
-muserisc_icache.sv           toggle     1622/1842    88.06%
+muserisc_icache.sv           toggle     1623/1842    88.11%
 muserisc_sram_sp.sv          branch        6/6      100.00%
 muserisc_sram_sp.sv          line          2/2      100.00%
 muserisc_sram_sp.sv          toggle      685/686     99.85%
