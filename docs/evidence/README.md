@@ -1887,3 +1887,27 @@ stages 4c/5:
   offer-hold selection). Arrays: I$
   2 x (512 x 64 b data + 64 x 44 b tag); D$ 4 x (512 x
   64 b data with byte write mask + 64 x 44 b tag).
+
+## CSR vsetvl VLMAX and PLIC arbitration timing (2026-10-16, branch `timing-fixes`)
+
+- Artifact: [`timing-csr-plic-2026-10-16.log`](timing-csr-plic-2026-10-16.log).
+- Fixes the 2nd and 3rd worst paths of the first SoC synthesis
+  (`docs/SOC_AREA.md` on `soc-sram-synth`): the CSR computed
+  VLMAX as `512 / sew_bits` etc. (a 64-bit divider, 40.3 ns
+  there) and now shifts (`group_bits >> (vsew + 3)`); the PLIC's
+  31-step sequential claim scan (~460 levels) is now a 5-level
+  tournament tree with the same lowest-id tie rule, still
+  combinational, so a claim read returns the best source at the
+  time of the read.
+- Per-block synthesis with the SoC's ORFS Yosys flow
+  (`scripts/synth_block_orfs.sh`, new; Nangate45, unrepaired,
+  wire-load model): `muserisc_csr` **43.1 ns → 0.91 ns**,
+  74,032 → 56,320 µm²; `muserisc_plic` **19.2 ns → 3.3 ns**
+  (reg→reg; reg→`rdata_o` 19.1 → 3.2 ns), 37,288 → 32,860 µm².
+- Gates on the rebased tree (main 910c023): lint, test,
+  core-test (cached + uncached), vec TB at two seeds,
+  riscv-tests 123/123 cached and uncached, ACT 2,577/2,578
+  cached (random latency) and uncached (only the known
+  `PMPSm_cfg_A_tor_zero-00` waiver; all 1,872 Vx/Vls + 162 Vf
+  pass), `socrtl` and OpenSBI on `soc_rtl_tb`, Verilator 5.020
+  and the `soc_tb` Linux boot (details in the log).
