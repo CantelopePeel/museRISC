@@ -93,11 +93,16 @@ _start:
     sub a1, a1, a0
     li a2, 2                       // at least the nops retired between reads
     bltu a1, a2, fail
+    // cycle aliases mcycle: an mcycle read bracketed by two cycle
+    // reads lies between them. No fixed skew bound, so the check
+    // holds however long the fetches in between take (uncached
+    // fetch under heavy bus backpressure).
     csrr a0, cycle
     csrr a1, mcycle
-    sub a1, a1, a0
-    li a2, 8                       // allow small skew, same source
-    bgeu a1, a2, fail
+    csrr a2, cycle
+    bltu a1, a0, fail
+    bltu a2, a1, fail
+    bgeu a0, a2, fail              // and the counter advanced
 
     // 4: ECALL traps to M with precise epc/cause, handler resumes
     li t0, 4

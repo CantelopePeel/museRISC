@@ -5,6 +5,11 @@
 //       next instruction boundary (mepc = the instruction after
 //       the vmacc) and the op is neither cut short nor replayed:
 //       the non-idempotent vmacc accumulates exactly 20 times.
+//       Under slow uncached fetch the IRQ can instead land while
+//       the loop's addi/bnez/vmacc are being fetched, so mepc may
+//       be any loop instruction; if it is the vmacc itself, the
+//       op must not have started (vstart = 0). The exact-20 check
+//       holds in every case.
 //  3:   indexed load with a misaligned element 2: elements 0-1
 //       commit, element 2+ untouched, vstart = 2, tval = address.
 //  4-5: unit-stride segment load whose element 2 field 1 is
@@ -56,10 +61,12 @@ _start:
     csrs mie, t1
     csrsi mstatus, 8                 // mstatus.MIE
     li s2, 20
-1:  vmacc.vv v16, v8, v24
+irq_loop:
+    vmacc.vv v16, v8, v24
 irq_after_vmacc:
     addi s2, s2, -1
-    bnez s2, 1b
+irq_loop_end:
+    bnez s2, irq_loop
     csrci mstatus, 8
     la a1, irq_count
     ld a2, 0(a1)
@@ -68,7 +75,15 @@ irq_after_vmacc:
     la a1, irq_epc
     ld a2, 0(a1)
     la a3, irq_after_vmacc
-    bne a2, a3, fail                 // ... right after a vmacc
+    beq a2, a3, 2f                   // ... right after a vmacc
+    la a3, irq_loop_end
+    beq a2, a3, 2f                   // ... or at the bnez
+    la a3, irq_loop
+    bne a2, a3, fail                 // ... or before a vmacc,
+    la a1, irq_vstart
+    ld a2, 0(a1)
+    bnez a2, fail                    // which had not started
+2:
     li t0, 2
     li a1, 20
     vmseq.vx v1, v16, a1
@@ -569,6 +584,9 @@ handler_irq:
     csrr t1, mepc
     la t2, irq_epc
     sd t1, 0(t2)
+    csrr t1, vstart
+    la t2, irq_vstart
+    sd t1, 0(t2)
     li t1, (1 << 7)
     csrc mie, t1
 handler_ret:
@@ -593,6 +611,7 @@ trap_cause: .dword 0, 0, 0           // mcause, mtval, vstart
 fixup:      .dword 0
 irq_count:  .dword 0
 irq_epc:    .dword 0
+irq_vstart: .dword 0
 idx:        .word 0, 4, 9, 12
 ldata:      .word 0x11111111, 0x22222222, 0x33333333, 0x44444444
             .word 0x55555555, 0x66666666

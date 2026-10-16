@@ -3,7 +3,7 @@
 //
 // Memory bus ("mbus", one transaction in flight, in order):
 //   Request channel, valid/ready (valid never waits for ready;
-//   payload stable while valid && !ready):
+//   payload, req_wdata included, stable while valid && !ready):
 //     req_addr   byte address (PA). Bursts: line-aligned on the
 //                first beat; each write beat carries its own
 //                beat address.
@@ -11,7 +11,8 @@
 //     req_len    beats - 1 (0 = single beat; line bursts are
 //                LINE_BYTES/8 - 1, incrementing, 8 bytes/beat)
 //     req_wdata, req_be   write data / byte lanes of the aligned
-//                64-bit word. Single-beat reads also carry the
+//                64-bit word (req_wdata is 0 on I$ beats).
+//                Single-beat reads also carry the
 //                accessed lanes in req_be (I/O devices see the
 //                exact access width).
 //     req_last   last write beat (always 1 on reads)
