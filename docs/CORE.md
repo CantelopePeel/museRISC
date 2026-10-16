@@ -295,12 +295,22 @@ registered in a done state, so a done result can never be seen
 by the next op (which always starts from IDLE). The FPU, the M
 unit and the vector unit are asserted (simulation) never to be
 in flight together. The vector unit's own integer mul/div are
-unaffected. An interrupt waits for a held M op like any EX hold;
-an older instruction's exception kills it (re-executed after the
-handler returns).
+unaffected. An interrupt waits for a held M op like any EX hold
+(it is injected on a younger instruction). An older instruction's
+exception kills it (`kill = trap_take`) and it re-executes after
+the handler returns. That kill can come at any cycle of the op: an
+older access parked in MEM by `mem_stall` (a page-table walk, or a
+vector load/store that faults on a later element) keeps the M op
+running in EX for as long as the stall lasts. A result finished
+during the stall is acked in the cycle the stall ends with the
+fault and then flushed from EX/MEM by the trap; a trap firing in
+the done cycle itself kills the unit in its done state. Covered by
+`md_kill_directed.S` (vector load faulting on element 8 behind
+long divides, multiplies and x/0; x/0 behind a misaligned load)
+and `md_irq_directed.S`.
 
-| op | cycles in EX (1 = no stall) |
-|----|-----------------------------|
+| op | cycles in EX, default `COMB=0` (minimum 2: every M op stalls EX) |
+|----|------------------------------------------------------------------|
 | MUL, MULH, MULHSU, MULHU, MULW | 3 |
 | DIV/REM(U)(W) by zero, signed overflow | 2 |
 | other DIV/REM(U)(W) | 3 + n, n = max(0, ceil((clz\|b\| − clz\|a\| + 1)/2)) |
@@ -314,7 +324,9 @@ ASIC), summed in MUL2. Divider: radix-4 restoring recurrence on
 magnitudes (compare against d, 2d, 3d in parallel), normalized by
 leading-zero counts so only significant quotient digits iterate;
 FIX applies signs and the W sign extension. `COMB=1` keeps the legacy
-single-cycle behaviour behind the same handshake (`done_o = req_i`).
+single-cycle behaviour behind the same handshake (`done_o = req_i`);
+the core selects it with `+define+MUSERISC_MULDIV_COMB`
+(`make -C sim core-mdcomb` runs the directed suite on that build).
 Simulation builds cross-check every completion against
 `muserisc_muldiv`.
 

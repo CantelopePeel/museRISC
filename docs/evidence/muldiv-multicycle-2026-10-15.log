@@ -69,3 +69,30 @@ parameter (bit -> int unsigned, default 0; no logic change).
 UART capture: muldiv-multicycle-linux-boot-2026-10-15.log (fpu-multicycle
 reached the same exit at 502,782,909 cycles; the extra ~7.5M cycles are the
 M-unit EX stalls).
+
+== Round-1 audit fixes (2026-10-16), re-run on the new head ==
+RTL: the core's sim-only M-unit in-flight check moved into a generate
+block guarded by the M-unit mode, so a COMB=1 core elaborates
+(+define+MUSERISC_MULDIV_COMB; S_IDLE pinned to encoding 0, compared as
+nonzero: Verilator 5.020 hits an internal error on a hierarchical
+enum-item reference inside a generate block). No synthesizable change.
+New md_kill_directed.S: vector load faulting on element 8 (mem_stall
+~16 cycles) behind long divides (killed in ITER), mul / x/0 (result held
+through the stall, acked when it ends with the fault, flushed by the
+trap); x/0 behind a misaligned load (killed in its done state). Kill
+states confirmed with a debug build: ITER x2, PREP-done x2.
+make lint                 rc=0, 0 warnings (5 s)
+make test                 PASS (4 s)
+make core-test            rc=0 (263 s): all unit TBs, 30 directed programs
+                          incl. md_kill_directed, md_irq 72/72, core-ds1,
+                          and new core-mdcomb: the whole directed suite on
+                          the COMB=1 core (28 programs + md_irq 11 offsets)
+make riscv-tests          123/123 (34 s)
+ACT I,M regenerated       64/64 (2 s)
+ACT full (2,578 ELFs)     2577/2578, only PMPSm_cfg_A_tor_zero-00 (280 s)
+Verilator 5.020 (Docker)  make lint 0 warnings; muldiv_mc TBs PASS;
+                          make -C sim core 30/30 PASS; core-mdcomb PASS
+                          (669 s incl. apt)
+Yosys read_slang (ORFS flags) rc=0
+The Linux boot above ran on the pre-fix RTL (the fix is simulation-only
+code plus an explicit enum encoding equal to the implicit one).

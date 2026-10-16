@@ -101,6 +101,14 @@ module muserisc_core import muserisc_pkg::*; (
   logic        mem_stall;     // data translation miss: hold all regs
   logic        fpu_req, fpu_done;
   logic        muldiv_req, muldiv_done;
+  // M unit mode: multi-cycle (default) or, with
+  // +define+MUSERISC_MULDIV_COMB, the legacy single-cycle unit
+  // behind the same handshake (done in the issue cycle).
+`ifdef MUSERISC_MULDIV_COMB
+  localparam int unsigned MuldivComb = 1;
+`else
+  localparam int unsigned MuldivComb = 0;
+`endif
   logic        ex_mc_busy;    // a multi-cycle EX unit is still working
   logic        ex_hold;       // EX holds (multi-cycle unit / vector WB)
   logic        ex_advance;    // EX contents move to EX/MEM this cycle
@@ -578,11 +586,19 @@ module muserisc_core import muserisc_pkg::*; (
       $error("muserisc_core: M-unit op in EX together with an FP/vector op");
     // Unit state (hierarchical, simulation only): a non-idle
     // unit means an operation is in flight or its result held.
-    if ((u_muldiv.g_mc.state_q != u_muldiv.g_mc.S_IDLE) &&
-        (fpu_req || vec_busy || (u_fpu.state_q != u_fpu.S_IDLE)))
-      $error("muserisc_core: M unit in flight with the FPU/vector unit");
     if ((u_fpu.state_q != u_fpu.S_IDLE) && (muldiv_req || vec_busy))
       $error("muserisc_core: FPU in flight with the M/vector unit");
+  end
+  // The multi-cycle M unit's state exists only with COMB = 0 (the
+  // legacy single-cycle mode has none). S_IDLE is encoding 0 (the
+  // enum item itself is not referenced: Verilator 5.020 fails on a
+  // hierarchical enum-item reference inside a generate block).
+  if (MuldivComb == 0) begin : g_md_inflight_chk
+    always_ff @(posedge clk_i) begin
+      if ((|u_muldiv.g_mc.state_q) &&
+          (fpu_req || vec_busy || (u_fpu.state_q != u_fpu.S_IDLE)))
+        $error("muserisc_core: M unit in flight with the FPU/vector unit");
+    end
   end
 `endif
   // FP vector ops accrue fflags and dirty FS on commit.
@@ -947,7 +963,7 @@ module muserisc_core import muserisc_pkg::*; (
 
   // Multi-cycle M unit on the generic EX handshake (see
   // ex_mc_busy above); operands are sampled when it accepts.
-  muserisc_muldiv_mc u_muldiv (
+  muserisc_muldiv_mc #(.COMB(MuldivComb)) u_muldiv (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
       .req_i     (muldiv_req),

@@ -82,7 +82,9 @@ module muserisc_muldiv_mc #(
   end else begin : g_mc
 
     typedef enum logic [2:0] {
-      S_IDLE, S_MUL1, S_MUL2, S_PREP, S_ITER, S_FIX
+      // S_IDLE must stay 0: muserisc_core's sim-only in-flight
+      // check tests the state for nonzero.
+      S_IDLE = 3'd0, S_MUL1, S_MUL2, S_PREP, S_ITER, S_FIX
     } state_e;
 
     // Leading-zero count, log-depth tree: 4-bit leaves, then four
