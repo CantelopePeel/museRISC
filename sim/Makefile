@@ -426,11 +426,11 @@ core-mdcomb: $(BUILD)/core_tb_mdcomb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TE
 	done; echo "CORE TB PASS [M COMB=1] md_irq_directed.bin (11 IRQ offsets 100..170)"
 
 ## ---- Core with random initial state -----------------------------------
-# --x-initial unique build run with +verilator+rand+reset+2: every
-# simulation check must stay quiet until reset and the core must
-# come out of reset correctly from arbitrary register contents.
-XINIT_RUNS := rv64i_directed.bin fp_directed.bin fpvec_directed.bin \
-  "priv_directed.bin 6000000 --irq-timer-after 2000"
+# --x-initial unique build: the whole directed suite (run_directed.sh,
+# caches on, random bus latency) with +verilator+rand+reset+2 at two
+# seeds. Every simulation check must stay quiet until reset, and the
+# core and the test programs must not depend on initial register
+# contents (e.g. a test using sp without setting it).
 $(BUILD)/core_tb_xinit: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/core_xinit --top-module muserisc_cpu \
 	  --x-initial unique \
@@ -440,11 +440,10 @@ $(BUILD)/core_tb_xinit: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $
 	  $(abspath $(ROOT)/tb/cpp/core_tb.cpp)
 
 core-xinit: $(BUILD)/core_tb_xinit $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
-	cd $(BUILD) && for r in $(XINIT_RUNS); do for s in 1 3 5; do \
-	  ./core_tb_xinit $$r $(CORE_RAND_ARGS) +verilator+rand+reset+2 +verilator+seed+$$s \
-	    > xinit.log 2>&1 || { cat xinit.log; exit 1; }; \
-	  tail -1 xinit.log | sed "s/^CORE TB PASS/CORE TB PASS [random initial state, seed $$s]/"; \
-	done; done
+	for s in 1 3; do \
+	  CORE_TB=./core_tb_xinit bash $(ROOT)/sim/run_directed.sh xinit$$s $(CORE_RAND_ARGS) \
+	    +verilator+rand+reset+2 +verilator+seed+$$s || exit 1; \
+	done
 
 ## ---- FPU_DS_BITS=1 core build: FP directed suites ---------------------
 $(BUILD)/core_tb_ds1: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
