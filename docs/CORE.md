@@ -232,10 +232,11 @@ Pipeline behaviour:
   I/O addresses go out as single uncached beats like scalar
   ones.
 - Front-end holds: IF consumes its word only when ID can
-  accept it (`!stall && !vec_ex_stall` and no MEM stall), so a
-  word that arrives while EX is held stays buffered. Any new
-  EX hold (e.g. a multi-cycle FPU) must be added to
-  `if_consume` as well.
+  accept it (`!stall && !ex_hold` and no MEM stall), so a word
+  that arrives while EX is held stays buffered. `ex_hold` is
+  the generic EX hold (vector unit and every multi-cycle EX
+  unit: FPU, M unit), so a new unit on that handshake is
+  covered automatically.
 
 ### Caches
 

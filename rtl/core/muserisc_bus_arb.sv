@@ -8,6 +8,8 @@
 // (valid && !ready) keeps its master selected (hold_q), so the
 // offered payload stays stable until the handshake (AXI rule)
 // even if the other master raises its valid meanwhile.
+// req_wdata_o is zero on I$ beats, so it too is stable on
+// every offered beat (checked by a_req_stable).
 `default_nettype none
 module muserisc_bus_arb (
     input  wire        clk_i,
@@ -50,7 +52,8 @@ module muserisc_bus_arb (
     req_addr_o  = sel ? m1_req_addr_i : m0_req_addr_i;
     req_write_o = sel && m1_req_write_i;
     req_len_o   = sel ? m1_req_len_i : m0_req_len_i;
-    req_wdata_o = m1_req_wdata_i;
+    // Zero on I$ beats so wdata is stable on every offered beat.
+    req_wdata_o = sel ? m1_req_wdata_i : 64'h0;
     req_be_o    = sel ? m1_req_be_i : m0_req_be_i;
     req_last_o  = sel ? m1_req_last_i : 1'b1;
     req_inst_o  = !sel;
@@ -98,7 +101,7 @@ module muserisc_bus_arb (
   a_req_stable: assert property (@(posedge clk_i) disable iff (!chk_live_q)
       (req_valid_o && !req_ready_i) |=>
       (req_valid_o && $stable(req_addr_o) && $stable(req_write_o) &&
-       $stable(req_len_o) && (!req_write_o || $stable(req_wdata_o)) &&
+       $stable(req_len_o) && $stable(req_wdata_o) &&
        $stable(req_be_o) && $stable(req_last_o) && $stable(req_inst_o)))
     else $error("bus_arb: request changed while valid && !ready");
 `endif

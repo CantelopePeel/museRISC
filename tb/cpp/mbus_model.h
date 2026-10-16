@@ -119,15 +119,17 @@ class MbusModel {
       const Req& p = offer_;
       if (!r.valid || r.addr != p.addr || r.write != p.write ||
           r.len != p.len || r.be != p.be || r.last != p.last ||
-          r.inst != p.inst || (r.write && r.wdata != p.wdata)) {
+          r.inst != p.inst || r.wdata != p.wdata) {
         std::fprintf(stderr,
             "MBUS PROTOCOL ERROR at bus cycle %llu: offered beat changed "
             "before acceptance (valid %d->%d addr 0x%llx->0x%llx inst %d->%d "
-            "write %d->%d len %u->%u be 0x%02x->0x%02x)\n",
+            "write %d->%d len %u->%u be 0x%02x->0x%02x wdata 0x%llx->0x%llx)\n",
             static_cast<unsigned long long>(now_), p.valid, r.valid,
             static_cast<unsigned long long>(p.addr),
             static_cast<unsigned long long>(r.addr), p.inst, r.inst,
-            p.write, r.write, p.len, r.len, p.be, r.be);
+            p.write, r.write, p.len, r.len, p.be, r.be,
+            static_cast<unsigned long long>(p.wdata),
+            static_cast<unsigned long long>(r.wdata));
         std::exit(4);
       }
     }
