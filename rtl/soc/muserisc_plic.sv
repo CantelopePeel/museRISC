@@ -8,8 +8,10 @@
 // edge), a store completes. Level sources re-pend after
 // completion while still asserted.
 // Per the RISC-V PLIC spec: priorities and thresholds are WARL
-// with PRIO_BITS implemented bits (upper bits read 0; priority
-// 0 = never interrupt); the threshold only gates the EIP
+// with PRIO_BITS implemented bits (upper bits read 0; a write
+// keeps only the low PRIO_BITS bits, i.e. truncates rather than
+// clamps: writing 8 stores 0; priority 0 = never interrupt); the
+// threshold only gates the EIP
 // notification, not what a claim returns (the highest-priority
 // pending enabled source with priority > 0); a completion for a
 // source not enabled for that context is ignored.
