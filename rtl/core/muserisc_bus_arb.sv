@@ -89,6 +89,9 @@ module muserisc_bus_arb (
   // Simulation checks (enabled one cycle after reset release).
 `ifndef SYNTHESIS
   logic chk_live_q;
+  // Low until reset: pre-reset state is arbitrary under
+  // +verilator+rand+reset+2.
+  initial chk_live_q = 1'b0;
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) chk_live_q <= 1'b0;
     else chk_live_q <= 1'b1;
