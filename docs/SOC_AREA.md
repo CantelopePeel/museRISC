@@ -1,7 +1,9 @@
 # SoC area and timing estimate (synthesis, 2026-10-16)
 
-This is ORFS synthesis of the whole `muserisc_soc_top` on fork main
-b634ffc. That covers the core, the L1 I$/D$ with bus arbiter (#15),
+This is ORFS synthesis of the whole `muserisc_soc_top`. It was
+synthesized on fork main b634ffc; the branch is now on edf395e, whose
+later RTL changes are all simulation-only checks (`` `ifndef
+SYNTHESIS ``) or comments, so the netlist is the same. That covers the core, the L1 I$/D$ with bus arbiter (#15),
 the SoC fabric, CLINT/PLIC/UART/boot ROM and crypto. The core
 includes the element-serial vector unit, whose FP runs on the shared
 multi-cycle FPU (#20), the multi-cycle M unit, and the CSR VLMAX shift
