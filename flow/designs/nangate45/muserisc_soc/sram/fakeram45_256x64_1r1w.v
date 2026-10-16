@@ -3,8 +3,8 @@
 // cycle after a read; after any other clock edge it is undefined,
 // modelled as pseudo-random garbage (2-state simulators turn X into
 // 0, which could hide a missing capture register).
-// A same-word read and write returns the old word (written bytes are
-// undefined in hardware and must be bypassed by the user).
+// A read of the word written in the same cycle is undefined and
+// returns whole-word garbage (the write itself completes).
 module fakeram45_256x64_1r1w (
     input  wire              clk,
     input  wire              we_in,
@@ -23,7 +23,7 @@ module fakeram45_256x64_1r1w (
     if (we_in)
       mem[wr_addr_in] <= (mem[wr_addr_in] & ~w_mask_in) |
                          (wd_in & w_mask_in);
-    if (re_in) rd_out <= mem[rd_addr_in];
+    if (re_in && !(we_in && (wr_addr_in == rd_addr_in))) rd_out <= mem[rd_addr_in];
     else rd_out <= 64'({1{junk}});
   end
 endmodule

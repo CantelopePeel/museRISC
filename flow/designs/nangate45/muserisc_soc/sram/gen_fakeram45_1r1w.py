@@ -26,9 +26,9 @@ Ports (all synchronous to clk, rising edge):
   re_in, rd_addr_in -> rd_out                       read port
 rd_out is registered and valid the cycle after re_in. Like the stock
 bsg_fakeram views it is undefined (X) after a clock edge with re_in
-low, so a user that needs held data must capture it. A same-word read
-and write in one cycle returns the old word for the unwritten bytes
-and undefined data for the written ones (the user bypasses those).
+low, so a user that needs held data must capture it. A read of the
+word written in the same cycle is undefined (whole word), as for a
+real dual-port SRAM; the user must not issue one.
 
 --ports 1rw instead writes a single-port view in the stock fakeram45
 pin style (clk, ce_in, we_in, addr_in, wd_in, w_mask_in, rd_out), used
@@ -338,8 +338,8 @@ module {name} (
 endmodule
 """
     return head + f"""
-// A same-word read and write returns the old word (written bytes are
-// undefined in hardware and must be bypassed by the user).
+// A read of the word written in the same cycle is undefined and
+// returns whole-word garbage (the write itself completes).
 module {name} (
     input  wire              clk,
     input  wire              we_in,
@@ -358,7 +358,7 @@ module {name} (
     if (we_in)
       mem[wr_addr_in] <= (mem[wr_addr_in] & ~w_mask_in) |
                          (wd_in & w_mask_in);
-    if (re_in) rd_out <= mem[rd_addr_in];
+    if (re_in && !(we_in && (wr_addr_in == rd_addr_in))) rd_out <= mem[rd_addr_in];
     else rd_out <= {junk};
   end
 endmodule

@@ -61,7 +61,7 @@ TESTS    := rv64i_directed rv64m_directed md_directed md_irq_directed md_kill_di
             vm_sfence_cache_directed fp_hold_cache_directed ptw_drop_directed
 
 .PHONY: all alu muldiv muldiv_mc decoder regfile csr plic mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 core-xinit sw coverage clean riscv-tests \
-        crypto sha256 sha512 keccak ecfield cryptotop core-mdcomb srammacro
+        crypto sha256 sha512 keccak ecfield cryptotop core-mdcomb srammacro directed-bins
 all: alu muldiv muldiv_mc decoder regfile csr plic mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 core-mdcomb core-xinit srammacro coverage
 
 ## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
@@ -500,6 +500,9 @@ $(BUILD)/soc_rtl_tb_%: $(ROOT)/tb/cpp/soc_rtl_tb.cpp $(ROOT)/tb/cpp/mbus_model.h
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
 	  -o $(abspath $@) $(SOC_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/soc_rtl_tb.cpp)
+
+# All directed-test binaries (used by vendor_model_check.sh).
+directed-bins: $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
 
 srammacro: $(addprefix $(BUILD)/vec_tb_,$(SRAM_MACROS)) $(addprefix $(BUILD)/core_tb_,$(SRAM_MACROS)) \
            $(addprefix $(BUILD)/soc_rtl_tb_,$(SRAM_MACROS)) \

@@ -14,14 +14,19 @@
 // (MUSERISC_SRAM_FAKERAM45 / MUSERISC_SRAM_SKY130 select the
 // macro instance in the ORFS flows; default is behavioural).
 //
-// Read-during-write to the same word is resolved here by a
-// one-cycle write bypass (write-first semantics) for the bytes
-// being written. The unwritten bytes of a colliding word still
-// come from the replica, so a replica must return them intact
-// (true of the behavioural model and of a dual-port cell, whose
-// unwritten columns are not driven). OpenRAM documents
-// same-address read+write as unsupported, so on sky130 this is an
-// assumption to confirm, or a reason for a full-word bypass.
+// Read-during-write. SRAM macros leave a read of the word written in
+// the same cycle undefined (OpenRAM documents same-address
+// read+write as unsupported), so the replicas never see one:
+//  * a read of the word being written by a FULL-word write (wbe=FF)
+//    is not sent to the replica; the port returns the write data
+//    instead (one-cycle full-word bypass, write-first semantics);
+//  * a read colliding with a PARTIAL write is illegal and asserted
+//    against in simulation. The vector unit avoids it by write
+//    combining (most element writes are full-word) and by retrying
+//    the read a cycle later otherwise (vrf_coll in muserisc_vec.sv);
+//    the core's vector load/store sequencer never reads (RD phase)
+//    and writes (ACC/WO phases) in the same cycle.
+// A read in the cycle after a write sees the written data.
 //
 // Consumer contract: read data is valid the cycle after re
 // and is then held while re stays low, but a held word does
@@ -151,17 +156,17 @@ module muserisc_vregfile (
   assign raddr[1] = raddr_b_i;
   assign raddr[2] = raddr_c_i;
 
-  // Write bypass state per port: the bytes written in the
-  // same cycle a port sampled that address.
-  logic [2:0]  byp_q;
-  logic [7:0]  byp_be_q [3];
+  // Full-word bypass state per port: the read sampled a word that a
+  // full-word write wrote in the same cycle; return that data and
+  // keep returning it (hold) until the port's next read.
+  logic [2:0]  coll, byp_q;
   logic [63:0] byp_data_q [3];
-  logic [63:0] rdata [3];
 
   for (genvar p = 0; p < 3; p++) begin : g_port
+    assign coll[p] = re[p] && we_i && (waddr_i == raddr[p]);
     muserisc_vrf_bank u_bank (
         .clk_i   (clk_i),
-        .re_i    (re[p]),
+        .re_i    (re[p] && !coll[p]),
         .raddr_i (raddr[p]),
         .rdata_o (ram_q[p]),
         .we_i    (we_i),
@@ -171,21 +176,24 @@ module muserisc_vregfile (
     );
     always_ff @(posedge clk_i) begin
       if (re[p]) begin
-        byp_q[p] <= we_i && (waddr_i == raddr[p]);
-        byp_be_q[p] <= wbe_i;
+        byp_q[p] <= coll[p];
         byp_data_q[p] <= wdata_i;
       end
     end
-    logic [63:0] byp_mask;
-    for (genvar b = 0; b < 8; b++) begin : g_byte
-      assign byp_mask[b*8 +: 8] = {8{byp_q[p] && byp_be_q[p][b]}};
+`ifndef SYNTHESIS
+    // A read colliding with a partial write would need the unwritten
+    // bytes from the replica, which the SRAM macros cannot give.
+    always_ff @(posedge clk_i) begin
+      if (coll[p] && (wbe_i != 8'hff))
+        $error("muserisc_vregfile: port %0d reads word %0d in the cycle a partial write (be %h) writes it",
+               p, raddr[p], wbe_i);
     end
-    assign rdata[p] = (ram_q[p] & ~byp_mask) | (byp_data_q[p] & byp_mask);
+`endif
   end
 
-  assign rdata_a_o = rdata[0];
-  assign rdata_b_o = rdata[1];
-  assign rdata_c_o = rdata[2];
+  assign rdata_a_o = byp_q[0] ? byp_data_q[0] : ram_q[0];
+  assign rdata_b_o = byp_q[1] ? byp_data_q[1] : ram_q[1];
+  assign rdata_c_o = byp_q[2] ? byp_data_q[2] : ram_q[2];
 
   // v0 shadow (register 0 = words 0..7).
   logic [511:0] v0_q;

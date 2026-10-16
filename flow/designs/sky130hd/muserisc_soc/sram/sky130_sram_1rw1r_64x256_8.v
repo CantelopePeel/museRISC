@@ -64,20 +64,15 @@ module sky130_sram_1rw1r_64x256_8 (
     end
   end
 
-  // Port 1 read (falling edge), after any same-edge port 0 write.
+  // Port 1 read (falling edge).
   always @(negedge clk1) begin
     if (!csb1_reg) begin
-      rd1_q <= mem[addr1_reg];
-      if (!csb0_reg && !web0_reg && addr0_reg == addr1_reg) begin
-        if (wmask0_reg[0]) rd1_q[7:0] <= din0_reg[7:0];
-        if (wmask0_reg[1]) rd1_q[15:8] <= din0_reg[15:8];
-        if (wmask0_reg[2]) rd1_q[23:16] <= din0_reg[23:16];
-        if (wmask0_reg[3]) rd1_q[31:24] <= din0_reg[31:24];
-        if (wmask0_reg[4]) rd1_q[39:32] <= din0_reg[39:32];
-        if (wmask0_reg[5]) rd1_q[47:40] <= din0_reg[47:40];
-        if (wmask0_reg[6]) rd1_q[55:48] <= din0_reg[55:48];
-        if (wmask0_reg[7]) rd1_q[63:56] <= din0_reg[63:56];
-      end
+      // Same-address read during a port-0 write: unsupported,
+      // whole-word garbage.
+      if (!csb0_reg && !web0_reg && addr0_reg == addr1_reg)
+        rd1_q <= ~64'({1{junk}});
+      else
+        rd1_q <= mem[addr1_reg];
       ntag1 <= ptag1;
     end
   end
