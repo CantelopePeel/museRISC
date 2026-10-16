@@ -34,6 +34,17 @@ single-hart embedded-initramfs boot, not a distro or shell.
 Evidence and the precise claim boundary are in
 `docs/evidence/README.md`.
 
+PLIC completion and Linux 6.6.0: the PLIC (RTL and the `soc_tb`
+model) follows the spec and ignores a completion for a source that
+is not enabled for the completing context. Linux 6.6.0's
+`plic_irq_eoi` writes the completion without checking that, so an
+interrupt disabled between its claim and its EOI would stay
+claimed and never fire again. Mainline Linux later restored a guard
+in `plic_irq_eoi` that briefly re-enables a disabled source around
+the completion write.
+For anything beyond the boot gate, use a 6.6.y stable kernel that
+carries that fix, or treat it as a known risk.
+
 ## KVM smoke (#22)
 
 The DT advertises `rv64imafdcbh`, so the same kernel build
