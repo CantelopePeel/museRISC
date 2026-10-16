@@ -26,9 +26,9 @@ the boot ROM/CLINT/PLIC/UART are uncached I/O. Bus timing options
 `--mem-lat A:B`, `--mem-gap N`, `--mem-ready PCT`, `--mem-seed S`
 randomize latency/backpressure, and `--no-cache` disables the
 caches. The blocking caches roughly triple the cycle count
-(1,604,706,870 cycles to `MUSERISC_LINUX_BOOT_OK` at bus latency
-1 vs 505,911,743 on the pre-cache core); `soc_tb` is built
-without coverage instrumentation and runs at ~250k cycles/s.
+(1,614,840,462 cycles to `MUSERISC_LINUX_BOOT_OK` at bus latency
+1 vs 510,301,199 on the pre-cache core); `soc_tb` is built
+without coverage instrumentation (~100-250k cycles/s on a shared host).
 
 The OpenSBI-only smoke gate substitutes `s_hello.bin` for the
 kernel `Image` and `--exit-string HELLO`. Kernel output takes

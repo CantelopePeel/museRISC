@@ -1723,18 +1723,35 @@ stages 4c/5:
   8 KiB 2-way L1 I$, a blocking 16 KiB 4-way write-back +
   write-allocate L1 D$ (single-port sync-read SRAM arrays),
   and a 2:1 arbiter onto one valid/ready burst memory bus.
-  FENCE.I cleans the D$ and invalidates the I$; the PTW and
-  AMO/LR/SC go through the D$; DRAM-only PMA keeps
+  FENCE.I cleans the D$ and invalidates the I$; the PTW,
+  AMO/LR/SC and the element-serial vector load/store
+  sequencer go through the D$; the DRAM-only PMA keeps
   ROM/CLINT/PLIC/UART uncached. Design, protocol and
   parameters: [`docs/CORE.md`](../CORE.md#memory-interface-and-l1-caches).
-- `make core-test` (122 s wall):
+  All results below are on the branch rebased onto `main`
+  bd03ef0 (element-serial vector unit, mip RMW fix #6,
+  synthesizable SoC #4, multi-cycle FPU #5, multi-cycle M unit
+  #14); the SoC now
+  instantiates `muserisc_cpu` behind the new
+  `muserisc_soc_fabric`, and IF consumes fetch words only when
+  the generic `ex_hold` is low.
+- `make core-test` (373 s wall):
   [`l1cache-core-test-2026-10-15.log`](l1cache-core-test-2026-10-15.log).
-  All 26 directed tests (22 existing + 4 new:
+  All 35 directed tests (30 existing + 5 new:
   `smc_fencei_directed`, `amo_cache_directed`,
-  `mmio_bypass_directed`, `vm_sfence_cache_directed`) pass
-  twice — caches on with seeded random bus latency 1–6,
-  inter-beat gaps 0–2 and 70 % `req_ready` backpressure, and
-  caches off — = 52 `CORE TB PASS`. New unit TBs:
+  `mmio_bypass_directed` incl. vector stride-0 loads/stores to
+  the side-effect device, `vm_sfence_cache_directed`,
+  `fp_hold_cache_directed`: fdiv.d/fsqrt.d and full-width
+  div/rem/divuw on the multi-cycle units followed by
+  straight-line code on cold I$ lines) pass twice — caches on with seeded
+  random bus latency 1–6, inter-beat gaps 0–2 and 70 %
+  `req_ready` backpressure, and caches off — including
+  `fp_stall_directed`, `md_directed`, `md_kill_directed`, the
+  48-offset `fp_irq_directed` and the 72-offset
+  `md_irq_directed` timer-IRQ sweeps in both configurations;
+  `core-ds1` (FPU_DS_BITS=1) and `core-mdcomb` (combinational M
+  unit) builds with random latency. 106 `CORE TB PASS` lines,
+  no failures. New unit TBs:
   `icache_tb` 30,000 checked fetches (2,167 FENCE.I
   invalidations, 1,770 with a request outstanding), and
   `dcache_tb` 141,535 checks (16,565 loads, 17,951 stores,
@@ -1758,50 +1775,89 @@ stages 4c/5:
   I$ fetch address bits [1:0] (always 0 by protocol), one
   SRAM data bit. `muserisc_bus_arb` (exercised only through
   `muserisc_cpu`): line 5/5, branch 16/16. Merged over all
-  runs, the new core memory-port logic is fully line-covered;
-  the remaining uncovered core lines/branches are
-  pre-existing (vector LS corner cases, guest-fault causes).
+  runs, the new core memory-port logic is fully line- and
+  branch-covered; the remaining uncovered core lines/branches
+  are pre-existing (vector LS corner cases, AMO min/max
+  32-bit arms, guest-fault causes).
 - riscv-tests: **123/123** with caches + random latency
   ([`riscv-tests-core-l1cache-2026-10-15.csv`](riscv-tests-core-l1cache-2026-10-15.csv),
-  `make riscv-tests`, 30 s) and **123/123** uncached
+  `make riscv-tests`, 41 s) and **123/123** uncached
   ([`riscv-tests-core-l1cache-nocache-2026-10-15.csv`](riscv-tests-core-l1cache-nocache-2026-10-15.csv),
-  36 s).
+  45 s).
 - ACT (all 2,578 generated self-checking ELFs: 544 scalar/
-  priv + 1,872 Vx/Vls + 162 Vf, regenerated in this
-  worktree with the recorded `EXTENSIONS` lists):
-  **2,577/2,578** with caches + random latency (seed 3,
+  priv + 1,872 Vx/Vls + 162 Vf, generated in this worktree
+  with the recorded `EXTENSIONS` lists) via
+  `sim/run_act_core_par.sh` (now takes `CORE_TB_ARGS`), 20
+  jobs: **2,577/2,578** with caches + random latency (seed 3,
   [`act-core-l1cache-2026-10-15.csv`](act-core-l1cache-2026-10-15.csv),
-  660 s with 20 jobs via `sim/run_act_parallel.sh`) and
-  **2,577/2,578** uncached
+  456 s) and **2,577/2,578** uncached
   ([`act-core-l1cache-nocache-2026-10-15.csv`](act-core-l1cache-nocache-2026-10-15.csv),
-  1,044 s). The only failure is the known
-  `PMPSm_cfg_A_tor_zero-00` PA-0 waiver; the pre-change core
-  gives the same 2,577/2,578 on the same ELFs. No regression
-  vs 543/544 + 1,872/1,872 + 162/162.
+  491 s). The only failure is the known
+  `PMPSm_cfg_A_tor_zero-00` PA-0 waiver, as on `main`
+  ([`act-core-muldiv-multicycle-2026-10-15.csv`](act-core-muldiv-multicycle-2026-10-15.csv)).
 - Stress (not a make target; `core_tb` directly): all 123
-  riscv-tests ELFs and all 26 directed binaries under 8 seeds x
-  3 harsher bus profiles (latency 1-20 + gaps 0-5 + 30 % ready;
-  latency 1-3 + 50 % ready; fixed latency 8), with a timer IRQ
-  asserted at cycle 2000: **3,360 runs, 0 failures** (659 s;
-  run before the rebase onto the AES S-box change, cache/core
-  memory-port RTL identical).
+  riscv-tests ELFs and 22 `*_directed` binaries
+  (`fp_irq_directed`/`md_irq_directed` excluded: their IRQ must
+  land inside a specific window, swept separately in core-test) under 8 seeds x
+  3 harsher bus profiles (latency 1–20 + gaps 0–5 + 30 % ready;
+  latency 1–3 + 50 % ready; fixed latency 8), with a timer IRQ
+  asserted at cycle 2000: **3,480 runs, 0 failures** (1,504 s).
 - GitHub-CI toolchain reproduction (Docker `ubuntu:24.04`, apt
   Verilator 5.020 + `gcc-riscv64-unknown-elf` 13, clean export
-  of the branch): `make lint` clean; `make -C sim alu muldiv
-  decoder regfile csr mmu fpu bext rvc vec icache dcache crypto`
-  all PASS; `make -C sim core` 52/52 `CORE TB PASS`; riscv-tests
+  of the branch): `make lint` clean; unit TBs (`alu muldiv
+  decoder regfile csr mmu fpu bext rvc vec icache dcache
+  crypto`) all PASS (the first attempt hit a Verilator 5.020
+  internal "destroy locked Thread Pool" abort while finishing
+  the unchanged `csr_tb` build; the rerun passed); `make -C sim
+  core` 60/60; `soc_rtl_tb` and `soc_tb` build; riscv-tests
   smoke 26/26.
+- RTL SoC ([`l1cache-soc-rtl-2026-10-15.log`](l1cache-soc-rtl-2026-10-15.log)):
+  `soc_rtl_tb` with RAM behind the memory bus — on-core crypto
+  driver + secp256k1 ECDSA verify **SOC CRYPTO PASS** with
+  caches + random latency (18,851,904 cycles; upstream
+  combinational-RAM SoC 11,097,819) and uncached (34,486,744);
+  OpenSBI + `s_hello` from the RTL boot ROM **HELLO** at bus
+  latency 1 (11,317,000 cycles; upstream 5,978,097) and with
+  random latency (11,362,632). Slang elaboration of
+  `muserisc_soc_top` with the ORFS Yosys `read_slang` (same
+  flags and 34-file list as `flow/designs/nangate45/
+  muserisc_soc/config.mk`): **0 errors**, 20 warnings, all
+  pre-existing ("asynchronous load value missing" in core/
+  crypto), none in the cache/CPU/fabric files.
 - Cycle cost (blocking caches, two cycles per hit, correctness
-  first): riscv-tests take 2.76x the stage-7 cycles with
-  caches + random latency (median 3.15x), 3.70x uncached
-  at latency 1 (every access a bus round trip plus the
-  registered response); ACT 3.16x / 3.83x.
+  first) vs the combinational-memory core on `main`: riscv-tests
+  2.74x total cycles with caches + random latency (median
+  3.09x; vs the `fpu-multicycle` riscv-tests CSV), 3.64x uncached at latency 1 (every access a bus round
+  trip plus the registered response); ACT 1.55x / 1.71x (the
+  element-serial vector unit already dominates the vector
+  suites); SoC crypto firmware 1.70x.
+- Linux 6.6 (`soc_tb`, same OpenSBI v1.9 / Image / DTB as
+  `muldiv-multicycle-linux-boot-2026-10-15.log`, which reaches
+  the marker at 510,301,199 cycles on `main`): with caches on, `MUSERISC_LINUX_BOOT_OK` / `SOC TB PASS` at
+  bus latency 1 in **1,614,840,462 cycles** (3.16x, 7,398 s;
+  [`l1cache-linux-boot-lat1-2026-10-16.log`](l1cache-linux-boot-lat1-2026-10-16.log)),
+  and with random latency 1–6 + gaps 0–2 + 70 % ready at
+  **2,125,154,335 cycles** (seed 7, 8,930 s;
+  [`l1cache-linux-boot-rand-seed7-2026-10-16.log`](l1cache-linux-boot-rand-seed7-2026-10-16.log))
+  and **2,124,624,648 cycles** (seed 11, 9,022 s;
+  [`l1cache-linux-boot-rand-seed11-2026-10-16.log`](l1cache-linux-boot-rand-seed11-2026-10-16.log)).
+  Not a gate: an uncached (`--no-cache`) Linux boot was
+  stopped at 2.3G cycles with no kernel console output; every
+  PC sample from 0.9G to 2.3G cycles fell in the scheduler's
+  PELT update (`__update_load_avg_cfs_rq`), consistent with the
+  timer tick (40,000 cycles at the DT's 10 MHz timebase) being
+  consumed by tick processing when every access is a bus round
+  trip; the uncached mode is a bring-up strap and is gated by
+  the directed tests, riscv-tests and ACT above. (Before the #6 mip fix reached `main`, seed 7
+  hit the #3 SEI livelock right after `/init`'s first line,
+  while latency 1 and seed 11 passed: the fix, not this branch,
+  resolved it.)
 - Synthesis check (Yosys 0.68 in `openroad/orfs:latest`, sv2v
   v0.0.13, Nangate45 typical, arrays black-boxed):
   [`synth-caches-nangate45-2026-10-15.log`](synth-caches-nangate45-2026-10-15.log).
   Logic area excluding SRAM arrays: I$ 2,928 um2 (1,508
   cells, 270 flops), D$ 13,796 um2 (7,086 cells, 1,299
-  flops, 47 % sequential — valid/dirty bits and the 64 B
+  flops, 47 % sequential — valid/dirty bits, the 64 B
   write-back line buffer and the registered uncached
   response), arbiter 178 um2. Arrays: I$
   2 x (512 x 64 b data + 64 x 44 b tag); D$ 4 x (512 x

@@ -184,7 +184,7 @@ RV64GCV, built in stages; unchecked items are not claims.
 | ACT vector (integer) | 1872/1872 run, 43 not generated | [`act-core-stage8-2026-10-14.csv`](docs/evidence/act-core-stage8-2026-10-14.csv) |
 | OpenSBI | PASS | [`core-stage6a-opensbi-2026-10-14.log`](docs/evidence/core-stage6a-opensbi-2026-10-14.log) |
 | Linux 6.6 | PASS to `/init` | [`core-stage6-linux-boot-2026-10-14.log`](docs/evidence/core-stage6-linux-boot-2026-10-14.log) |
-| L1 caches: riscv-tests / ACT / Linux | 123/123 · 2577/2578 (1 waiver) · PASS | [`act-core-l1cache-2026-10-15.csv`](docs/evidence/act-core-l1cache-2026-10-15.csv), [`l1cache-linux-boot-lat1-2026-10-15.log`](docs/evidence/l1cache-linux-boot-lat1-2026-10-15.log) |
+| L1 caches: riscv-tests / ACT / Linux | 123/123 · 2577/2578 (1 waiver) · PASS | [`act-core-l1cache-2026-10-15.csv`](docs/evidence/act-core-l1cache-2026-10-15.csv), [`l1cache-linux-boot-lat1-2026-10-16.log`](docs/evidence/l1cache-linux-boot-lat1-2026-10-16.log) |
 | Linux KVM smoke | PASS (MMIO exit) | [`core-stage7-kvm-smoke-2026-10-14.log`](docs/evidence/core-stage7-kvm-smoke-2026-10-14.log) |
 | Crypto KATs | PASS | `make test` |
 
