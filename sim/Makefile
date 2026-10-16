@@ -206,11 +206,13 @@ rvc: $(BUILD)/rvc_tb
 # Harness = muserisc_vec + banked muserisc_vregfile + TB backdoor.
 $(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(FPU_INC) \
                  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
+                 $(RTL)/muserisc_fpu.sv \
                  $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
                  $(ROOT)/tb/sv/muserisc_vec_harness.sv | $(BUILD) $(OBJ)
 	$(VERILATOR) $(VFLAGS) $(OBJ)/vec --top-module muserisc_vec_harness \
 	  -o $(abspath $(BUILD)/vec_tb) $(PKG) \
 	  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
+	  $(RTL)/muserisc_fpu.sv \
 	  $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
 	  $(ROOT)/tb/sv/muserisc_vec_harness.sv \
 	  $(abspath $(ROOT)/tb/cpp/vec_tb.cpp)

@@ -4,7 +4,9 @@
 // so the scalar FP datapath (being reworked separately into a
 // multi-cycle FPU) neither dominates nor blocks the comparison.
 // The same stub is used for the before and after designs; the
-// count of fp_eval call sites is reported separately.
+// count of fp_eval call sites is reported separately. Since the
+// vector unit runs its FP sub-steps on the shared scalar FPU,
+// synthesis sees only the (stubbed) estimate stages.
 package muserisc_fpu_pkg;
   localparam logic [4:0] FPU_ADD   = 5'd0;
   localparam logic [4:0] FPU_SUB   = 5'd1;
@@ -26,6 +28,23 @@ package muserisc_fpu_pkg;
     logic [63:0] result;
     logic [4:0]  flags;
   } fp_eval_result_t;
+  typedef struct packed {
+    logic               sign;
+    logic signed [15:0] exp;
+    logic [52:0]        sig;
+    logic               is_zero, is_inf, is_nan, is_snan, is_sub;
+    logic [63:0]        raw;
+  } unpacked_t;
+  function automatic unpacked_t unpack(input logic [63:0] v, input logic d);
+    unpack = '0;
+    unpack.raw = v ^ {63'd0, d};
+  endfunction
+  function automatic fp_eval_result_t fp_est_fin(
+      input logic rsqrt, input logic d, input logic [2:0] rm,
+      input unpacked_t u);
+    fp_est_fin.result = u.raw ^ {59'd0, rm, rsqrt, d};
+    fp_est_fin.flags = u.raw[4:0];
+  endfunction
   function automatic fp_eval_result_t fp_estimate(
       input logic rsqrt, input logic d, input logic [2:0] rm,
       input logic [63:0] v);

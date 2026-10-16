@@ -102,14 +102,13 @@ FPU structure: every operation is a chain of stage functions in
 `muserisc_fpu_ops.svh` (unpack, special cases, align, add,
 normalise, round; radix-2 restoring divide/sqrt steps; float/int
 conversions). `muserisc_fpu` puts a register after each stage
-and runs `FPU_DS_BITS` (= 2) divide/sqrt steps per cycle; the
-vector unit calls `fp_eval`, which chains the very same
-functions combinationally, so scalar and vector results are
-identical by construction (simulation additionally asserts
-every multi-cycle completion against `fp_eval`). Normalisation
-uses log-depth leading-zero shifters; there are no
-data-dependent loops. The vector FP path itself remains
-combinational (out of scope for this change).
+and runs `FPU_DS_BITS` (= 2) divide/sqrt steps per cycle. The
+vector unit runs its FP elements on the same FPU instance (see
+the vector unit below). `fp_eval` chains the very same
+functions combinationally; it is the simulation reference:
+every FPU completion, scalar or vector, is asserted against it.
+Normalisation uses log-depth leading-zero shifters; there are no
+data-dependent loops.
 
 Latency (cycles the instruction occupies EX; 1 = no stall):
 
@@ -452,11 +451,21 @@ Multi-cycle elements hold S2 and back-pressure S1/S0:
 radix-2^16 iterative multiplier on magnitudes (prep, 1/1/2/4
 partial-product steps for SEW 8/16/32/64, sign, post, write),
 radix-2 restoring divider (prep, SEW iterations, sign/special
-cases), and FP elements through one shared `fp_eval` /
-`fp_estimate` call per cycle (widening forms: convert vs2,
-convert vs1, operate; `vfwred*`: convert, fold). The FP path
-still calls the combinational `fp_eval` and will be re-pointed
-at the multi-cycle FPU.
+cases), and FP elements as one or more FP sub-steps
+(widening forms: convert vs2, convert vs1, operate;
+`vfwred*`: convert, fold). Each sub-step is one operation on
+the core's scalar `muserisc_fpu` (the vector unit drives its
+ports while busy: no scalar FP op can be in EX then, so
+sharing costs a 2:1 operand mux instead of a second FPU), or
+for `vfrec7`/`vfrsqrt7` a two-cycle estimate in the vector
+unit (`unpack`, register, `fp_est_fin`). Every sub-step result
+is registered before use, so the FP datapath never chains
+into the vector write-back. A sub-step takes the scalar
+latency of that operation plus one cycle (e.g. `vfadd` 6
+cycles per active element, `vfdiv.vv`/`vfsqrt.v` 18 (e32) /
+33 (e64), `vfwmacc` 16, estimates 3); inactive (masked-off)
+elements skip the FPU. Simulation asserts each sub-step result
+against `fp_eval`/`fp_estimate` on the issued operands.
 
 Read-ahead safety: S0 reads up to three elements ahead of
 the write in S3. For every source/destination overlap RVV
