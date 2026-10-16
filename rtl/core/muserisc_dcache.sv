@@ -389,6 +389,9 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
   // must match the burst length this cache asked for.
 `ifndef SYNTHESIS
   logic chk_live_q;
+  // Low until reset: pre-reset state is arbitrary under
+  // +verilator+rand+reset+2.
+  initial chk_live_q = 1'b0;
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) chk_live_q <= 1'b0;
     else chk_live_q <= 1'b1;
