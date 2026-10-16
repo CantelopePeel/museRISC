@@ -1887,3 +1887,45 @@ stages 4c/5:
   offer-hold selection). Arrays: I$
   2 x (512 x 64 b data + 64 x 44 b tag); D$ 4 x (512 x
   64 b data with byte write mask + 64 x 44 b tag).
+
+### Follow-ups from the PR #15 round-2 audit (2026-10-16)
+
+- N1: `muserisc_bus_arb` drives `req_wdata_o = 0` on I$ beats, so
+  the whole request payload (wdata included) is stable on every
+  offered beat; `a_req_stable` and `MbusModel::CheckStable()` now
+  check wdata on read beats too (the error message prints wdata).
+  Mutant check (ungated wdata, `--mem-ready 20`, 3 seeds x
+  `vm_directed`/`smc_fencei_directed`): the SVA fires in 6/6 runs;
+  with the SVA also removed, the C++ check aborts 6/6 (exit 4,
+  e.g. `addr 0x80->0x80 inst 1->1 ... wdata 0x0->0x4511451145114511`).
+  Arbiter synthesis (Yosys/Nangate45): 259 um2, 167 cells, 4
+  flops (was 191 um2; the 64 AND gates are the gating).
+- N3: `priv_directed` test 3 brackets an `mcycle` read between two
+  `cycle` reads instead of bounding the skew by 8 cycles;
+  `vec_trap_directed` test 1 accepts an IRQ taken at any loop
+  instruction (at the `vmacc` itself only with vstart = 0; the
+  exact-20 accumulation check is unchanged). Before: 8/24 failures
+  in 4 seeds of uncached / 20 %-ready profiles (priv test 3 in
+  7, vec_trap test 1 in 1). After: 20 seeds x 5 profiles
+  (`--no-cache` lat 1-4 / 20 %, `--no-cache` lat 2-30 gap 6 /
+  20 %, cached lat 2-30 gap 6 / 20 %, default random, lat 1):
+  all 100 `vec_trap` runs pass, and 80/100 `priv` runs; the 20
+  others are all in the slowest profile (`--no-cache` lat 2-30
+  gap 6 / 20 %) and are cycle-budget timeouts at 12M cycles, not
+  failures: with a 60M budget they pass at 13.83M cycles (3/3
+  seeds checked).
+- Gates on `l1-followup` (main 910c023 + fixes), heavily loaded
+  host: `make lint` clean (17 s); `make test` PASS (4 s);
+  `make core-test` 108 `CORE TB PASS`, 0 fail (897 s);
+  riscv-tests 123/123 (`make riscv-tests` 88 s; random latency
+  91 s; uncached 91 s); ACT 2,577/2,578 with caches + random
+  latency (only `PMPSm_cfg_A_tor_zero-00`, 550 s, 20 jobs);
+  stress at seeds 301-303 x 6 profiles (adds `--no-cache` lat 1-4
+  / 20 % ready to the five earlier ones): 2,628 runs, 0 failures,
+  0 protocol errors (1,725 s); `soc_rtl_tb` crypto PASS cached +
+  random latency (18,851,904 cycles) and uncached (34,486,744),
+  OpenSBI `s_hello` HELLO at latency 1 (11,317,000) and random
+  latency (11,362,632); Docker ubuntu:24.04 Verilator 5.020: lint
+  clean, unit TBs incl. `icache`/`dcache` PASS, `make -C sim core`
+  72 PASS lines, `soc_tb`/`soc_rtl_tb` build, riscv-tests smoke
+  26/26.
