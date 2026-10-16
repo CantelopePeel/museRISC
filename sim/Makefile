@@ -60,9 +60,9 @@ TESTS    := rv64i_directed rv64m_directed md_directed md_irq_directed md_kill_di
             smc_fencei_directed amo_cache_directed mmio_bypass_directed \
             vm_sfence_cache_directed fp_hold_cache_directed ptw_drop_directed
 
-.PHONY: all alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 sw coverage clean riscv-tests \
+.PHONY: all alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 core-xinit sw coverage clean riscv-tests \
         crypto sha256 sha512 keccak ecfield cryptotop core-mdcomb
-all: alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 core-mdcomb coverage
+all: alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 core-mdcomb core-xinit coverage
 
 ## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
 # Caches on, seeded random bus latency/gaps/backpressure.
@@ -424,6 +424,27 @@ core-mdcomb: $(BUILD)/core_tb_mdcomb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TE
 	  ./core_tb_mdcomb md_irq_directed.bin --irq-timer-after $$o $(CORE_RAND_ARGS) > mdcomb.log 2>&1 \
 	    || { cat mdcomb.log; exit 1; }; \
 	done; echo "CORE TB PASS [M COMB=1] md_irq_directed.bin (11 IRQ offsets 100..170)"
+
+## ---- Core with random initial state -----------------------------------
+# --x-initial unique build run with +verilator+rand+reset+2: every
+# simulation check must stay quiet until reset and the core must
+# come out of reset correctly from arbitrary register contents.
+XINIT_RUNS := rv64i_directed.bin fp_directed.bin fpvec_directed.bin \
+  "priv_directed.bin 6000000 --irq-timer-after 2000"
+$(BUILD)/core_tb_xinit: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
+	$(VERILATOR) $(VFLAGS) $(OBJ)/core_xinit --top-module muserisc_cpu \
+	  --x-initial unique \
+	  "-GC1_BASE=64'h0" "-GC1_SIZE=64'h10000000" \
+	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
+	  -o $(abspath $(BUILD)/core_tb_xinit) $(CPU_RTL) \
+	  $(abspath $(ROOT)/tb/cpp/core_tb.cpp)
+
+core-xinit: $(BUILD)/core_tb_xinit $(addprefix $(BUILD)/,$(addsuffix .bin,$(TESTS)))
+	cd $(BUILD) && for r in $(XINIT_RUNS); do for s in 1 3 5; do \
+	  ./core_tb_xinit $$r $(CORE_RAND_ARGS) +verilator+rand+reset+2 +verilator+seed+$$s \
+	    > xinit.log 2>&1 || { cat xinit.log; exit 1; }; \
+	  tail -1 xinit.log | sed "s/^CORE TB PASS/CORE TB PASS [random initial state, seed $$s]/"; \
+	done; done
 
 ## ---- FPU_DS_BITS=1 core build: FP directed suites ---------------------
 $(BUILD)/core_tb_ds1: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
