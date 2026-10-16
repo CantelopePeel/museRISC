@@ -60,9 +60,9 @@ TESTS    := rv64i_directed rv64m_directed md_directed md_irq_directed md_kill_di
             smc_fencei_directed amo_cache_directed mmio_bypass_directed \
             vm_sfence_cache_directed fp_hold_cache_directed ptw_drop_directed
 
-.PHONY: all alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec icache dcache core core-ds1 sw coverage clean riscv-tests \
+.PHONY: all alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 sw coverage clean riscv-tests \
         crypto sha256 sha512 keccak ecfield cryptotop core-mdcomb
-all: alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec icache dcache core core-ds1 core-mdcomb coverage
+all: alu muldiv muldiv_mc decoder regfile csr mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 core-mdcomb coverage
 
 ## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
 # Caches on, seeded random bus latency/gaps/backpressure.
@@ -219,6 +219,32 @@ $(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(FPU_INC) \
 
 vec: $(BUILD)/vec_tb
 	cd $(BUILD) && COV_FILE=cov_vec.dat ./vec_tb
+
+# Same harness with randomized initial state (--x-initial unique,
+# +verilator+rand+reset+2): the simulation cross-checks must stay
+# quiet until reset. Short runs; seeds 1, 2 and 4 each fired a
+# cross-check at time 0 before the reset gating. No coverage.
+$(BUILD)/vec_tb_xinit: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(FPU_INC) \
+                 $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
+                 $(RTL)/muserisc_fpu.sv \
+                 $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
+                 $(ROOT)/tb/sv/muserisc_vec_harness.sv | $(BUILD) $(OBJ)
+	$(VERILATOR) --cc --exe --build -j 0 -Wall -Wno-DECLFILENAME --assert --coverage-line \
+	  --x-initial unique -I$(RTL) -CFLAGS "-std=c++17 -O2" \
+	  --Mdir $(OBJ)/vec_xinit --top-module muserisc_vec_harness \
+	  -o $(abspath $(BUILD)/vec_tb_xinit) $(PKG) \
+	  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
+	  $(RTL)/muserisc_fpu.sv \
+	  $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
+	  $(ROOT)/tb/sv/muserisc_vec_harness.sv \
+	  $(abspath $(ROOT)/tb/cpp/vec_tb.cpp)
+
+vec-xinit: $(BUILD)/vec_tb_xinit
+	cd $(BUILD) && for s in 1 2 4; do \
+	  ./vec_tb_xinit 20 +verilator+rand+reset+2 +verilator+seed+$$s > vec_xinit.log 2>&1 \
+	    || { cat vec_xinit.log; exit 1; }; \
+	  tail -1 vec_xinit.log | sed "s/^VEC TB PASS/VEC TB PASS [random initial state, seed $$s]/"; \
+	done
 
 ## ---- L1 cache unit tests ----------------------------------------------
 # Small geometry (4 sets x 2 ways x 32 B lines) so the random
