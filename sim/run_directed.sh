@@ -56,7 +56,7 @@ run priv priv_directed.bin 6000000 --irq-timer-after 2000
 # pending (as the pre-cache core target).
 for o in $(seq 20 120); do
   echo "[$TAG] core_tb irq_exc_race_directed.bin --irq-timer-after $o ${EXTRA[*]} --mem-seed $seed"
-  COV_FILE="cov_irqexc_${o}_${TAG}.dat" ./core_tb irq_exc_race_directed.bin \
+  COV_FILE="cov_irqexc_${o}_${TAG}.dat" "$TB" irq_exc_race_directed.bin \
     --irq-timer-after "$o" "${EXTRA[@]}" --mem-seed "$seed" > "irq_exc_${o}_${TAG}.log" 2>&1 ||
     { echo "offset $o:"; cat "irq_exc_${o}_${TAG}.log"; exit 1; }
 done
