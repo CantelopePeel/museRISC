@@ -2000,36 +2000,36 @@ stages 4c/5:
 
 ## SoC synthesis with all large arrays on SRAM macros (2026-10-16, branch `soc-sram-synth`)
 
-- ORFS synthesis of the whole `muserisc_soc_top` on main 035bb05,
-  with the L1 caches, the CSR/PLIC fixes and vector FP on the shared
-  FPU. All 15 large arrays are macros: 3 VRF banks, 6 L1 data ways and
-  6 L1 tag ways.
+- ORFS synthesis of the whole `muserisc_soc_top` on main 3bf8965. All
+  15 large arrays are macros: 3 VRF banks, 6 L1 data ways and 6 L1 tag
+  ways.
   - On Nangate45 the macros are fakeram45, partly generated.
   - On sky130hd they are the OpenRAM macros prebuilt in ORFS.
 - Flat results:
-  - Nangate45: 533,214 µm² std cells + 158,051 µm² macros, 27,293
+  - Nangate45: 536,637 µm² std cells + 158,051 µm² macros, 27,433
     flops.
-  - sky130hd (direct run): 2,496,057 µm² + 6,225,284 µm², 27,299
-    flops.
+  - sky130hd: 2,502,929 µm² + 6,225,284 µm², 27,439 flops.
 - Unrepaired fmax (period bisection in OpenSTA):
-  - Nangate45: 166 MHz.
-  - sky130hd: 12.1 MHz, limited by the half-cycle path from the
-    OpenRAM VRF read into the FPU. With registered macro outputs it
-    would be 22.2 MHz.
-- The rough sky130 placed core size is 12.0–13.8 mm².
-- Summary and estimates: [`../SOC_AREA.md`](../SOC_AREA.md). Runs,
-  timing, gates, vendor-model and mutation checks:
+  - Nangate45: 169 MHz.
+  - sky130hd: 11.9 MHz. It is set by the OpenRAM half-cycle reads: 18.1
+    MHz with the VRF outputs registered, 22.2 MHz with all 15
+    registered.
+- The rough sky130 placed core size is 12.0–13.9 mm².
+- The VRF never presents a same-address read and write to a macro:
+  S3 write combining, a full-word bypass, and a retry for partial
+  writes. The `srammacro` models return whole-word garbage for that
+  mode, permanently.
+- Summary: [`../SOC_AREA.md`](../SOC_AREA.md). Runs, timing, collision
+  statistics, mutations, gates and the vendor-model check:
   [`soc-sram-synth-2026-10-16.log`](soc-sram-synth-2026-10-16.log),
   with stat and STA reports in `soc-sram-synth-*-2026-10-16.*`.
-- Gates after the RTL changes (macro wrappers with read capture, and a
-  reset PC without an async-load flop):
+- Gates:
   - lint (5.048, and Docker 5.020 run non-root);
   - test;
-  - core-test, including the new `srammacro` target: vector TB, 36
-    directed runs and SoC crypto per macro family, with cycle counts
-    identical to the behavioural build;
+  - core-test, including `srammacro`;
   - riscv-tests 123/123;
   - `socrtl` and OpenSBI hello, cached and uncached;
+  - vendor OpenRAM model run;
   - ACT 2,577/2,578
     ([`act-core-soc-sram-synth-2026-10-16.csv`](act-core-soc-sram-synth-2026-10-16.csv)),
     with only the `PMPSm_cfg_A_tor_zero-00` waiver failing.

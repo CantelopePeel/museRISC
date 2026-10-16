@@ -1,7 +1,7 @@
 # SoC area and timing estimate (synthesis, 2026-10-16)
 
 This is ORFS synthesis of the whole `muserisc_soc_top` on fork main
-035bb05. That covers the core, the L1 I$/D$ with bus arbiter (#15),
+3bf8965. That covers the core, the L1 I$/D$ with bus arbiter (#15),
 the SoC fabric, CLINT/PLIC/UART/boot ROM and crypto. The core
 includes the element-serial vector unit, whose FP runs on the shared
 multi-cycle FPU (#20), the multi-cycle M unit, and the CSR VLMAX shift
@@ -25,7 +25,7 @@ Evidence: [`evidence/soc-sram-synth-2026-10-16.log`](evidence/soc-sram-synth-202
 
 Flat synthesis (the ORFS default) gives the totals. A second,
 hierarchical run (`SYNTH_HIERARCHICAL=1`) gives the per-module split;
-it keeps module boundaries, so it comes out 1–4 % larger.
+it keeps module boundaries, so it comes out 1–3 % larger.
 
 Both flows read the RTL with `-D SYNTHESIS`, so simulation-only
 checks are dropped. ORFS passes that define itself, and the configs
@@ -33,53 +33,51 @@ repeat it.
 
 | | Nangate45 | sky130hd |
 |---|---:|---:|
-| Std-cell area | 0.533 mm² (533,214 µm²) | 2.496 mm² (2,496,057 µm²) |
+| Std-cell area | 0.537 mm² (536,637 µm²) | 2.503 mm² (2,502,929 µm²) |
 | SRAM macros (15) | 0.158 mm² (158,051 µm²) | 6.225 mm² (6,225,284 µm²) |
 |   VRF banks (3) | 38,473 µm² | 1,258,388 µm² |
 |   L1 data ways (6) | 103,809 µm² | 4,332,656 µm² |
 |   L1 tag ways (6) | 15,769 µm² | 634,240 µm² |
-| Total synthesized area | 0.691 mm² | 8.721 mm² |
-| Cells (incl. macros) | 313,021 | 274,034 |
-| Flip-flops | 27,293 | 27,299 |
-| **Fmax (unrepaired, wire-load)** | **166 MHz** (6.03 ns) | **12.1 MHz** (82.8 ns) |
-| Limiting path | `vls_started_q` → D$ data macro `ce_in` (5.5 ns logic) | VRF OpenRAM `dout1` (falling edge) → FPU operand enable: 40.9 ns of logic in half a cycle |
-| Fmax if the OpenRAM outputs were registered | (same) | **22.2 MHz** (44.95 ns): FPU `state_q` → `exmem_result_q` |
-| Yosys wall time / peak RSS (whole make) | 1 h 04 min / 2.71 GB | 1 h 01 min / 2.77 GB |
+| Total synthesized area | 0.695 mm² | 8.728 mm² |
+| Cells (incl. macros) | 316,548 | 275,790 |
+| Flip-flops | 27,433 | 27,439 |
+| **Fmax (unrepaired, wire-load)** | **169 MHz** (5.91 ns) | **11.9 MHz** (84.1 ns) |
+| Limiting path | `vls_started_q` → D$ tag-way read capture (5.4 ns) | VRF OpenRAM `dout1`, launched on the falling edge → FPU operand enable: 0.38 ns clk→q + 39.75 ns logic + 1.42 ns setup + 0.5 ns uncertainty = half the period |
+| Fmax with only the 3 VRF macro outputs registered | (same) | **18.1 MHz** (55.3 ns): D$ tag-way OpenRAM `dout0` (falling edge) → same FPU enable, 25.4 ns of logic in half a cycle |
+| Fmax with all 15 macro outputs registered | (same) | **22.2 MHz** (45.0 ns): `vls_started_q` → FPU operand enable, full cycle |
+| Yosys wall time / peak RSS (whole make) | 1 h 17 min / 2.73 GB | 1 h 08 min / 2.72 GB |
 
 Fmax is found by bisecting the clock period in OpenSTA, which is the
-`min_period_bisect` line of `sta_synth.tcl`. A period-minus-WNS figure
+`min_period_*` lines of `sta_synth.tcl`. A period-minus-WNS figure
 is wrong once a path starts at a falling-edge macro output, whose
 budget is half the period.
 
-On sky130 the half-cycle VRF read paths therefore set fmax:
-- the period must be at least 2 × (clk→q + logic + uncertainty)
-  = 2 × 41.4 ns;
-- with those outputs registered, the next limit is the full-cycle
-  FPU result path at 45 ns.
+**The sky130 fmax is set by the OpenRAM half-cycle read paths.**
+- Registering only the VRF outputs (a VRF read pipeline stage)
+  leaves the L1 macros' half-cycle paths, which give 18.1 MHz.
+- About 22 MHz needs all 15 macro outputs registered, which costs one
+  more cycle of latency on VRF reads and on cache hits.
 
-Everything else is shorter:
-- PLIC and fabric ~18 ns;
-- the caches ~20 ns;
-- crypto ~24 ns.
+These are unrepaired wire-load numbers, and one gate dominates. Both
+FPU-enable paths go through a single `sky130_fd_sc_hd__a2111oi_0`
+that drives 145 loads unbuffered, and it alone is 22.4 ns of the
+39.75 ns. That is an artefact of the unrepaired netlist (repair would
+buffer or upsize it), so these fmax figures mostly reflect fanout,
+not logic depth.
 
-On Nangate45 every block closes with slack at 100 MHz; the worst
-paths in each block are 4.6–5.5 ns. The hierarchical netlists agree:
-6.03 ns on Nangate45; 66.5 ns (15.0 MHz) on sky130, or 34.8 ns
-(28.7 MHz) rising-edge only.
+On Nangate45 every block has at least 4.1 ns of slack at 100 MHz.
 
 The sky130 column comes from a direct sky130hd synthesis run (the
 platform and the OpenRAM macros ship in `openroad/orfs:latest`), not
 from scaling:
-- Std-cell area scales 4.68× from Nangate45 to sky130hd (flat runs).
+- Std-cell area scales 4.66× from Nangate45 to sky130hd (flat runs).
 - The macros do not scale that way: sky130 OpenRAM is 33–42× the
   fakeram45 area for the same array.
 - So on sky130 the macros are 71 % of the synthesized area.
 
-Where the Yosys time went: mostly in `abc` (Nangate45 3,082 s, sky130
-2,899 s), with `extract_fa` at ~280 s, on a host at load ~100–150.
-With the combinational vector `fp_eval` gone, flat synthesis is about
-3× faster than before #20. The hierarchical runs took 21 min each at
-2.35 GB.
+Where the Yosys time went: mostly in `abc` (Nangate45 3,878 s, sky130
+3,372 s), with `extract_fa` at ~290 s, on a loaded host. The
+hierarchical runs took ~25 min each at 2.35 GB.
 
 ### Area by module (hierarchical runs)
 
@@ -94,24 +92,24 @@ arbiter into the top.
 | L1 data ways (6 × `muserisc_sram_sp`) | 6 × 17,735 | 6 × 724,923 | 6 × 66 | macro + read capture + half select |
 | L1 tag ways (6 × `muserisc_sram_sp`) | ² | 6 × 107,366 | 6 × 45 | macro + read capture |
 | VRF banks (3 × `muserisc_vrf_bank`) | 3 × 13,252 | 3 × 421,852 | 3 × 65 | macro + read capture |
-| `muserisc_vec` | 61,218 | 284,007 | 1,481 | element-serial vector unit; FP on the shared FPU |
-| `muserisc_csr` | 57,498 | 273,381 | 3,063 | |
-| `muserisc_mmu` | 65,873 | 302,419 | 4,557 | TLBs + walker |
-| `muserisc_fpu` | 52,075 | 243,099 | 1,394 | multi-cycle FPU, shared by scalar and vector |
-| `muserisc_core` pipeline | 96,571 ³ | 203,017 | 2,730 | |
+| `muserisc_vec` | 62,965 | 289,330 | 1,645 | element-serial vector unit; FP on the shared FPU; VRF write combining |
+| `muserisc_csr` | 57,284 | 271,229 | 3,063 | |
+| `muserisc_mmu` | 64,327 | 305,088 | 4,557 | TLBs + walker |
+| `muserisc_fpu` | 52,480 | 244,698 | 1,394 | multi-cycle FPU, shared by scalar and vector |
+| `muserisc_core` pipeline | 95,876 ³ | 203,017 | 2,730 | |
 | `muserisc_fpregfile` / `regfile` | ³ | 106,162 / 96,927 | 2,048 / 2,048 | 32×64 flops each |
 | `muserisc_alu`, `decoder`, `rvc` | ³ | 31,109 | 0 | |
-| `muserisc_muldiv_mc` | 38,953 | 183,989 | 276 | multi-cycle M unit |
-| `muserisc_bext` | 28,537 | 141,361 | 0 | bit-manip / scalar crypto |
-| `muserisc_vregfile` logic | 5,337 | 28,569 | 731 | v0 shadow + write bypass |
+| `muserisc_muldiv_mc` | 38,740 | 185,249 | 276 | multi-cycle M unit |
+| `muserisc_bext` | 27,709 | 140,013 | 0 | bit-manip / scalar crypto |
+| `muserisc_vregfile` logic | 5,177 | 27,850 | 707 | v0 shadow + full-word collision bypass |
 | `muserisc_dcache` logic | 26,712 ² | 68,910 | 1,299 | |
 | `muserisc_icache` logic | 9,221 ² | 16,638 | 270 | |
 | `ec_field` | 42,260 | 197,387 | 1,291 | crypto field unit |
-| `sha256_block` | ⁴ | 158,568 | 2,569 | |
-| `muse_crypto_top` + bridge | 45,888 ⁴ | 49,926 | 1,098 | |
+| `sha256_block` | ⁴ | 159,019 | 2,569 | |
+| `muse_crypto_top` + bridge | 45,895 ⁴ | 49,926 | 1,098 | |
 | `muserisc_plic` | 33,472 | 160,669 | 1,184 | 32 sources, tournament tree |
 | fabric, arbiter, CLINT, UART, boot ROM, top | 9,334 | 41,547 | 639 | |
-| **Total** | **719,116** | **8,846,976** | **27,539** | |
+| **Total** | **717,619** | **8,854,059** | **27,679** | |
 
 ² The Nangate45 D$ / I$ rows include their 4 / 2 tag ways
 (macros 4 / 2 × 2,628 µm²). ³ The Nangate45 "pipeline" row includes
@@ -168,33 +166,93 @@ The RTL contracts expect held data: the VRF holds while `re` is low,
 and `muserisc_sram_sp` holds until the next read. So every macro
 wrapper has a capture register: `rd_q` marks a read in the previous
 cycle, `hold_q` takes the macro output in the cycle after a read, and
-`rdata = rd_q ? macro_out : hold_q`. Latency is unchanged. The cost
-is 15 × (44–64) flops plus muxes, ~1 % of std-cell area.
+`rdata = rd_q ? macro_out : hold_q`. Latency is unchanged.
 
 The vector unit depends on the hold: without it, both macro families
-fail the vector TB. The caches pass the full directed suite even
-without it, because they consume array data in the cycle after the
-read. They keep the capture register anyway, since `muserisc_sram_sp`
-documents the hold.
+fail the vector TB.
 
-**Half-cycle paths on sky130.** OpenRAM read data arrives ~0.4 ns
+The caches do not depend on it today. Every reader of
+`muserisc_sram_sp` data samples it exactly one cycle after the read,
+and the full directed suite passes without the register. It is kept
+anyway, so that `muserisc_sram_sp` has the same documented hold
+contract in every build, and a later cache change cannot break only
+on silicon. The cost:
+- 666 flops: 6 × 66 + 6 × 45, counting `rd_q` and the half select.
+- About 0.027 mm² on sky130 (1.1 % of std cells) and ~4,000 µm² on
+  Nangate45.
+- One 2:1 mux (a few hundred ps) on the L1 half-cycle `dout0` path,
+  which is the limit once the VRF outputs are registered.
+
+**Half-cycle paths on sky130.** OpenRAM read data arrives ~0.3–0.4 ns
 after the falling edge. So everything from `dout` through the capture
-mux (and, for the VRF, the write bypass) to the first flop gets half
-a clock period, and the clock period must be at least twice that path.
-In the run above that path, from VRF read data into the FPU operand
-enables, is 40.9 ns, and it sets the sky130 fmax at 12.1 MHz. A full
-cycle would need a read pipeline stage (one more cycle of latency) or
-a macro with rising-edge output.
+mux to the first flop gets half a clock period, and the period must be
+at least 2 × (clk→q + logic + setup + uncertainty).
+- The VRF read into the FPU operand enables is 39.75 ns of logic,
+  which gives 11.9 MHz.
+- The L1 tag read into the same enables is 25.4 ns, which gives
+  18.1 MHz once the VRF outputs are registered.
 
-**Collisions.**
-- The VRF bypass in `muserisc_vregfile` covers same-word read/write
-  collisions for the bytes being written. Unwritten bytes of a
-  colliding word still come from the macro, so this design assumes
-  the macro returns them intact. That holds for both models and for a
-  dual-port cell, whose unwritten columns are not driven. OpenRAM
-  documents same-address read+write as unsupported, so this needs
-  confirming for sky130, or a full-word bypass.
-- The L1 arrays are single-port, so they cannot collide.
+A full cycle would need a read pipeline stage (one more cycle of
+latency) or a macro with rising-edge output.
+
+**Same-address read and write.** OpenRAM documents a read and a write
+of the same address in the same cycle as unsupported; the vendor model
+prints a warning. So the design never issues one to a macro.
+
+- **VRF** (the only dual-port macro use). The vector unit issues
+  ~136 k same-row read+write cycles in the vector TB. Almost all of
+  them are a port-C read of the old vd word while S3 writes the
+  previous element into that word, which used to be a partial
+  (byte-masked) write. Two changes, both in the RTL every build
+  simulates:
+  1. **Write combining** in `muserisc_vec`. Element writes become
+     full-word writes (`wbe = FF`) whenever S3 knows the whole current
+     word. That is the case when the previous S3 write was a full-word
+     write of the same row, or when the element's own port-C read was
+     of that row and no write touched the row since. That read is
+     tracked through S1/S2 and invalidated by any write to the row.
+     A read that collides with a full-word write is not sent to the
+     replica. `muserisc_vregfile` returns the write data instead (a
+     full-word, write-first bypass) and holds it like a read.
+  2. **Retry.** A read that would collide with a partial write is not
+     issued; S0 or the gather issue retries it the next cycle. The
+     write is older, so S3 drains and the retry cannot deadlock.
+
+  The core's vector load/store sequencer never reads and writes in the
+  same cycle. `muserisc_vregfile` asserts (in simulation, every build)
+  that no read ever collides with a partial write.
+
+  In the vector TB:
+  - all 136,168 collisions hit full-word writes (array not read);
+  - 12 cycles were retries;
+  - 375,165 of 378,358 element writes were full-word;
+  - the cycle count went from 13,232,156 to 13,232,168 (+12).
+
+  With combining disabled (retry only) it is +1.07 % overall, and
+  ~+48 % on single-cycle integer ops. The added hardware is 164 flops
+  in `muserisc_vec`, while `muserisc_vregfile` loses 24 bypass flops.
+- **L1 arrays:** single-port use (OpenRAM port 1 tied off, fakeram45
+  1RW), so a read and a write can never coincide.
+- **fakeram45 1R1W (Nangate45 VRF):** same RTL, so the same guarantee
+  applies. Its generated model also returns whole-word garbage for a
+  same-address read and write.
+
+**Signoff assumption (sky130).**
+- The OpenRAM `.lib` has only a falling-edge arc on `dout`: no
+  rising-edge invalidation or min-delay arc.
+- So no STA checks that `dout` stays valid past the rising edge at the
+  flops that sample it there: the capture register and, in the cycle
+  after a read, every downstream consumer.
+- The design assumes the macro's clk→dout-invalid delay exceeds those
+  flops' hold time plus clock skew. This must be confirmed with the
+  macro's characterization, or a timed gate-level simulation, at
+  signoff.
+- In zero-delay RTL simulation the vendor model's blocking posedge
+  `dout = 'bx` races the capture flop.
+  `flow/designs/sky130hd/muserisc_soc/sram/vendor_model_check.sh`
+  reproduces both cases:
+  - with `dout <= 'bx` (the assumption): PASS;
+  - `--as-shipped`: FAIL.
 
 **Simulation.** `make -C sim srammacro` (part of `make core-test`)
 builds each macro family's behavioural models and runs:
@@ -206,22 +264,35 @@ builds each macro family's behavioural models and runs:
 The models are
 `flow/designs/nangate45/muserisc_soc/sram/*.v` (generated) and
 `flow/designs/sky130hd/muserisc_soc/sram/gen_openram_models.py`. They
-follow the vendor read behaviour: undefined data after a non-read
-edge (pseudo-random garbage, because 2-state Verilator would turn X
-into 0), and on sky130 data only after the falling edge.
+follow the vendor read behaviour:
+- undefined data after a non-read edge (pseudo-random garbage, because
+  2-state Verilator would turn X into 0);
+- on sky130, data only after the falling edge;
+- whole-word garbage for a same-address read and write on the
+  dual-port macros, permanently, so any reliance on that mode fails
+  `srammacro`.
+
+The round-2 RTL, whose bypass covered only the written bytes, fails
+the vector TB on these models: 566 failures on fakeram45 and 565 on
+sky130. The current RTL passes.
 
 Results are bit-exact, with cycle counts identical to the behavioural
 build in every directed test, the SoC crypto run and OpenSBI.
+
 Separate checks:
 - Removing the VRF capture register fails the vector TB on both
   families.
 - Breaking the sky130 half select fails the cache tests.
+- Mutations of the collision handling, run on the sky130 models:
+  - sending colliding reads to the macro → VEC TB FAIL (568 failures);
+  - no write combining, retry only → PASS at +1.07 % cycles;
+  - no retry → the partial-collision assertion fires;
+  - no old-word staleness tracking → VEC TB FAIL (7 failures).
 - The vendor OpenRAM `.v` files themselves pass the vector TB (3
-  X-randomization seeds) and the full directed suite under Verilator.
-  Two edits were needed: `$display` stripped, and the posedge
-  `dout = 'bx` made non-blocking. As a blocking assignment it races
-  the same-edge capture flop in simulation, which is zero-delay; in
-  silicon the macro's clk→q exceeds the flop's hold time.
+  X-randomization seeds) and the full directed suite.
+  `vendor_model_check.sh` runs them, with `$display` stripped and the
+  posedge `dout = 'bx` made non-blocking (the signoff assumption
+  above).
 
 `make lint` lints the SoC under both defines.
 
@@ -261,21 +332,23 @@ than as an achievable fmax.
      multi-cycle on the shared FPU in #20.
    - The CSR VLMAX divider (39 ns) became a shift in #19.
    - PLIC arbitration became a log-depth tree in #19.
-2. **Nangate45: 166 MHz unrepaired.** The worst paths run from
-   `vls_started_q` (vector load/store sequencing) into the D$ data
-   macro enable and the EX/MEM result, ~5.5 ns. Every block has ≥ 4 ns
-   slack at 100 MHz.
-3. **sky130hd: the OpenRAM half-cycle read limits fmax to 12.1 MHz.**
-   - VRF read data is driven ~0.4 ns after the falling edge.
-   - It passes through the capture mux, the vregfile bypass and the
-     FPU operand muxes (40.9 ns) into `u_fpu.prod_op` enables.
-   - The fix is a VRF read pipeline stage (one more cycle of read
-     latency) or a rising-edge macro. Either gets the sky130 SoC to
-     ~22 MHz.
-   - Next is the FPU result → EX/MEM result path, 45 ns full cycle.
-4. **sky130hd full-cycle paths ≥ 20 ns.** FPU result and status,
-   vector FP result capture (`u_vec.fp_res`, 44 ns) and CSR `fflags`
-   (39 ns): all FPU-adjacent wide muxing.
+2. **Nangate45: 169 MHz unrepaired.** The worst paths run from
+   `vls_started_q` (vector load/store sequencing) into the D$ read
+   capture and the EX/MEM result, ~5.4 ns. Every block has at least
+   4.1 ns of slack at 100 MHz (`u_dcache` 4.12 ns).
+3. **sky130hd: the OpenRAM half-cycle reads limit fmax.**
+
+   | Registered macro outputs | Fmax | Limiting path |
+   |---|---:|---|
+   | none | 11.9 MHz | VRF read into the FPU operand enables |
+   | the 3 VRF macros (VRF read pipeline stage) | 18.1 MHz | L1 tag read into the same enables |
+   | all 15 macros | 22.2 MHz | full-cycle FPU-enable path |
+
+   Most of the FPU-enable delay is one 145-fanout gate that repair
+   would buffer.
+4. **sky130hd full-cycle paths of 20 ns or more:** FPU result and
+   status, vector scalar/FP result capture, and CSR (~32–45 ns). All
+   are FPU-adjacent wide muxing.
 
 ## sky130 chip-size estimate (rough)
 
@@ -287,7 +360,7 @@ than as an achievable fmax.
   - VRF: 3 × 0.541 mm² = 1.62 mm².
   - L1 data: 6 × 0.870 mm² = 5.22 mm².
   - L1 tags: 6 × 0.167 mm² = 1.00 mm².
-- **Core with caches ≈ 12.0–13.8 mm².** That is above Caravel's
+- **Core with caches ≈ 12.0–13.9 mm².** That is above Caravel's
   ~10 mm². Without the L1 arrays (VRF only, caches' logic kept) the
   figure is ~5.8–7.6 mm².
 
@@ -304,7 +377,7 @@ are:
 - fewer VRF replicas (each 256×64 is 0.54 mm² placed).
 
 On Nangate45 (for comparison, not a target) the same SoC is 0.69 mm²
-synthesized and reaches 166 MHz before repair.
+synthesized and reaches 169 MHz before repair.
 
 ## Reproduce
 
@@ -323,6 +396,8 @@ python3 flow/designs/nangate45/muserisc_soc/sram/gen_fakeram45_1r1w.py --ports 1
 python3 flow/designs/nangate45/muserisc_soc/sram/gen_fakeram45_1r1w.py --ports 1rw --model-only \
   --depth 512 --width 64 flow/designs/nangate45/muserisc_soc/sram
 python3 flow/designs/sky130hd/muserisc_soc/sram/gen_openram_models.py flow/designs/sky130hd/muserisc_soc/sram
+# vendor OpenRAM models (needs docker + the ORFS image):
+flow/designs/sky130hd/muserisc_soc/sram/vendor_model_check.sh [--as-shipped]
 ```
 
 Each flat synthesis takes ~1 h on a loaded host, mostly in ABC.

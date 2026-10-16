@@ -51,6 +51,11 @@ proc endpoints {incl excl} {
   }
   return $eps
 }
+# req_depth_ns = period - setup uncertainty - slack: the delay the
+# path needs from the launching rising edge, including the endpoint
+# setup time. For a path launched on a falling edge (sky130 OpenRAM
+# dout) it also includes the half period before the launch, so it is
+# not the logic depth; use the bisected minimum period for fmax.
 proc report_block {label eps} {
   global period
   if {[llength $eps] == 0} {
@@ -60,7 +65,7 @@ proc report_block {label eps} {
   set path [lindex [find_timing_paths -to $eps -path_delay max \
     -group_path_count 1 -sort_by_slack] 0]
   set slack [get_property $path slack]
-  puts [format "block %-20s endpoints %6d  worst_slack %9.3f  arrival_ns %8.3f  from %s  to %s" \
+  puts [format "block %-20s endpoints %6d  worst_slack %9.3f  req_depth_ns %8.3f  from %s  to %s" \
     $label [llength $eps] $slack [expr {$period - 0.5 - $slack}] \
     [get_full_name [get_property $path startpoint]] \
     [get_full_name [get_property $path endpoint]]]
@@ -96,7 +101,7 @@ while {$hi - $lo > 0.05} {
 puts [format "min_period_bisect_ns %.2f  fmax_bisect_mhz %.2f" $hi [expr {1000.0 / $hi}]]
 wns_at $hi
 puts "==== critical path at the bisected minimum period"
-report_checks -path_delay max -path_group core_clock -digits 3
+report_checks -path_delay max -path_group core_clock -fields {fanout} -digits 3
 
 # Same, restricted to paths launched on the rising edge (i.e. what
 # fmax would be if the falling-edge macro outputs were registered).
@@ -117,3 +122,24 @@ puts [format "min_period_rise_launch_ns %.2f  fmax_rise_launch_mhz %.2f" $hi [ex
 wns_rise_at $hi
 puts "==== worst rising-edge-launched path at that period"
 report_checks -rise_from [get_clocks core_clock] -path_delay max -digits 3
+
+# Only the VRF macro outputs registered (a VRF read pipeline stage):
+# their paths become full-cycle (need period >= min_period_bisect / 2,
+# the half-cycle budget they had), while every other path, including
+# the L1 macros' falling-edge outputs, keeps its timing. Measured by
+# excluding paths launched at the VRF macros.
+set vrf_macros [get_cells -quiet -hierarchical *u_vregfile*u_ram]
+if {[llength $vrf_macros] > 0} {
+  set_false_path -from $vrf_macros
+  set lo 1.0
+  set hi 2000.0
+  while {$hi - $lo > 0.05} {
+    set mid [expr {($lo + $hi) / 2.0}]
+    if {[wns_at $mid] >= 0} { set hi $mid } else { set lo $mid }
+  }
+  puts [format "min_period_without_vrf_launch_ns %.2f  fmax_without_vrf_launch_mhz %.2f  (VRF macros: %d)" \
+    $hi [expr {1000.0 / $hi}] [llength $vrf_macros]]
+  wns_at $hi
+  puts "==== critical path with VRF-launched paths excluded"
+  report_checks -path_delay max -path_group core_clock -fields {fanout} -digits 3
+}
