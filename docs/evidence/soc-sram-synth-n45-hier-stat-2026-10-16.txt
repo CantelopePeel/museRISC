@@ -1,0 +1,1541 @@
+
+26. Printing statistics.
+
+=== ec_field$muserisc_soc_top.u_crypto_bridge.u_crypto.u_fld ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    34711        -    34711        - wires
+    35732        -    35732        - wire bits
+     1299        -     1299        - public wires
+     2320        -     2320        - public wire bits
+       10        -       10        - ports
+     1031        -     1031        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+    31391 4.23E+04    31391 4.23E+04 cells
+      634  674.576      634  674.576   AND2_X1
+        3     3.99        3     3.99   AND2_X2
+      244   324.52      244   324.52   AND3_X1
+        3    4.788        3    4.788   AND3_X2
+        1    2.926        1    2.926   AND3_X4
+      549  876.204      549  876.204   AND4_X1
+        9   16.758        9   16.758   AND4_X2
+       62  148.428       62  148.428   AOI211_X2
+     4434 4.72E+03     4434 4.72E+03   AOI21_X1
+       37   68.894       37   68.894   AOI21_X2
+        9   31.122        9   31.122   AOI21_X4
+       59  172.634       59  172.634   AOI221_X2
+        1    3.458        1    3.458   AOI221_X4
+        8   17.024        8   17.024   AOI222_X1
+        1    3.724        1    3.724   AOI222_X2
+      163   216.79      163   216.79   AOI22_X1
+        2    4.788        2    4.788   AOI22_X2
+     1762 1.41E+03     1762 1.41E+03   BUF_X1
+      193  205.352      193  205.352   BUF_X2
+       43   80.066       43   80.066   BUF_X4
+        7   24.206        7   24.206   BUF_X8
+       73   58.254       73   58.254   CLKBUF_X1
+        3    3.192        3    3.192   CLKBUF_X2
+        3     3.99        3     3.99   CLKBUF_X3
+      523  2782.36      523  2782.36   DFFR_X1
+      768 3.47E+03      768 3.47E+03   DFF_X1
+      261 1.11E+03      261 1.11E+03   FA_X1
+     2016  5362.56     2016  5362.56   HA_X1
+     4481 2.38E+03     4481 2.38E+03   INV_X1
+        2    1.596        2    1.596   INV_X2
+        1     1.33        1     1.33   INV_X4
+     2132 3.97E+03     2132 3.97E+03   MUX2_X1
+        1    2.394        1    2.394   MUX2_X2
+     2501    2E+03     2501    2E+03   NAND2_X1
+        4     5.32        4     5.32   NAND2_X2
+        1    2.394        1    2.394   NAND2_X4
+      620   659.68      620   659.68   NAND3_X1
+        5     9.31        5     9.31   NAND3_X2
+      762  1013.46      762  1013.46   NAND4_X1
+        2    4.788        2    4.788   NAND4_X2
+     1895  1512.21     1895  1512.21   NOR2_X1
+        7     9.31        7     9.31   NOR2_X2
+       52   96.824       52   96.824   NOR3_X2
+        1    4.788        1    4.788   NOR4_X4
+       77  184.338       77  184.338   OAI211_X2
+     4177 4.44E+03     4177 4.44E+03   OAI21_X1
+       27   50.274       27   50.274   OAI21_X2
+        5    17.29        5    17.29   OAI21_X4
+       45   131.67       45   131.67   OAI221_X2
+       28   59.584       28   59.584   OAI222_X1
+       69    91.77       69    91.77   OAI22_X1
+        1    2.394        1    2.394   OAI22_X2
+        6   11.172        6   11.172   OAI33_X1
+      663  705.432      663  705.432   OR2_X1
+        5     6.65        5     6.65   OR2_X2
+      119   158.27      119   158.27   OR3_X1
+        5     7.98        5     7.98   OR3_X2
+        1    2.926        1    2.926   OR3_X4
+       64  102.144       64  102.144   OR4_X1
+        9   16.758        9   16.758   OR4_X2
+     1349 2.15E+03     1349 2.15E+03   XNOR2_X1
+      403  643.188      403  643.188   XOR2_X1
+
+   Chip area for module '\ec_field$muserisc_soc_top.u_crypto_bridge.u_crypto.u_fld': 42260.218000
+     of which used for sequential elements: 6255.256000 (14.80%)
+
+=== muse_crypto_top$muserisc_soc_top.u_crypto_bridge.u_crypto ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    61384        -    26673        - wires
+    62483        -    26751        - wire bits
+     5526        -     4227        - public wires
+     6625        -     4305        - public wire bits
+       28        -       18        - ports
+     1127        -       96        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+    53811 8.81E+04    22420 4.59E+04 cells
+      772  821.408      138  146.832   AND2_X1
+        4     5.32        1     1.33   AND2_X2
+      335   445.55       91   121.03   AND3_X1
+        3    4.788        -        -   AND3_X2
+        1    2.926        -        -   AND3_X4
+      574  916.104       25     39.9   AND4_X1
+       11   20.482        2    3.724   AND4_X2
+       87  208.278       25    59.85   AOI211_X2
+     4960  5277.44      526  559.664   AOI21_X1
+       39   72.618        2    3.724   AOI21_X2
+        9   31.122        -        -   AOI21_X4
+       67  196.042        8   23.408   AOI221_X2
+        1    3.458        -        -   AOI221_X4
+       14   29.792        6   12.768   AOI222_X1
+        1    3.724        -        -   AOI222_X2
+      469   623.77      306   406.98   AOI22_X1
+        2    4.788        -        -   AOI22_X2
+     3380  2697.24     1618 1.29E+03   BUF_X1
+      296  314.944      103  109.592   BUF_X2
+       86  160.132       43   80.066   BUF_X4
+        7   24.206        -        -   BUF_X8
+      351  280.098      278  221.844   CLKBUF_X1
+        5     5.32        2    2.128   CLKBUF_X2
+        3     3.99        -        -   CLKBUF_X3
+     1883    1E+04     1360   7235.2   DFFR_X1
+     3072 1.39E+04     2304 1.04E+04   DFF_X1
+      448 1.91E+03      187  795.872   FA_X1
+     2183  5806.78      167   444.22   HA_X1
+     5169 2.75E+03      688  366.016   INV_X1
+        3    2.394        1    0.798   INV_X2
+        1     1.33        -        -   INV_X4
+        1    0.532        1    0.532   LOGIC0_X1
+    12230 2.28E+04    10098 1.88E+04   MUX2_X1
+        2    4.788        1    2.394   MUX2_X2
+     3603 2.88E+03     1102  879.396   NAND2_X1
+        8    10.64        4     5.32   NAND2_X2
+        1    2.394        -        -   NAND2_X4
+      868  923.552      248  263.872   NAND3_X1
+        5     9.31        -        -   NAND3_X2
+      821  1091.93       59    78.47   NAND4_X1
+        2    4.788        -        -   NAND4_X2
+     2669 2.13E+03      774  617.652   NOR2_X1
+       11    14.63        4     5.32   NOR2_X2
+       61  113.582        9   16.758   NOR3_X2
+        2    9.576        1    4.788   NOR4_X4
+       92  220.248       15    35.91   OAI211_X2
+     5076  5.4E+03      899  956.536   OAI21_X1
+       31   57.722        4    7.448   OAI21_X2
+        5    17.29        -        -   OAI21_X4
+       52  152.152        7   20.482   OAI221_X2
+        1    3.458        1    3.458   OAI221_X4
+       38   80.864       10    21.28   OAI222_X1
+      226   300.58      157   208.81   OAI22_X1
+        1    2.394        -        -   OAI22_X2
+       10    18.62        4    7.448   OAI33_X1
+     1031  1.1E+03      368  391.552   OR2_X1
+        6     7.98        1     1.33   OR2_X2
+      230    305.9      111   147.63   OR3_X1
+        7   11.172        2    3.192   OR3_X2
+        2    5.852        1    2.926   OR3_X4
+       87  138.852       23   36.708   OR4_X1
+        9   16.758        -        -   OR4_X2
+     1826 2.91E+03      477  761.292   XNOR2_X1
+        5     13.3        5     13.3   XNOR2_X2
+      553  882.588      150    239.4   XOR2_X1
+        3    7.182        3    7.182   XOR2_X2
+        1 4.23E+04        1        - submodules
+        1 4.23E+04        1        -   ec_field$muserisc_soc_top.u_crypto_bridge.u_crypto.u_fld
+
+   Chip area for module '\muse_crypto_top$muserisc_soc_top.u_crypto_bridge.u_crypto': 88147.878000
+     of which used for sequential elements: 23909.144000 (27.12%)
+
+=== muserisc_bext$muserisc_soc_top.u_cpu.u_core.u_bext ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    23048        -    23048        - wires
+    23242        -    23242        - wire bits
+        4        -        4        - public wires
+      198        -      198        - public wire bits
+        4        -        4        - ports
+      198        -      198        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+    22700 2.85E+04    22700 2.85E+04 cells
+      203  215.992      203  215.992   AND2_X1
+        3     3.99        3     3.99   AND2_X2
+        2    4.788        2    4.788   AND2_X4
+      225   299.25      225   299.25   AND3_X1
+        7   11.172        7   11.172   AND3_X2
+        2    5.852        2    5.852   AND3_X4
+      131  209.076      131  209.076   AND4_X1
+       15    27.93       15    27.93   AND4_X2
+        3   10.374        3   10.374   AND4_X4
+       99  237.006       99  237.006   AOI211_X2
+        9   26.334        9   26.334   AOI211_X4
+     1118 1.19E+03     1118 1.19E+03   AOI21_X1
+       20    37.24       20    37.24   AOI21_X2
+        2    6.916        2    6.916   AOI21_X4
+       23   67.298       23   67.298   AOI221_X2
+        2    6.916        2    6.916   AOI221_X4
+      118  251.104      118  251.104   AOI222_X1
+        2    7.448        2    7.448   AOI222_X2
+        5    18.62        5    18.62   AOI222_X4
+      410    545.3      410    545.3   AOI22_X1
+        4    9.576        4    9.576   AOI22_X2
+     1955  1560.09     1955  1560.09   BUF_X1
+       74   78.736       74   78.736   BUF_X2
+       43   80.066       43   80.066   BUF_X4
+        8   27.664        8   27.664   BUF_X8
+       53   42.294       53   42.294   CLKBUF_X1
+        1    1.064        1    1.064   CLKBUF_X2
+       54  229.824       54  229.824   FA_X1
+      354   941.64      354   941.64   HA_X1
+      566  301.112      566  301.112   INV_X1
+        2    1.596        2    1.596   INV_X2
+     1708 3.18E+03     1708 3.18E+03   MUX2_X1
+        6   14.364        6   14.364   MUX2_X2
+     5242 4.18E+03     5242 4.18E+03   NAND2_X1
+        6     7.98        6     7.98   NAND2_X2
+      468  497.952      468  497.952   NAND3_X1
+        6   11.172        6   11.172   NAND3_X2
+        1    3.458        1    3.458   NAND3_X4
+      316   420.28      316   420.28   NAND4_X1
+        7   16.758        7   16.758   NAND4_X2
+        3   14.364        3   14.364   NAND4_X4
+      866  691.068      866  691.068   NOR2_X1
+       10     13.3       10     13.3   NOR2_X2
+        2    4.788        2    4.788   NOR2_X4
+       28   52.136       28   52.136   NOR3_X2
+        2    9.576        2    9.576   NOR4_X4
+      119  284.886      119  284.886   OAI211_X2
+        1    4.522        1    4.522   OAI211_X4
+     1299 1.38E+03     1299 1.38E+03   OAI21_X1
+        8   14.896        8   14.896   OAI21_X2
+       19   55.594       19   55.594   OAI221_X2
+        1    3.458        1    3.458   OAI221_X4
+       41   87.248       41   87.248   OAI222_X1
+        1    3.724        1    3.724   OAI222_X2
+      164   218.12      164   218.12   OAI22_X1
+        5    11.97        5    11.97   OAI22_X2
+       20    37.24       20    37.24   OAI33_X1
+      185   196.84      185   196.84   OR2_X1
+        2    4.788        2    4.788   OR2_X4
+       97   129.01       97   129.01   OR3_X1
+        2    3.192        2    3.192   OR3_X2
+       36   57.456       36   57.456   OR4_X1
+        6   11.172        6   11.172   OR4_X2
+        1    3.458        1    3.458   OR4_X4
+     5188 8.28E+03     5188 8.28E+03   XNOR2_X1
+       39   103.74       39   103.74   XNOR2_X2
+     1256    2E+03     1256    2E+03   XOR2_X1
+       26   62.244       26   62.244   XOR2_X2
+
+   Chip area for module '\muserisc_bext$muserisc_soc_top.u_cpu.u_core.u_bext': 28536.746000
+     of which used for sequential elements: 0.000000 (0.00%)
+
+=== muserisc_core$muserisc_soc_top.u_cpu.u_core ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+   277729        -    61633        - wires
+   284056        -    62113        - wire bits
+    21934        -    10301        - public wires
+    28261        -    10781        - public wire bits
+      264        -       26        - ports
+     6591        -      506        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+   240693 4.46E+05    51564 9.66E+04 cells
+    11048 1.18E+04      926  985.264   AND2_X1
+       28    37.24        2     2.66   AND2_X2
+        5    11.97        -        -   AND2_X4
+     3585  4768.05      557   740.81   AND3_X1
+       30    47.88        4    6.384   AND3_X2
+       14   40.964        1    2.926   AND3_X4
+     3148 5.02E+03      374  596.904   AND4_X1
+       60   111.72        5     9.31   AND4_X2
+        7   24.206        1    3.458   AND4_X4
+      818 1.96E+03      190   454.86   AOI211_X2
+       18   52.668        5    14.63   AOI211_X4
+    17194 1.83E+04     2542  2.7E+03   AOI21_X1
+       85   158.27       13   24.206   AOI21_X2
+        7   24.206        1    3.458   AOI21_X4
+      473 1.38E+03       73  213.598   AOI221_X2
+        5    17.29        2    6.916   AOI221_X4
+      977 2.08E+03      199  423.472   AOI222_X1
+        2    7.448        -        -   AOI222_X2
+        9   33.516        1    3.724   AOI222_X4
+     6064  8065.12     1152  1532.16   AOI22_X1
+       19   45.486        6   14.364   AOI22_X2
+        3   13.566        1    4.522   AOI22_X4
+    17613 1.41E+04     3404 2.72E+03   BUF_X1
+       88    585.2        3    19.95   BUF_X16
+     1630  1734.32      329  350.056   BUF_X2
+       16  208.544        -        -   BUF_X32
+      659 1.23E+03      164  305.368   BUF_X4
+      137  473.746       64  221.312   BUF_X8
+     2470  1971.06      884  705.432   CLKBUF_X1
+      219  233.016        7    7.448   CLKBUF_X2
+        3     3.99        -        -   CLKBUF_X3
+     9546 5.08E+04     1914 1.02E+04   DFFR_X1
+        6    31.92        1     5.32   DFFS_X1
+     8939 4.04E+04     4879 2.21E+04   DFF_X1
+     7672 3.27E+04       26  110.656   FA_X1
+    10754 2.86E+04      950     2527   HA_X1
+    12346 6.57E+03     2172 1.16E+03   INV_X1
+       20    15.96       16   12.768   INV_X2
+        3     3.99        3     3.99   INV_X4
+        3    1.596        1    0.532   LOGIC0_X1
+        4    2.128        1    0.532   LOGIC1_X1
+    40293  7.5E+04    18566 3.46E+04   MUX2_X1
+       23   55.062        2    4.788   MUX2_X2
+    17792 1.42E+04     2120  1691.76   NAND2_X1
+       35    46.55        7     9.31   NAND2_X2
+       26   62.244        4    9.576   NAND2_X4
+     6234 6.63E+03     1409  1.5E+03   NAND3_X1
+       34   63.308       10    18.62   NAND3_X2
+        5    17.29        1    3.458   NAND3_X4
+     4357  5794.81      459   610.47   NAND4_X1
+       41   98.154        9   21.546   NAND4_X2
+        9   43.092        4   19.152   NAND4_X4
+    12340  9847.32     2058 1.64E+03   NOR2_X1
+      132   175.56       28    37.24   NOR2_X2
+        5    11.97        1    2.394   NOR2_X4
+      424  789.488       88  163.856   NOR3_X2
+        2    7.448        1    3.724   NOR3_X4
+      114  545.832       34  162.792   NOR4_X4
+     1096 2.62E+03      347  830.718   OAI211_X2
+        3   13.566        1    4.522   OAI211_X4
+    15267 1.62E+04     2803 2.98E+03   OAI21_X1
+      144  268.128      116  215.992   OAI21_X2
+        9   31.122        2    6.916   OAI21_X4
+      438 1.28E+03      136  397.936   OAI221_X2
+        5    17.29        1    3.458   OAI221_X4
+      404  859.712       53  112.784   OAI222_X1
+        1    3.724        -        -   OAI222_X2
+     2371  3153.43      560    744.8   OAI22_X1
+       35    83.79        6   14.364   OAI22_X2
+        4   18.088        -        -   OAI22_X4
+      524  975.688       87  161.994   OAI33_X1
+     2561 2.72E+03      554  589.456   OR2_X1
+       21    27.93       17    22.61   OR2_X2
+        4    9.576        1    2.394   OR2_X4
+     1253  1666.49      240    319.2   OR3_X1
+       10    15.96        1    1.596   OR3_X2
+        5    14.63        2    5.852   OR3_X4
+     1288 2.06E+03      141  225.036   OR4_X1
+       70   130.34       18   33.516   OR4_X2
+       23   79.534        2    6.916   OR4_X4
+    14126 2.25E+04      495   790.02   XNOR2_X1
+       45    119.7        2     5.32   XNOR2_X2
+     3363 5.37E+03      305   486.78   XOR2_X1
+       27   64.638        -        -   XOR2_X2
+        3 3.85E+04        -        -   fakeram45_256x64_1r1w
+        7 3.49E+05        7        - submodules
+        1 2.85E+04        1        -   muserisc_bext$muserisc_soc_top.u_cpu.u_core.u_bext
+        1 5.75E+04        1        -   muserisc_csr$muserisc_soc_top.u_cpu.u_core.u_csr
+        1 5.21E+04        1        -   muserisc_fpu$muserisc_soc_top.u_cpu.u_core.u_fpu
+        1 6.59E+04        1        -   muserisc_mmu$muserisc_soc_top.u_cpu.u_core.u_mmu
+        1  3.9E+04        1        -   muserisc_muldiv_mc$muserisc_soc_top.u_cpu.u_core.u_muldiv
+        1 6.12E+04        1        -   muserisc_vec$muserisc_soc_top.u_cpu.u_core.u_vec
+        1 4.51E+04        1        -   muserisc_vregfile$muserisc_soc_top.u_cpu.u_core.u_vregfile
+
+   Chip area for module '\muserisc_core$muserisc_soc_top.u_cpu.u_core': 445818.660000
+     of which used for sequential elements: 91238.798000 (20.47%)
+
+=== muserisc_csr$muserisc_soc_top.u_cpu.u_core.u_csr ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    37903        -    37903        - wires
+    39634        -    39634        - wire bits
+     2864        -     2864        - public wires
+     4595        -     4595        - public wire bits
+       78        -       78        - ports
+     1809        -     1809        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+    30882 5.75E+04    30882 5.75E+04 cells
+      875      931      875      931   AND2_X1
+      712   946.96      712   946.96   AND3_X1
+        6    9.576        6    9.576   AND3_X2
+        1    2.926        1    2.926   AND3_X4
+     1246 1.99E+03     1246 1.99E+03   AND4_X1
+       11   20.482       11   20.482   AND4_X2
+      147  351.918      147  351.918   AOI211_X2
+     2232 2.37E+03     2232 2.37E+03   AOI21_X1
+        1    1.862        1    1.862   AOI21_X2
+       69  201.894       69  201.894   AOI221_X2
+      113  240.464      113  240.464   AOI222_X1
+     1229  1634.57     1229  1634.57   AOI22_X1
+     1662 1.33E+03     1662 1.33E+03   BUF_X1
+      211  224.504      211  224.504   BUF_X2
+        6   11.172        6   11.172   BUF_X4
+        1    3.458        1    3.458   BUF_X8
+      269  214.662      269  214.662   CLKBUF_X1
+        1    1.064        1    1.064   CLKBUF_X2
+     3060  16279.2     3060  16279.2   DFFR_X1
+        3    15.96        3    15.96   DFFS_X1
+        4   17.024        4   17.024   FA_X1
+     4800    12768     4800    12768   HA_X1
+     2039 1.08E+03     2039 1.08E+03   INV_X1
+        1    0.532        1    0.532   LOGIC0_X1
+        1    0.532        1    0.532   LOGIC1_X1
+     4193 7.81E+03     4193 7.81E+03   MUX2_X1
+     1488 1.19E+03     1488 1.19E+03   NAND2_X1
+      751  799.064      751  799.064   NAND3_X1
+      879  1169.07      879  1169.07   NAND4_X1
+     1029  821.142     1029  821.142   NOR2_X1
+       90   167.58       90   167.58   NOR3_X2
+       19   90.972       19   90.972   NOR4_X4
+       59  141.246       59  141.246   OAI211_X2
+     1872 1.99E+03     1872 1.99E+03   OAI21_X1
+       33   96.558       33   96.558   OAI221_X2
+       99  210.672       99  210.672   OAI222_X1
+      424   563.92      424   563.92   OAI22_X1
+        1    4.522        1    4.522   OAI22_X4
+       14   26.068       14   26.068   OAI33_X1
+      329  350.056      329  350.056   OR2_X1
+      131   174.23      131   174.23   OR3_X1
+        1    1.596        1    1.596   OR3_X2
+        1    2.926        1    2.926   OR3_X4
+      300    478.8      300    478.8   OR4_X1
+       11   20.482       11   20.482   OR4_X2
+        5    17.29        5    17.29   OR4_X4
+      321  512.316      321  512.316   XNOR2_X1
+      132  210.672      132  210.672   XOR2_X1
+
+   Chip area for module '\muserisc_csr$muserisc_soc_top.u_cpu.u_core.u_csr': 57498.028000
+     of which used for sequential elements: 16295.160000 (28.34%)
+
+=== muserisc_dcache$muserisc_soc_top.u_cpu.u_dcache ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    10321        -     9473        - wires
+    11285        -     9873        - wire bits
+     2779        -     2235        - public wires
+     3743        -     2635        - public wire bits
+       46        -       22        - ports
+     1010        -      422        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+     8313 9.77E+04     7745 2.67E+04 cells
+      101  107.464      101  107.464   AND2_X1
+       33    43.89       33    43.89   AND3_X1
+       14   22.344       14   22.344   AND4_X1
+       10    23.94       10    23.94   AOI211_X2
+      557  592.648      557  592.648   AOI21_X1
+        8   23.408        8   23.408   AOI221_X2
+        6   12.768        6   12.768   AOI222_X1
+      147   195.51      147   195.51   AOI22_X1
+      477  380.646      477  380.646   BUF_X1
+        2     13.3        2     13.3   BUF_X16
+       33   35.112       33   35.112   BUF_X2
+       45    83.79       17   31.654   BUF_X4
+        7   24.206        7   24.206   BUF_X8
+       59   47.082       59   47.082   CLKBUF_X1
+      786  4181.52      786  4181.52   DFFR_X1
+        1     5.32        1     5.32   DFFS_X1
+      952  4.3E+03      692 3.13E+03   DFF_X1
+       12    31.92       12    31.92   HA_X1
+      151   80.332      147   78.204   INV_X1
+        1    0.532        1    0.532   LOGIC0_X1
+     3151 5.87E+03     2895  5390.49   MUX2_X1
+        1    2.394        1    2.394   MUX2_X2
+      700    558.6      700    558.6   NAND2_X1
+      212  225.568      212  225.568   NAND3_X1
+       73    97.09       73    97.09   NAND4_X1
+      252  201.096      252  201.096   NOR2_X1
+        2     2.66        2     2.66   NOR2_X2
+        8   14.896        4    7.448   NOR3_X2
+        2    9.576        2    9.576   NOR4_X4
+       38   90.972       38   90.972   OAI211_X2
+      147  156.408      147  156.408   OAI21_X1
+        3    8.778        3    8.778   OAI221_X2
+        1    3.458        1    3.458   OAI221_X4
+        7   14.896        7   14.896   OAI222_X1
+        1    3.724        1    3.724   OAI222_X2
+       22    29.26       22    29.26   OAI22_X1
+        1    2.394        1    2.394   OAI22_X2
+        9   16.758        9   16.758   OAI33_X1
+       25     26.6       25     26.6   OR2_X1
+        4     5.32        -        -   OR2_X2
+       30     39.9       30     39.9   OR3_X1
+       23   36.708       23   36.708   OR4_X1
+        9   16.758        1    1.862   OR4_X2
+        1    3.458        1    3.458   OR4_X4
+      174  277.704      174  277.704   XNOR2_X1
+        7   11.172        7   11.172   XOR2_X1
+        4 6.92E+04        -        -   fakeram45_512x64
+        4 1.05E+04        4 1.05E+04   fakeram45_64x44
+        4 7.09E+04        4        - submodules
+        1 1.77E+04        1        -   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[0].u_data
+        1 1.77E+04        1        -   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[1].u_data
+        1 1.77E+04        1        -   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[2].u_data
+        1 1.77E+04        1        -   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[3].u_data
+
+   Chip area for module '\muserisc_dcache$muserisc_soc_top.u_cpu.u_dcache': 97652.058000
+     of which used for sequential elements: 8491.784000 (8.70%)
+
+=== muserisc_fpu$muserisc_soc_top.u_cpu.u_core.u_fpu ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    38573        -    38573        - wires
+    38836        -    38836        - wire bits
+     1409        -     1409        - public wires
+     1672        -     1672        - public wire bits
+       15        -       15        - ports
+      278        -      278        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+    33256 5.21E+04    33256 5.21E+04 cells
+     3365  3580.36     3365  3580.36   AND2_X1
+      716   952.28      716   952.28   AND3_X1
+        1    1.596        1    1.596   AND3_X2
+        1    2.926        1    2.926   AND3_X4
+      251  400.596      251  400.596   AND4_X1
+        1    1.862        1    1.862   AND4_X2
+        1    3.458        1    3.458   AND4_X4
+      129  308.826      129  308.826   AOI211_X2
+     3013 3.21E+03     3013 3.21E+03   AOI21_X1
+        3    5.586        3    5.586   AOI21_X2
+       59  172.634       59  172.634   AOI221_X2
+      108  229.824      108  229.824   AOI222_X1
+      833  1107.89      833  1107.89   AOI22_X1
+     2758  2.2E+03     2758  2.2E+03   BUF_X1
+       65    69.16       65    69.16   BUF_X2
+        3    5.586        3    5.586   BUF_X4
+      223  177.954      223  177.954   CLKBUF_X1
+        4    21.28        4    21.28   DFFR_X1
+     1390  6285.58     1390  6285.58   DFF_X1
+     2508 1.07E+04     2508 1.07E+04   FA_X1
+     1470   3910.2     1470   3910.2   HA_X1
+     2167 1.15E+03     2167 1.15E+03   INV_X1
+        1    0.532        1    0.532   LOGIC1_X1
+     2784 5.18E+03     2784 5.18E+03   MUX2_X1
+     2389 1.91E+03     2389 1.91E+03   NAND2_X1
+      987 1.05E+03      987 1.05E+03   NAND3_X1
+      449   597.17      449   597.17   NAND4_X1
+     2007  1.6E+03     2007  1.6E+03   NOR2_X1
+        1     1.33        1     1.33   NOR2_X2
+       75   139.65       75   139.65   NOR3_X2
+        4   19.152        4   19.152   NOR4_X4
+      145   347.13      145   347.13   OAI211_X2
+     2857 3.04E+03     2857 3.04E+03   OAI21_X1
+        2    3.724        2    3.724   OAI21_X2
+       41  119.966       41  119.966   OAI221_X2
+       39   82.992       39   82.992   OAI222_X1
+      310    412.3      310    412.3   OAI22_X1
+        1    2.394        1    2.394   OAI22_X2
+      151  281.162      151  281.162   OAI33_X1
+      468  497.952      468  497.952   OR2_X1
+      240    319.2      240    319.2   OR3_X1
+        1    1.596        1    1.596   OR3_X2
+      207  330.372      207  330.372   OR4_X1
+        3    5.586        3    5.586   OR4_X2
+       13   44.954       13   44.954   OR4_X4
+      745  1189.02      745  1189.02   XNOR2_X1
+      267  426.132      267  426.132   XOR2_X1
+
+   Chip area for module '\muserisc_fpu$muserisc_soc_top.u_cpu.u_core.u_fpu': 52075.352000
+     of which used for sequential elements: 6306.860000 (12.11%)
+
+=== muserisc_icache$muserisc_soc_top.u_cpu.u_icache ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+     2905        -     2481        - wires
+     3421        -     2715        - wire bits
+      977        -      705        - public wires
+     1493        -      939        - public wire bits
+       29        -       17        - ports
+      545        -      251        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+     2286 4.47E+04     2002 9.22E+03 cells
+      140   148.96      140   148.96   AND2_X1
+       14    18.62       14    18.62   AND3_X1
+       13   20.748       13   20.748   AND4_X1
+        2    4.788        2    4.788   AOI211_X2
+       23   24.472       23   24.472   AOI21_X1
+        2    5.852        2    5.852   AOI221_X2
+       15    19.95       15    19.95   AOI22_X1
+      146  116.508      146  116.508   BUF_X1
+       12   12.768       12   12.768   BUF_X2
+       17   31.654        3    5.586   BUF_X4
+        7   24.206        7   24.206   BUF_X8
+       43   34.314       43   34.314   CLKBUF_X1
+      269  1431.08      269  1431.08   DFFR_X1
+        1     5.32        1     5.32   DFFS_X1
+      220   994.84       90   406.98   DFF_X1
+        3     7.98        3     7.98   HA_X1
+       63   33.516       61   32.452   INV_X1
+        1    0.532        1    0.532   LOGIC0_X1
+      630  1173.06      502  934.724   MUX2_X1
+      158  126.084      158  126.084   NAND2_X1
+        7    7.448        7    7.448   NAND3_X1
+       36    47.88       36    47.88   NAND4_X1
+      174  138.852      174  138.852   NOR2_X1
+        6   11.172        4    7.448   NOR3_X2
+        3   14.364        3   14.364   NOR4_X4
+       77   81.928       77   81.928   OAI21_X1
+        2    5.852        2    5.852   OAI221_X2
+        1    2.128        1    2.128   OAI222_X1
+       42    55.86       42    55.86   OAI22_X1
+        2    3.724        2    3.724   OAI33_X1
+       26   27.664       26   27.664   OR2_X1
+        2     2.66        -        -   OR2_X2
+       21    27.93       21    27.93   OR3_X1
+        1    2.926        1    2.926   OR3_X4
+        8   12.768        8   12.768   OR4_X1
+        6   11.172        2    3.724   OR4_X2
+       88  140.448       88  140.448   XNOR2_X1
+        1    1.596        1    1.596   XOR2_X1
+        2 3.46E+04        -        -   fakeram45_512x64
+        2  5256.16        2  5256.16   fakeram45_64x44
+        2 3.55E+04        2        - submodules
+        1 1.77E+04        1        -   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_icache.g_way[0].u_data
+        1 1.77E+04        1        -   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_icache.g_way[1].u_data
+
+   Chip area for module '\muserisc_icache$muserisc_soc_top.u_cpu.u_icache': 44690.660000
+     of which used for sequential elements: 2431.240000 (5.44%)
+
+=== muserisc_mmu$muserisc_soc_top.u_cpu.u_core.u_mmu ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    38694        -    38694        - wires
+    39453        -    39453        - wire bits
+     4539        -     4539        - public wires
+     5298        -     5298        - public wire bits
+       39        -       39        - ports
+      798        -      798        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+    34461 6.59E+04    34461 6.59E+04 cells
+      270   287.28      270   287.28   AND2_X1
+       20     26.6       20     26.6   AND2_X2
+      297   395.01      297   395.01   AND3_X1
+        4    6.384        4    6.384   AND3_X2
+        2    5.852        2    5.852   AND3_X4
+      436  695.856      436  695.856   AND4_X1
+        6   11.172        6   11.172   AND4_X2
+       64  153.216       64  153.216   AOI211_X2
+        1    2.926        1    2.926   AOI211_X4
+     2409 2.56E+03     2409 2.56E+03   AOI21_X1
+       26   48.412       26   48.412   AOI21_X2
+        1    3.458        1    3.458   AOI21_X4
+      133  389.158      133  389.158   AOI221_X2
+       94  200.032       94  200.032   AOI222_X1
+      902  1199.66      902  1199.66   AOI22_X1
+        1    4.522        1    4.522   AOI22_X4
+     2707 2.16E+03     2707 2.16E+03   BUF_X1
+       85   565.25       85   565.25   BUF_X16
+      676  719.264      676  719.264   BUF_X2
+       16  208.544       16  208.544   BUF_X32
+      338  629.356      338  629.356   BUF_X4
+       52  179.816       52  179.816   BUF_X8
+      528  421.344      528  421.344   CLKBUF_X1
+      207  220.248      207  220.248   CLKBUF_X2
+        3     3.99        3     3.99   CLKBUF_X3
+     4556 2.42E+04     4556 2.42E+04   DFFR_X1
+        1     5.32        1     5.32   DFFS_X1
+        8   34.048        8   34.048   FA_X1
+       25     66.5       25     66.5   HA_X1
+     1364  725.648     1364  725.648   INV_X1
+        1    0.532        1    0.532   LOGIC0_X1
+        1    0.532        1    0.532   LOGIC1_X1
+     7027 1.31E+04     7027 1.31E+04   MUX2_X1
+        2    4.788        2    4.788   MUX2_X2
+     1063  848.274     1063  848.274   NAND2_X1
+        8    10.64        8    10.64   NAND2_X2
+       21   50.274       21   50.274   NAND2_X4
+      482  512.848      482  512.848   NAND3_X1
+        4    7.448        4    7.448   NAND3_X2
+        2    6.916        2    6.916   NAND3_X4
+     1137  1512.21     1137  1512.21   NAND4_X1
+        9   21.546        9   21.546   NAND4_X2
+     1668 1.33E+03     1668 1.33E+03   NOR2_X1
+        9    11.97        9    11.97   NOR2_X2
+        1    2.394        1    2.394   NOR2_X4
+        8   14.896        8   14.896   NOR3_X2
+       26  124.488       26  124.488   NOR4_X4
+      210   502.74      210   502.74   OAI211_X2
+        1    4.522        1    4.522   OAI211_X4
+      756  804.384      756  804.384   OAI21_X1
+        3    5.586        3    5.586   OAI21_X2
+        3   10.374        3   10.374   OAI21_X4
+       60   175.56       60   175.56   OAI221_X2
+        1    3.458        1    3.458   OAI221_X4
+       23   48.944       23   48.944   OAI222_X1
+      220    292.6      220    292.6   OAI22_X1
+       13   31.122       13   31.122   OAI22_X2
+        2    9.044        2    9.044   OAI22_X4
+      146  271.852      146  271.852   OAI33_X1
+      158  168.112      158  168.112   OR2_X1
+        2     2.66        2     2.66   OR2_X2
+        1    2.394        1    2.394   OR2_X4
+       49    65.17       49    65.17   OR3_X1
+        1    1.596        1    1.596   OR3_X2
+      303  483.588      303  483.588   OR4_X1
+       17   31.654       17   31.654   OR4_X2
+     5257 8.39E+03     5257 8.39E+03   XNOR2_X1
+      534  852.264      534  852.264   XOR2_X1
+
+   Chip area for module '\muserisc_mmu$muserisc_soc_top.u_cpu.u_core.u_mmu': 65873.038000
+     of which used for sequential elements: 24243.240000 (36.80%)
+
+=== muserisc_muldiv_mc$muserisc_soc_top.u_cpu.u_core.u_muldiv ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    27099        -    27099        - wires
+    27290        -    27290        - wire bits
+      325        -      325        - public wires
+      516        -      516        - public wire bits
+       11        -       11        - ports
+      202        -      202        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+    21266  3.9E+04    21266  3.9E+04 cells
+     3361 3.58E+03     3361 3.58E+03   AND2_X1
+        1    2.394        1    2.394   AND2_X4
+      178   236.74      178   236.74   AND3_X1
+        1    1.596        1    1.596   AND3_X2
+      123  196.308      123  196.308   AND4_X1
+        1    1.862        1    1.862   AND4_X2
+       51  122.094       51  122.094   AOI211_X2
+     1693  1.8E+03     1693  1.8E+03   AOI21_X1
+        3    5.586        3    5.586   AOI21_X2
+        1    3.458        1    3.458   AOI21_X4
+       22   64.372       22   64.372   AOI221_X2
+       33   70.224       33   70.224   AOI222_X1
+      172   228.76      172   228.76   AOI22_X1
+        3    7.182        3    7.182   AOI22_X2
+     1867 1.49E+03     1867 1.49E+03   BUF_X1
+       28   29.792       28   29.792   BUF_X2
+       13   24.206       13   24.206   BUF_X4
+        3   10.374        3   10.374   BUF_X8
+       30    23.94       30    23.94   CLKBUF_X1
+        1    1.064        1    1.064   CLKBUF_X2
+        3    15.96        3    15.96   DFFR_X1
+      273 1.23E+03      273 1.23E+03   DFF_X1
+     4121 1.75E+04     4121 1.75E+04   FA_X1
+     1490   3963.4     1490   3963.4   HA_X1
+     1083  576.156     1083  576.156   INV_X1
+      710  1322.02      710  1322.02   MUX2_X1
+       13   31.122       13   31.122   MUX2_X2
+      923  736.554      923  736.554   NAND2_X1
+        4     5.32        4     5.32   NAND2_X2
+      368  391.552      368  391.552   NAND3_X1
+      228   303.24      228   303.24   NAND4_X1
+        1    2.394        1    2.394   NAND4_X2
+     1702 1.36E+03     1702 1.36E+03   NOR2_X1
+        6     7.98        6     7.98   NOR2_X2
+       34   63.308       34   63.308   NOR3_X2
+        2    9.576        2    9.576   NOR4_X4
+       43  102.942       43  102.942   OAI211_X2
+     1459 1.55E+03     1459 1.55E+03   OAI21_X1
+        5     9.31        5     9.31   OAI21_X2
+       16   46.816       16   46.816   OAI221_X2
+       16   34.048       16   34.048   OAI222_X1
+       77   102.41       77   102.41   OAI22_X1
+        5     9.31        5     9.31   OAI33_X1
+      191  203.224      191  203.224   OR2_X1
+       69    91.77       69    91.77   OR3_X1
+        2    5.852        2    5.852   OR3_X4
+       41   65.436       41   65.436   OR4_X1
+        3    5.586        3    5.586   OR4_X2
+      572  912.912      572  912.912   XNOR2_X1
+        1     2.66        1     2.66   XNOR2_X2
+      220   351.12      220   351.12   XOR2_X1
+
+   Chip area for module '\muserisc_muldiv_mc$muserisc_soc_top.u_cpu.u_core.u_muldiv': 38953.306000
+     of which used for sequential elements: 1250.466000 (3.21%)
+
+=== muserisc_plic$muserisc_soc_top.u_plic ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    24670        -    24670        - wires
+    24860        -    24860        - wire bits
+     1193        -     1193        - public wires
+     1383        -     1383        - public wire bits
+        9        -        9        - ports
+      199        -      199        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+    20089 3.35E+04    20089 3.35E+04 cells
+      336  357.504      336  357.504   AND2_X1
+        3     3.99        3     3.99   AND2_X2
+      194   258.02      194   258.02   AND3_X1
+        3    4.788        3    4.788   AND3_X2
+        2    5.852        2    5.852   AND3_X4
+      617  984.732      617  984.732   AND4_X1
+       17   31.654       17   31.654   AND4_X2
+        1    3.458        1    3.458   AND4_X4
+       81  193.914       81  193.914   AOI211_X2
+     1999 2.13E+03     1999 2.13E+03   AOI21_X1
+       20    37.24       20    37.24   AOI21_X2
+        3   10.374        3   10.374   AOI21_X4
+       57  166.782       57  166.782   AOI221_X2
+        3   10.374        3   10.374   AOI221_X4
+       10    21.28       10    21.28   AOI222_X1
+        2    7.448        2    7.448   AOI222_X2
+      230    305.9      230    305.9   AOI22_X1
+        9   21.546        9   21.546   AOI22_X2
+        3   13.566        3   13.566   AOI22_X4
+      708  564.984      708  564.984   BUF_X1
+       11   11.704       11   11.704   BUF_X2
+        1    1.862        1    1.862   BUF_X4
+       74   59.052       74   59.052   CLKBUF_X1
+        1     1.33        1     1.33   CLKBUF_X3
+     1184  6298.88     1184  6298.88   DFFR_X1
+     3454  9187.64     3454  9187.64   HA_X1
+     1696  902.272     1696  902.272   INV_X1
+     2798 5.21E+03     2798 5.21E+03   MUX2_X1
+     2302 1.84E+03     2302 1.84E+03   NAND2_X1
+      443  471.352      443  471.352   NAND3_X1
+        4    7.448        4    7.448   NAND3_X2
+      399   530.67      399   530.67   NAND4_X1
+        6   14.364        6   14.364   NAND4_X2
+        2    9.576        2    9.576   NAND4_X4
+      506  403.788      506  403.788   NOR2_X1
+        2     2.66        2     2.66   NOR2_X2
+        2    4.788        2    4.788   NOR2_X4
+       24   44.688       24   44.688   NOR3_X2
+        1    3.724        1    3.724   NOR3_X4
+        2    9.576        2    9.576   NOR4_X4
+      102  244.188      102  244.188   OAI211_X2
+     2353  2.5E+03     2353  2.5E+03   OAI21_X1
+        7   13.034        7   13.034   OAI21_X2
+       18   52.668       18   52.668   OAI221_X2
+        8   17.024        8   17.024   OAI222_X1
+       74    98.42       74    98.42   OAI22_X1
+        3    7.182        3    7.182   OAI22_X2
+        5     9.31        5     9.31   OAI33_X1
+      176  187.264      176  187.264   OR2_X1
+        3     3.99        3     3.99   OR2_X2
+       76   101.08       76   101.08   OR3_X1
+        1    1.596        1    1.596   OR3_X2
+        1    2.926        1    2.926   OR3_X4
+       35    55.86       35    55.86   OR4_X1
+       17   31.654       17   31.654   OR4_X2
+
+   Chip area for module '\muserisc_plic$muserisc_soc_top.u_plic': 33472.376000
+     of which used for sequential elements: 6298.880000 (18.82%)
+
+=== muserisc_soc_top ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+   383372        -     6363        - wires
+   392905        -     6800        - wire bits
+    33790        -     1381        - public wires
+    43323        -     1818        - public wire bits
+      402        -       26        - ports
+     9935        -      463        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+   330305 7.19E+05     5113 9.33E+03 cells
+    12606 1.34E+04      209  222.376   AND2_X1
+       41    54.53        6     7.98   AND2_X2
+        7   16.758        2    4.788   AND2_X4
+     4272  5681.76      111   147.63   AND3_X1
+       42   67.032        6    9.576   AND3_X2
+       20    58.52        3    8.778   AND3_X4
+     4479 7.15E+03      113  180.348   AND4_X1
+      100    186.2       12   22.344   AND4_X2
+       13   44.954        5    17.29   AND4_X4
+     1003  2.4E+03        5    11.97   AOI211_X2
+       19   55.594        1    2.926   AOI211_X4
+    25087 2.67E+04      354  376.656   AOI21_X1
+      178  331.436       34   63.308   AOI21_X2
+       28   96.824        9   31.122   AOI21_X4
+      621 1.82E+03       14   40.964   AOI221_X2
+       11   38.038        2    6.916   AOI221_X4
+     1010  2149.28        3    6.384   AOI222_X1
+        5    18.62        -        -   AOI222_X2
+        9   33.516        -        -   AOI222_X4
+     6966  9264.78       41    54.53   AOI22_X1
+       33   79.002        3    7.182   AOI22_X2
+        7   31.654        1    4.522   AOI22_X4
+    22526  1.8E+04      202  161.196   BUF_X1
+       93   618.45        3    19.95   BUF_X16
+     2032 2.16E+03       50     53.2   BUF_X2
+       16  208.544        -        -   BUF_X32
+      860  1601.32       52   96.824   BUF_X4
+      173  598.234       15    51.87   BUF_X8
+     3012  2.4E+03       15    11.97   CLKBUF_X1
+      225    239.4        1    1.064   CLKBUF_X2
+        9    11.97        2     2.66   CLKBUF_X3
+    14168 7.54E+04      500     2660   DFFR_X1
+       22   117.04       14    74.48   DFFS_X1
+    13311 6.02E+04      128  578.816   DFF_X1
+     8121 3.46E+04        1    4.256   FA_X1
+    16505  43903.3       99   263.34   HA_X1
+    19696 1.05E+04      271  144.172   INV_X1
+       24   19.152        1    0.798   INV_X2
+        5     6.65        1     1.33   INV_X4
+        7    3.724        1    0.532   LOGIC0_X1
+        4    2.128        -        -   LOGIC1_X1
+    60045 1.12E+05      943 1.76E+03   MUX2_X1
+       31   74.214        5    11.97   MUX2_X2
+    24917 1.99E+04      362  288.876   NAND2_X1
+       51    67.83        8    10.64   NAND2_X2
+       28   67.032        1    2.394   NAND2_X4
+     8021 8.53E+03      257  273.448   NAND3_X1
+       50     93.1        7   13.034   NAND3_X2
+       22   76.076       17   58.786   NAND3_X4
+     5771  7675.43       85   113.05   NAND4_X1
+       49  117.306        -        -   NAND4_X2
+       12   57.456        1    4.788   NAND4_X4
+    16209 1.29E+04      268  213.864   NOR2_X1
+      157   208.81       10     13.3   NOR2_X2
+        9   21.546        2    4.788   NOR2_X4
+      534  994.308       11   20.482   NOR3_X2
+        3   11.172        -        -   NOR3_X4
+      124  593.712        1    4.788   NOR4_X4
+     1357 3.25E+03       29   69.426   OAI211_X2
+        3   13.566        -        -   OAI211_X4
+    23216 2.47E+04      296  314.944   OAI21_X1
+      202  376.124       20    37.24   OAI21_X2
+       17   58.786        3   10.374   OAI21_X4
+      527 1.54E+03       14   40.964   OAI221_X2
+        7   24.206        -        -   OAI221_X4
+      459  976.752        1    2.128   OAI222_X1
+        2    7.448        -        -   OAI222_X2
+     2769  3682.77       34    45.22   OAI22_X1
+       40    95.76        -        -   OAI22_X2
+        4   18.088        -        -   OAI22_X4
+      551 1.03E+03        1    1.862   OAI33_X1
+     3917 4.17E+03       98  104.272   OR2_X1
+       45    59.85        9    11.97   OR2_X2
+        4    9.576        -        -   OR2_X4
+     1655  2201.15       45    59.85   OR3_X1
+       19   30.324        1    1.596   OR3_X2
+       13   38.038        4   11.704   OR3_X4
+     1481 2.36E+03       40    63.84   OR4_X1
+      120   223.44        9   16.758   OR4_X2
+       30   103.74        6   20.748   OR4_X4
+    16389 2.62E+04      175    279.3   XNOR2_X1
+       52   138.32        2     5.32   XNOR2_X2
+     3982 6.36E+03       58   92.568   XOR2_X1
+       30    71.82        -        -   XOR2_X2
+        3 3.85E+04        -        -   fakeram45_256x64_1r1w
+        6 1.04E+05        -        -   fakeram45_512x64
+        6 1.58E+04        -        -   fakeram45_64x44
+        5  7.1E+05        5        - submodules
+        1 8.81E+04        1        -   muse_crypto_top$muserisc_soc_top.u_crypto_bridge.u_crypto
+        1 4.46E+05        1        -   muserisc_core$muserisc_soc_top.u_cpu.u_core
+        1 9.77E+04        1        -   muserisc_dcache$muserisc_soc_top.u_cpu.u_dcache
+        1 4.47E+04        1        -   muserisc_icache$muserisc_soc_top.u_cpu.u_icache
+        1 3.35E+04        1        -   muserisc_plic$muserisc_soc_top.u_plic
+
+   Chip area for module '\muserisc_soc_top': 719115.838000
+     of which used for sequential elements: 135683.142000 (18.87%)
+
+=== muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[0].u_data ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+      212        -      212        - wires
+      353        -      353        - wire bits
+      136        -      136        - public wires
+      277        -      277        - public wire bits
+        6        -        6        - ports
+      147        -      147        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+      142 1.77E+04      142 1.77E+04 cells
+        7   13.034        7   13.034   BUF_X4
+       65   293.93       65   293.93   DFF_X1
+        1    0.532        1    0.532   INV_X1
+       64  119.168       64  119.168   MUX2_X1
+        1    1.862        1    1.862   NOR3_X2
+        1     1.33        1     1.33   OR2_X2
+        2    3.724        2    3.724   OR4_X2
+        1 1.73E+04        1 1.73E+04   fakeram45_512x64
+
+   Chip area for module '\muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[0].u_data': 17735.018000
+     of which used for sequential elements: 293.930000 (1.66%)
+
+=== muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[1].u_data ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+      212        -      212        - wires
+      353        -      353        - wire bits
+      136        -      136        - public wires
+      277        -      277        - public wire bits
+        6        -        6        - ports
+      147        -      147        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+      142 1.77E+04      142 1.77E+04 cells
+        7   13.034        7   13.034   BUF_X4
+       65   293.93       65   293.93   DFF_X1
+        1    0.532        1    0.532   INV_X1
+       64  119.168       64  119.168   MUX2_X1
+        1    1.862        1    1.862   NOR3_X2
+        1     1.33        1     1.33   OR2_X2
+        2    3.724        2    3.724   OR4_X2
+        1 1.73E+04        1 1.73E+04   fakeram45_512x64
+
+   Chip area for module '\muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[1].u_data': 17735.018000
+     of which used for sequential elements: 293.930000 (1.66%)
+
+=== muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[2].u_data ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+      212        -      212        - wires
+      353        -      353        - wire bits
+      136        -      136        - public wires
+      277        -      277        - public wire bits
+        6        -        6        - ports
+      147        -      147        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+      142 1.77E+04      142 1.77E+04 cells
+        7   13.034        7   13.034   BUF_X4
+       65   293.93       65   293.93   DFF_X1
+        1    0.532        1    0.532   INV_X1
+       64  119.168       64  119.168   MUX2_X1
+        1    1.862        1    1.862   NOR3_X2
+        1     1.33        1     1.33   OR2_X2
+        2    3.724        2    3.724   OR4_X2
+        1 1.73E+04        1 1.73E+04   fakeram45_512x64
+
+   Chip area for module '\muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[2].u_data': 17735.018000
+     of which used for sequential elements: 293.930000 (1.66%)
+
+=== muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[3].u_data ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+      212        -      212        - wires
+      353        -      353        - wire bits
+      136        -      136        - public wires
+      277        -      277        - public wire bits
+        6        -        6        - ports
+      147        -      147        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+      142 1.77E+04      142 1.77E+04 cells
+        7   13.034        7   13.034   BUF_X4
+       65   293.93       65   293.93   DFF_X1
+        1    0.532        1    0.532   INV_X1
+       64  119.168       64  119.168   MUX2_X1
+        1    1.862        1    1.862   NOR3_X2
+        1     1.33        1     1.33   OR2_X2
+        2    3.724        2    3.724   OR4_X2
+        1 1.73E+04        1 1.73E+04   fakeram45_512x64
+
+   Chip area for module '\muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[3].u_data': 17735.018000
+     of which used for sequential elements: 293.930000 (1.66%)
+
+=== muserisc_sram_sp$muserisc_soc_top.u_cpu.u_icache.g_way[0].u_data ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+      212        -      212        - wires
+      353        -      353        - wire bits
+      136        -      136        - public wires
+      277        -      277        - public wire bits
+        6        -        6        - ports
+      147        -      147        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+      142 1.77E+04      142 1.77E+04 cells
+        7   13.034        7   13.034   BUF_X4
+       65   293.93       65   293.93   DFF_X1
+        1    0.532        1    0.532   INV_X1
+       64  119.168       64  119.168   MUX2_X1
+        1    1.862        1    1.862   NOR3_X2
+        1     1.33        1     1.33   OR2_X2
+        2    3.724        2    3.724   OR4_X2
+        1 1.73E+04        1 1.73E+04   fakeram45_512x64
+
+   Chip area for module '\muserisc_sram_sp$muserisc_soc_top.u_cpu.u_icache.g_way[0].u_data': 17735.018000
+     of which used for sequential elements: 293.930000 (1.66%)
+
+=== muserisc_sram_sp$muserisc_soc_top.u_cpu.u_icache.g_way[1].u_data ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+      212        -      212        - wires
+      353        -      353        - wire bits
+      136        -      136        - public wires
+      277        -      277        - public wire bits
+        6        -        6        - ports
+      147        -      147        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+      142 1.77E+04      142 1.77E+04 cells
+        7   13.034        7   13.034   BUF_X4
+       65   293.93       65   293.93   DFF_X1
+        1    0.532        1    0.532   INV_X1
+       64  119.168       64  119.168   MUX2_X1
+        1    1.862        1    1.862   NOR3_X2
+        1     1.33        1     1.33   OR2_X2
+        2    3.724        2    3.724   OR4_X2
+        1 1.73E+04        1 1.73E+04   fakeram45_512x64
+
+   Chip area for module '\muserisc_sram_sp$muserisc_soc_top.u_cpu.u_icache.g_way[1].u_data': 17735.018000
+     of which used for sequential elements: 293.930000 (1.66%)
+
+=== muserisc_vec$muserisc_soc_top.u_cpu.u_core.u_vec ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+    47984        -    47984        - wires
+    49454        -    49454        - wire bits
+     1655        -     1655        - public wires
+     3125        -     3125        - public wire bits
+       52        -       52        - ports
+     1522        -     1522        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+    44221 6.12E+04    44221 6.12E+04 cells
+     2048 2.18E+03     2048 2.18E+03   AND2_X1
+        3     3.99        3     3.99   AND2_X2
+        2    4.788        2    4.788   AND2_X4
+      898  1194.34      898  1194.34   AND3_X1
+        7   11.172        7   11.172   AND3_X2
+        6   17.556        6   17.556   AND3_X4
+      583  930.468      583  930.468   AND4_X1
+       21   39.102       21   39.102   AND4_X2
+        2    6.916        2    6.916   AND4_X4
+      138  330.372      138  330.372   AOI211_X2
+        3    8.778        3    8.778   AOI211_X4
+     4187 4.45E+03     4187 4.45E+03   AOI21_X1
+       19   35.378       19   35.378   AOI21_X2
+        2    6.916        2    6.916   AOI21_X4
+       94  275.044       94  275.044   AOI221_X2
+        1    3.458        1    3.458   AOI221_X4
+      312  663.936      312  663.936   AOI222_X1
+        3   11.172        3   11.172   AOI222_X4
+     1366  1816.78     1366  1816.78   AOI22_X1
+        6   14.364        6   14.364   AOI22_X2
+        1    4.522        1    4.522   AOI22_X4
+     3209 2.56E+03     3209 2.56E+03   BUF_X1
+      244  259.616      244  259.616   BUF_X2
+       73  135.926       73  135.926   BUF_X4
+        5    17.29        5    17.29   BUF_X8
+      421  335.958      421  335.958   CLKBUF_X1
+        2    2.128        2    2.128   CLKBUF_X2
+        9    47.88        9    47.88   DFFR_X1
+        1     5.32        1     5.32   DFFS_X1
+     1471 6.65E+03     1471 6.65E+03   DFF_X1
+      951 4.05E+03      951 4.05E+03   FA_X1
+     1663  4423.58     1663  4423.58   HA_X1
+     2945  1566.74     2945  1566.74   INV_X1
+        2    1.596        2    1.596   INV_X2
+     4193 7.81E+03     4193 7.81E+03   MUX2_X1
+     4541 3.62E+03     4541 3.62E+03   NAND2_X1
+       10     13.3       10     13.3   NAND2_X2
+        1    2.394        1    2.394   NAND2_X4
+     1762 1.87E+03     1762 1.87E+03   NAND3_X1
+        6   11.172        6   11.172   NAND3_X2
+        1    3.458        1    3.458   NAND3_X4
+      881  1171.73      881  1171.73   NAND4_X1
+        6   14.364        6   14.364   NAND4_X2
+        2    9.576        2    9.576   NAND4_X4
+     3007  2.4E+03     3007  2.4E+03   NOR2_X1
+       25    33.25       25    33.25   NOR2_X2
+        1    2.394        1    2.394   NOR2_X4
+      101  188.062      101  188.062   NOR3_X2
+        1    3.724        1    3.724   NOR3_X4
+       26  124.488       26  124.488   NOR4_X4
+      173  414.162      173  414.162   OAI211_X2
+     4221 4.49E+03     4221 4.49E+03   OAI21_X1
+       10    18.62       10    18.62   OAI21_X2
+        4   13.832        4   13.832   OAI21_X4
+      133  389.158      133  389.158   OAI221_X2
+        2    6.916        2    6.916   OAI221_X4
+      133  283.024      133  283.024   OAI222_X1
+      613   815.29      613   815.29   OAI22_X1
+       10    23.94       10    23.94   OAI22_X2
+        1    4.522        1    4.522   OAI22_X4
+      101  188.062      101  188.062   OAI33_X1
+      674  717.136      674  717.136   OR2_X1
+        2     2.66        2     2.66   OR2_X2
+      427   567.91      427   567.91   OR3_X1
+        4    6.384        4    6.384   OR3_X2
+      260   414.96      260   414.96   OR4_X1
+       12   22.344       12   22.344   OR4_X2
+        2    6.916        2    6.916   OR4_X4
+     1524 2.43E+03     1524 2.43E+03   XNOR2_X1
+        3     7.98        3     7.98   XNOR2_X2
+      649 1.04E+03      649 1.04E+03   XOR2_X1
+        1    2.394        1    2.394   XOR2_X2
+
+   Chip area for module '\muserisc_vec$muserisc_soc_top.u_cpu.u_core.u_vec': 61218.038000
+     of which used for sequential elements: 6705.062000 (10.95%)
+
+=== muserisc_vregfile$muserisc_soc_top.u_cpu.u_core.u_vregfile ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+     2795        -     2168        - wires
+     4034        -     2966        - wire bits
+      837        -      426        - public wires
+     2076        -     1224        - public wire bits
+       39        -       15        - ports
+     1278        -      813        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+     2343 4.51E+04     1932  5337.29 cells
+        2     2.66        2     2.66   AND3_X1
+        1    2.926        1    2.926   AND3_X4
+        4    6.384        4    6.384   AND4_X1
+       51   40.698       51   40.698   BUF_X1
+        3    3.192        3    3.192   BUF_X2
+       19   35.378        1    1.862   BUF_X4
+        4   13.832        1    3.458   BUF_X8
+       62   49.476       62   49.476   CLKBUF_X1
+      926 4.19E+03      731 3.31E+03   DFF_X1
+        2     5.32        2     5.32   HA_X1
+       10     5.32       10     5.32   INV_X1
+     1112 2.07E+03      920  1713.04   MUX2_X1
+       26   20.748       26   20.748   NAND2_X1
+        7    7.448        7    7.448   NAND3_X1
+        8   14.896        8   14.896   NAND3_X2
+        8    10.64        8    10.64   NAND4_X1
+        9   21.546        9   21.546   NAND4_X2
+        3    2.394        3    2.394   NOR2_X1
+       53    70.49       53    70.49   NOR2_X2
+        1    4.788        1    4.788   NOR4_X4
+        3     3.99        3     3.99   OAI22_X1
+        2    2.128        2    2.128   OR2_X1
+       24   38.304       24   38.304   XNOR2_X1
+        3 3.85E+04        -        -   fakeram45_256x64_1r1w
+        3 3.98E+04        3        - submodules
+        1 1.33E+04        1        -   muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[0].u_bank
+        1 1.33E+04        1        -   muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[1].u_bank
+        1 1.33E+04        1        -   muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[2].u_bank
+
+   Chip area for module '\muserisc_vregfile$muserisc_soc_top.u_cpu.u_core.u_vregfile': 45093.650000
+     of which used for sequential elements: 4187.372000 (9.29%)
+
+=== muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[0].u_bank ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+      209        -      209        - wires
+      356        -      356        - wire bits
+      137        -      137        - public wires
+      284        -      284        - public wire bits
+        8        -        8        - ports
+      155        -      155        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+      137 1.33E+04      137 1.33E+04 cells
+        6   11.172        6   11.172   BUF_X4
+        1    3.458        1    3.458   BUF_X8
+       65   293.93       65   293.93   DFF_X1
+       64  119.168       64  119.168   MUX2_X1
+        1 1.28E+04        1 1.28E+04   fakeram45_256x64_1r1w
+
+   Chip area for module '\muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[0].u_bank': 13252.120000
+     of which used for sequential elements: 293.930000 (2.22%)
+
+=== muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[1].u_bank ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+      209        -      209        - wires
+      356        -      356        - wire bits
+      137        -      137        - public wires
+      284        -      284        - public wire bits
+        8        -        8        - ports
+      155        -      155        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+      137 1.33E+04      137 1.33E+04 cells
+        6   11.172        6   11.172   BUF_X4
+        1    3.458        1    3.458   BUF_X8
+       65   293.93       65   293.93   DFF_X1
+       64  119.168       64  119.168   MUX2_X1
+        1 1.28E+04        1 1.28E+04   fakeram45_256x64_1r1w
+
+   Chip area for module '\muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[1].u_bank': 13252.120000
+     of which used for sequential elements: 293.930000 (2.22%)
+
+=== muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[2].u_bank ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+      209        -      209        - wires
+      356        -      356        - wire bits
+      137        -      137        - public wires
+      284        -      284        - public wire bits
+        8        -        8        - ports
+      155        -      155        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+      137 1.33E+04      137 1.33E+04 cells
+        6   11.172        6   11.172   BUF_X4
+        1    3.458        1    3.458   BUF_X8
+       65   293.93       65   293.93   DFF_X1
+       64  119.168       64  119.168   MUX2_X1
+        1 1.28E+04        1 1.28E+04   fakeram45_256x64_1r1w
+
+   Chip area for module '\muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[2].u_bank': 13252.120000
+     of which used for sequential elements: 293.930000 (2.22%)
+
+=== design hierarchy ===
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+   330305 7.19E+05     5113 9.33E+03 muserisc_soc_top
+    53811 8.81E+04    22420 4.59E+04 muse_crypto_top$muserisc_soc_top.u_crypto_bridge.u_crypto
+    31391 4.23E+04    31391 4.23E+04   ec_field$muserisc_soc_top.u_crypto_bridge.u_crypto.u_fld
+   240693 4.46E+05    51564 9.66E+04 muserisc_core$muserisc_soc_top.u_cpu.u_core
+    22700 2.85E+04    22700 2.85E+04   muserisc_bext$muserisc_soc_top.u_cpu.u_core.u_bext
+    30882 5.75E+04    30882 5.75E+04   muserisc_csr$muserisc_soc_top.u_cpu.u_core.u_csr
+    33256 5.21E+04    33256 5.21E+04   muserisc_fpu$muserisc_soc_top.u_cpu.u_core.u_fpu
+    34461 6.59E+04    34461 6.59E+04   muserisc_mmu$muserisc_soc_top.u_cpu.u_core.u_mmu
+    21266  3.9E+04    21266  3.9E+04   muserisc_muldiv_mc$muserisc_soc_top.u_cpu.u_core.u_muldiv
+    44221 6.12E+04    44221 6.12E+04   muserisc_vec$muserisc_soc_top.u_cpu.u_core.u_vec
+     2343 4.51E+04     1932  5337.29   muserisc_vregfile$muserisc_soc_top.u_cpu.u_core.u_vregfile
+      137 1.33E+04      137 1.33E+04     muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[0].u_bank
+      137 1.33E+04      137 1.33E+04     muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[1].u_bank
+      137 1.33E+04      137 1.33E+04     muserisc_vrf_bank$muserisc_soc_top.u_cpu.u_core.u_vregfile.g_port[2].u_bank
+     8313 9.77E+04     7745 2.67E+04 muserisc_dcache$muserisc_soc_top.u_cpu.u_dcache
+      142 1.77E+04      142 1.77E+04   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[0].u_data
+      142 1.77E+04      142 1.77E+04   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[1].u_data
+      142 1.77E+04      142 1.77E+04   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[2].u_data
+      142 1.77E+04      142 1.77E+04   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_dcache.g_way[3].u_data
+     2286 4.47E+04     2002 9.22E+03 muserisc_icache$muserisc_soc_top.u_cpu.u_icache
+      142 1.77E+04      142 1.77E+04   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_icache.g_way[0].u_data
+      142 1.77E+04      142 1.77E+04   muserisc_sram_sp$muserisc_soc_top.u_cpu.u_icache.g_way[1].u_data
+    20089 3.35E+04    20089 3.35E+04 muserisc_plic$muserisc_soc_top.u_plic
+
+        +----------------------------Count including submodules.
+        |        +-------------------Area including submodules.
+        |        |        +----------Local count, excluding submodules.
+        |        |        |        +-Local area, excluding submodules.
+        |        |        |        | 
+   383372        -     6363        - wires
+   392905        -     6800        - wire bits
+    33790        -     1381        - public wires
+    43323        -     1818        - public wire bits
+      402        -       26        - ports
+     9935        -      463        - port bits
+        -        -        -        - memories
+        -        -        -        - memory bits
+        -        -        -        - processes
+   330305 7.19E+05     5113 9.33E+03 cells
+    12606 1.34E+04      209  222.376   AND2_X1
+       41    54.53        6     7.98   AND2_X2
+        7   16.758        2    4.788   AND2_X4
+     4272  5681.76      111   147.63   AND3_X1
+       42   67.032        6    9.576   AND3_X2
+       20    58.52        3    8.778   AND3_X4
+     4479 7.15E+03      113  180.348   AND4_X1
+      100    186.2       12   22.344   AND4_X2
+       13   44.954        5    17.29   AND4_X4
+     1003  2.4E+03        5    11.97   AOI211_X2
+       19   55.594        1    2.926   AOI211_X4
+    25087 2.67E+04      354  376.656   AOI21_X1
+      178  331.436       34   63.308   AOI21_X2
+       28   96.824        9   31.122   AOI21_X4
+      621 1.82E+03       14   40.964   AOI221_X2
+       11   38.038        2    6.916   AOI221_X4
+     1010  2149.28        3    6.384   AOI222_X1
+        5    18.62        -        -   AOI222_X2
+        9   33.516        -        -   AOI222_X4
+     6966  9264.78       41    54.53   AOI22_X1
+       33   79.002        3    7.182   AOI22_X2
+        7   31.654        1    4.522   AOI22_X4
+    22526  1.8E+04      202  161.196   BUF_X1
+       93   618.45        3    19.95   BUF_X16
+     2032 2.16E+03       50     53.2   BUF_X2
+       16  208.544        -        -   BUF_X32
+      860  1601.32       52   96.824   BUF_X4
+      173  598.234       15    51.87   BUF_X8
+     3012  2.4E+03       15    11.97   CLKBUF_X1
+      225    239.4        1    1.064   CLKBUF_X2
+        9    11.97        2     2.66   CLKBUF_X3
+    14168 7.54E+04      500     2660   DFFR_X1
+       22   117.04       14    74.48   DFFS_X1
+    13311 6.02E+04      128  578.816   DFF_X1
+     8121 3.46E+04        1    4.256   FA_X1
+    16505  43903.3       99   263.34   HA_X1
+    19696 1.05E+04      271  144.172   INV_X1
+       24   19.152        1    0.798   INV_X2
+        5     6.65        1     1.33   INV_X4
+        7    3.724        1    0.532   LOGIC0_X1
+        4    2.128        -        -   LOGIC1_X1
+    60045 1.12E+05      943 1.76E+03   MUX2_X1
+       31   74.214        5    11.97   MUX2_X2
+    24917 1.99E+04      362  288.876   NAND2_X1
+       51    67.83        8    10.64   NAND2_X2
+       28   67.032        1    2.394   NAND2_X4
+     8021 8.53E+03      257  273.448   NAND3_X1
+       50     93.1        7   13.034   NAND3_X2
+       22   76.076       17   58.786   NAND3_X4
+     5771  7675.43       85   113.05   NAND4_X1
+       49  117.306        -        -   NAND4_X2
+       12   57.456        1    4.788   NAND4_X4
+    16209 1.29E+04      268  213.864   NOR2_X1
+      157   208.81       10     13.3   NOR2_X2
+        9   21.546        2    4.788   NOR2_X4
+      534  994.308       11   20.482   NOR3_X2
+        3   11.172        -        -   NOR3_X4
+      124  593.712        1    4.788   NOR4_X4
+     1357 3.25E+03       29   69.426   OAI211_X2
+        3   13.566        -        -   OAI211_X4
+    23216 2.47E+04      296  314.944   OAI21_X1
+      202  376.124       20    37.24   OAI21_X2
+       17   58.786        3   10.374   OAI21_X4
+      527 1.54E+03       14   40.964   OAI221_X2
+        7   24.206        -        -   OAI221_X4
+      459  976.752        1    2.128   OAI222_X1
+        2    7.448        -        -   OAI222_X2
+     2769  3682.77       34    45.22   OAI22_X1
+       40    95.76        -        -   OAI22_X2
+        4   18.088        -        -   OAI22_X4
+      551 1.03E+03        1    1.862   OAI33_X1
+     3917 4.17E+03       98  104.272   OR2_X1
+       45    59.85        9    11.97   OR2_X2
+        4    9.576        -        -   OR2_X4
+     1655  2201.15       45    59.85   OR3_X1
+       19   30.324        1    1.596   OR3_X2
+       13   38.038        4   11.704   OR3_X4
+     1481 2.36E+03       40    63.84   OR4_X1
+      120   223.44        9   16.758   OR4_X2
+       30   103.74        6   20.748   OR4_X4
+    16389 2.62E+04      175    279.3   XNOR2_X1
+       52   138.32        2     5.32   XNOR2_X2
+     3982 6.36E+03       58   92.568   XOR2_X1
+       30    71.82        -        -   XOR2_X2
+        3 3.85E+04        -        -   fakeram45_256x64_1r1w
+        6 1.04E+05        -        -   fakeram45_512x64
+        6 1.58E+04        -        -   fakeram45_64x44
+        5  7.1E+05        5        - submodules
+        1 8.81E+04        1        -   muse_crypto_top$muserisc_soc_top.u_crypto_bridge.u_crypto
+        1 4.46E+05        1        -   muserisc_core$muserisc_soc_top.u_cpu.u_core
+        1 9.77E+04        1        -   muserisc_dcache$muserisc_soc_top.u_cpu.u_dcache
+        1 4.47E+04        1        -   muserisc_icache$muserisc_soc_top.u_cpu.u_icache
+        1 3.35E+04        1        -   muserisc_plic$muserisc_soc_top.u_plic
+
+   Chip area for top module '\muserisc_soc_top': 719115.838000
+     of which used for sequential elements: 135683.142000 (18.87%)
+

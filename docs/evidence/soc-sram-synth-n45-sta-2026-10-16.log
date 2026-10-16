@@ -1,0 +1,586 @@
+OpenROAD unknown 
+Features included (+) or not (-): -GPU +GUI -Python
+This program is licensed under the BSD-3 license. See the LICENSE file for details.
+Components of this program may be licensed under more restrictive licenses which must be honored.
+==== summary
+wns max 0.000
+tns max 0.000
+crit_path_ns 6.018 (period 10.000, worst slack 3.982, setup uncertainty included)
+fmax_mhz 166.16
+==== critical path
+Startpoint: rst_ni (input port clocked by core_clock)
+Endpoint: u_cpu.u_core.boot_q$_DFFE_PN1P_
+          (recovery check against rising-edge clock core_clock)
+Path Group: asynchronous
+Path Type: max
+
+Fanout    Delay     Time   Description
+-----------------------------------------------------------------
+          0.000    0.000   clock core_clock (rise edge)
+          0.000    0.000   clock network delay (ideal)
+          2.000    2.000 ^ input external delay
+ 14007    0.000    2.000 ^ rst_ni (in)
+          0.000    2.000 ^ u_cpu.u_core.boot_q$_DFFE_PN1P_/SN (DFFS_X1)
+                   2.000   data arrival time
+
+         10.000   10.000   clock core_clock (rise edge)
+          0.000   10.000   clock network delay (ideal)
+         -0.500    9.500   clock uncertainty
+          0.000    9.500   clock reconvergence pessimism
+                   9.500 ^ u_cpu.u_core.boot_q$_DFFE_PN1P_/CK (DFFS_X1)
+          0.042    9.542   library recovery time
+                   9.542   data required time
+-----------------------------------------------------------------
+                   9.542   data required time
+                  -2.000   data arrival time
+-----------------------------------------------------------------
+                   7.542   slack (MET)
+
+
+Startpoint: u_cpu.u_core.vls_started_q$_DFF_PN0_
+            (rising edge-triggered flip-flop clocked by core_clock)
+Endpoint: u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram
+          (rising edge-triggered flip-flop clocked by core_clock)
+Path Group: core_clock
+Path Type: max
+
+Fanout    Delay     Time   Description
+-----------------------------------------------------------------
+          0.000    0.000   clock core_clock (rise edge)
+          0.000    0.000   clock network delay (ideal)
+          0.000    0.000 ^ u_cpu.u_core.vls_started_q$_DFF_PN0_/CK (DFFR_X1)
+     1    0.097    0.097 ^ u_cpu.u_core.vls_started_q$_DFF_PN0_/Q (DFFR_X1)
+     7    0.048    0.146 ^ _338549_/Z (BUF_X1)
+    10    0.068    0.214 ^ _338550_/Z (BUF_X1)
+    10    0.070    0.284 ^ _338551_/Z (BUF_X1)
+    10    0.067    0.351 ^ _338552_/Z (BUF_X1)
+    10    0.069    0.419 ^ _338553_/Z (BUF_X1)
+     8    0.057    0.476 v _338677_/ZN (NAND2_X1)
+     8    0.042    0.518 ^ _338678_/ZN (INV_X1)
+     1    0.040    0.559 ^ _348642_/Z (MUX2_X1)
+     1    0.012    0.570 v _348643_/ZN (NAND2_X1)
+    10    0.042    0.612 v _348644_/Z (BUF_X1)
+    10    0.053    0.665 v _572889_/Z (BUF_X1)
+     2    0.053    0.718 v _572929_/Z (MUX2_X1)
+     1    0.056    0.774 v _572931_/Z (MUX2_X1)
+     1    0.062    0.836 v _572936_/Z (MUX2_X1)
+     1    0.055    0.891 v _618968_/S (HA_X1)
+     5    0.038    0.928 v _339448_/Z (BUF_X1)
+     2    0.047    0.976 ^ _339451_/ZN (AOI21_X1)
+     1    0.025    1.000 v _424268_/ZN (OAI22_X1)
+     2    0.044    1.044 ^ _424269_/ZN (NOR2_X1)
+     1    0.017    1.061 v _424271_/ZN (OAI21_X1)
+     1    0.031    1.092 ^ _424272_/ZN (AOI21_X1)
+     1    0.041    1.133 ^ _424273_/ZN (XNOR2_X1)
+     1    0.042    1.175 ^ _424274_/Z (MUX2_X1)
+     1    0.044    1.219 ^ _607854_/S (HA_X1)
+     5    0.043    1.262 ^ _339796_/Z (BUF_X1)
+     1    0.015    1.277 v _339800_/ZN (NAND2_X1)
+     1    0.028    1.305 ^ _339801_/ZN (NOR2_X1)
+     4    0.026    1.331 v _339806_/ZN (AOI21_X1)
+     3    0.051    1.382 ^ _339812_/ZN (AOI22_X1)
+     6    0.055    1.437 ^ _339813_/ZN (AND2_X1)
+     6    0.067    1.504 ^ _340099_/ZN (AND3_X1)
+     6    0.062    1.566 ^ _340100_/ZN (AND4_X2)
+     6    0.078    1.645 ^ _341041_/ZN (AND4_X1)
+     4    0.039    1.684 v _341434_/ZN (XNOR2_X1)
+    10    0.081    1.765 ^ _341435_/ZN (OAI21_X2)
+     1    0.063    1.828 v _341436_/Z (MUX2_X1)
+     1    0.106    1.934 v _341437_/ZN (OR4_X2)
+     1    0.110    2.044 v _341438_/ZN (OR4_X2)
+     3    0.033    2.078 ^ _341458_/ZN (OAI21_X2)
+     1    0.032    2.109 v _341459_/ZN (NAND4_X1)
+     6    0.125    2.235 v _341460_/ZN (OR4_X2)
+     1    0.082    2.316 ^ _347857_/ZN (AOI221_X2)
+     2    0.027    2.344 v _347862_/ZN (OAI21_X2)
+     3    0.054    2.398 ^ _347863_/ZN (OAI211_X2)
+    10    0.034    2.432 ^ _347864_/Z (BUF_X8)
+     1    0.056    2.488 v _349272_/Z (MUX2_X1)
+     1    0.062    2.550 v _349273_/Z (MUX2_X1)
+     1    0.095    2.645 ^ _349274_/ZN (AOI222_X2)
+     3    0.052    2.698 v _349325_/ZN (OAI221_X2)
+     4    0.053    2.751 ^ _357847_/ZN (AOI21_X2)
+    10    0.033    2.784 ^ _358475_/Z (BUF_X4)
+     1    0.011    2.795 v _359117_/ZN (NOR2_X1)
+    28    0.447    3.242 ^ _359155_/ZN (AOI21_X1)
+     2    0.050    3.292 ^ _614735_/S (HA_X1)
+     1    0.017    3.309 v _363674_/ZN (AOI21_X1)
+     1    0.113    3.422 v _363678_/ZN (OR4_X1)
+     1    0.031    3.454 ^ _363679_/ZN (NOR2_X1)
+     1    0.018    3.472 v _363680_/ZN (OAI21_X1)
+     1    0.114    3.585 v _363681_/ZN (OR4_X1)
+     1    0.100    3.685 v _363685_/ZN (OR4_X1)
+     1    0.100    3.786 v _363688_/ZN (OR4_X1)
+     1    0.115    3.901 v _363689_/ZN (OR4_X1)
+     1    0.115    4.016 v _363690_/ZN (OR4_X1)
+     1    0.115    4.131 v _363691_/ZN (OR4_X1)
+     1    0.118    4.249 v _363692_/ZN (OR4_X1)
+     2    0.052    4.301 ^ _363693_/ZN (OAI22_X1)
+     2    0.069    4.370 v _363694_/Z (MUX2_X1)
+     1    0.041    4.411 ^ _368119_/ZN (AOI21_X1)
+     1    0.025    4.436 v _368124_/ZN (OAI21_X1)
+     3    0.077    4.513 ^ _368125_/ZN (AOI211_X2)
+     3    0.059    4.572 ^ _368318_/ZN (AND4_X4)
+     1    0.009    4.582 v _380081_/ZN (NOR2_X1)
+     3    0.032    4.613 ^ _380083_/ZN (NOR2_X1)
+    10    0.055    4.668 ^ _380084_/Z (BUF_X1)
+    10    0.062    4.730 ^ _380085_/Z (BUF_X1)
+    10    0.061    4.791 ^ _380086_/Z (BUF_X1)
+    10    0.065    4.856 ^ _380087_/Z (BUF_X1)
+     1    0.012    4.868 v _380088_/ZN (NOR2_X1)
+     2    0.066    4.934 v _380098_/ZN (OR2_X1)
+     3    0.039    4.972 v _613227_/CO (HA_X1)
+     1    0.011    4.983 ^ _424537_/ZN (INV_X1)
+     3    0.028    5.011 ^ _424538_/ZN (OR4_X1)
+     1    0.009    5.020 v _424575_/ZN (NOR2_X1)
+     4    0.067    5.086 v _424577_/Z (MUX2_X1)
+     5    0.032    5.119 ^ _424582_/ZN (NAND2_X1)
+     1    0.012    5.131 v _424641_/ZN (NOR2_X1)
+     1    0.053    5.184 v _424642_/Z (XOR2_X1)
+     1    0.071    5.255 v _424643_/Z (MUX2_X1)
+     1    0.039    5.294 ^ _424656_/ZN (AOI21_X1)
+     2    0.037    5.331 v _424681_/ZN (NAND4_X1)
+     1    0.028    5.359 ^ _424688_/ZN (NOR2_X1)
+     6    0.031    5.390 v _427678_/ZN (AOI21_X1)
+    10    0.051    5.441 v _427686_/Z (BUF_X1)
+     1    0.027    5.468 ^ _427692_/ZN (NAND2_X1)
+          0.000    5.468 ^ u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/ce_in (fakeram45_512x64)
+                   5.468   data arrival time
+
+         10.000   10.000   clock core_clock (rise edge)
+          0.000   10.000   clock network delay (ideal)
+         -0.500    9.500   clock uncertainty
+          0.000    9.500   clock reconvergence pessimism
+                   9.500 ^ u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/clk (fakeram45_512x64)
+         -0.050    9.450   library setup time
+                   9.450   data required time
+-----------------------------------------------------------------
+                   9.450   data required time
+                  -5.468   data arrival time
+-----------------------------------------------------------------
+                   3.982   slack (MET)
+
+
+==== worst path per block (endpoints inside the prefix)
+block u_cpu/u_core/u_vec   endpoints   1438  worst_slack     4.124  arrival_ns    5.376  from u_cpu.u_core.vls_started_q$_DFF_PN0_/Q  to u_cpu.u_core.u_vec.cnt_ok_q$_SDFFCE_PN0P_/D
+block u_cpu/u_core/u_fpu   endpoints   1399  worst_slack     4.270  arrival_ns    5.230  from u_cpu.u_core.vls_started_q$_DFF_PN0_/Q  to u_cpu.u_core.u_fpu.res_q[41]$_DFFE_PP_/D
+block u_cpu/u_core/u_csr   endpoints   3063  worst_slack     4.256  arrival_ns    5.244  from u_cpu.u_core.vls_started_q$_DFF_PN0_/Q  to u_cpu.u_core.u_csr.fflags_q[1]$_DFF_PN0_/D
+block u_cpu/u_core/u_mmu   endpoints   4555  worst_slack     4.294  arrival_ns    5.206  from u_cpu.u_core.vls_started_q$_DFF_PN0_/Q  to u_cpu.u_core.u_mmu.tlb_q[2456]$_DFFE_PN0P_/D
+block u_cpu/u_core/u_muldiv endpoints    276  worst_slack     4.348  arrival_ns    5.152  from u_cpu.u_core.vls_started_q$_DFF_PN0_/Q  to u_cpu.u_core.u_muldiv.g_mc.w0_q[50]$_DFFE_PP_/D
+block u_cpu/u_core/u_vregfile endpoints   1364  worst_slack     4.448  arrival_ns    5.052  from u_cpu.u_core.vls_started_q$_DFF_PN0_/Q  to u_cpu.u_core.u_vregfile.v0_o[152]$_DFFE_PP_/D
+block u_cpu/u_core         endpoints  18707  worst_slack     4.124  arrival_ns    5.376  from u_cpu.u_core.vls_started_q$_DFF_PN0_/Q  to u_cpu.u_core.u_vec.cnt_ok_q$_SDFFCE_PN0P_/D
+block u_cpu/u_icache       endpoints    960  worst_slack     4.894  arrival_ns    4.606  from u_cpu.u_core.boot_q$_DFFE_PN1P_/Q  to u_cpu.u_icache.r_addr_q[53]$_DFFE_PN0P_/D
+block u_cpu/u_dcache       endpoints   2679  worst_slack     3.982  arrival_ns    5.518  from u_cpu.u_core.vls_started_q$_DFF_PN0_/Q  to u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/ce_in
+block u_cpu/u_arb          endpoints      4  worst_slack     7.287  arrival_ns    2.213  from mem_req_ready_i  to u_cpu.u_arb.owner_q$_DFFE_PN0P_/D
+block u_fabric             endpoints    205  worst_slack     4.876  arrival_ns    4.624  from ext_irq_i[7]  to u_fabric.rdata_q[33]$_DFFE_PN0P_/D
+block u_crypto_bridge      endpoints   4958  worst_slack     4.838  arrival_ns    4.662  from u_crypto_bridge.u_crypto.u_fld.res[4]$_DFFE_PN0P_/Q  to u_crypto_bridge.u_crypto.u_fld.result[0]$_DFFE_PN0P_/D
+block u_plic               endpoints   1184  worst_slack     4.835  arrival_ns    4.665  from ext_irq_i[7]  to u_plic.claimed_q[29]$_DFF_PN0_/D
+block u_clint              endpoints    160  worst_slack     8.341  arrival_ns    1.159  from u_fabric.dev_addr_o[29]$_DFFE_PN0P_/QN  to u_clint.mtime_q[0]$_DFF_PN0_/D
+block u_uart               endpoints    270  worst_slack     7.055  arrival_ns    2.445  from uart_rx_valid_i  to u_uart.rx_count_q[4]$_DFF_PN0_/D
+block (all but vec)        endpoints  27703  worst_slack     3.982  arrival_ns    5.518  from u_cpu.u_core.vls_started_q$_DFF_PN0_/Q  to u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/ce_in
+==== worst path outside the vector unit
+Startpoint: u_cpu.u_core.vls_started_q$_DFF_PN0_
+            (rising edge-triggered flip-flop clocked by core_clock)
+Endpoint: u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram
+          (rising edge-triggered flip-flop clocked by core_clock)
+Path Group: core_clock
+Path Type: max
+
+   Delay     Time   Description
+-----------------------------------------------------------
+   0.000    0.000   clock core_clock (rise edge)
+   0.000    0.000   clock network delay (ideal)
+   0.000    0.000 ^ u_cpu.u_core.vls_started_q$_DFF_PN0_/CK (DFFR_X1)
+   0.097    0.097 ^ u_cpu.u_core.vls_started_q$_DFF_PN0_/Q (DFFR_X1)
+   0.048    0.146 ^ _338549_/Z (BUF_X1)
+   0.068    0.214 ^ _338550_/Z (BUF_X1)
+   0.070    0.284 ^ _338551_/Z (BUF_X1)
+   0.067    0.351 ^ _338552_/Z (BUF_X1)
+   0.069    0.419 ^ _338553_/Z (BUF_X1)
+   0.057    0.476 v _338677_/ZN (NAND2_X1)
+   0.042    0.518 ^ _338678_/ZN (INV_X1)
+   0.040    0.559 ^ _348642_/Z (MUX2_X1)
+   0.012    0.570 v _348643_/ZN (NAND2_X1)
+   0.042    0.612 v _348644_/Z (BUF_X1)
+   0.053    0.665 v _572889_/Z (BUF_X1)
+   0.053    0.718 v _572929_/Z (MUX2_X1)
+   0.056    0.774 v _572931_/Z (MUX2_X1)
+   0.062    0.836 v _572936_/Z (MUX2_X1)
+   0.055    0.891 v _618968_/S (HA_X1)
+   0.038    0.928 v _339448_/Z (BUF_X1)
+   0.047    0.976 ^ _339451_/ZN (AOI21_X1)
+   0.025    1.000 v _424268_/ZN (OAI22_X1)
+   0.044    1.044 ^ _424269_/ZN (NOR2_X1)
+   0.017    1.061 v _424271_/ZN (OAI21_X1)
+   0.031    1.092 ^ _424272_/ZN (AOI21_X1)
+   0.041    1.133 ^ _424273_/ZN (XNOR2_X1)
+   0.042    1.175 ^ _424274_/Z (MUX2_X1)
+   0.044    1.219 ^ _607854_/S (HA_X1)
+   0.043    1.262 ^ _339796_/Z (BUF_X1)
+   0.015    1.277 v _339800_/ZN (NAND2_X1)
+   0.028    1.305 ^ _339801_/ZN (NOR2_X1)
+   0.026    1.331 v _339806_/ZN (AOI21_X1)
+   0.051    1.382 ^ _339812_/ZN (AOI22_X1)
+   0.055    1.437 ^ _339813_/ZN (AND2_X1)
+   0.067    1.504 ^ _340099_/ZN (AND3_X1)
+   0.062    1.566 ^ _340100_/ZN (AND4_X2)
+   0.078    1.645 ^ _341041_/ZN (AND4_X1)
+   0.039    1.684 v _341434_/ZN (XNOR2_X1)
+   0.081    1.765 ^ _341435_/ZN (OAI21_X2)
+   0.063    1.828 v _341436_/Z (MUX2_X1)
+   0.106    1.934 v _341437_/ZN (OR4_X2)
+   0.110    2.044 v _341438_/ZN (OR4_X2)
+   0.033    2.078 ^ _341458_/ZN (OAI21_X2)
+   0.032    2.109 v _341459_/ZN (NAND4_X1)
+   0.125    2.235 v _341460_/ZN (OR4_X2)
+   0.082    2.316 ^ _347857_/ZN (AOI221_X2)
+   0.027    2.344 v _347862_/ZN (OAI21_X2)
+   0.054    2.398 ^ _347863_/ZN (OAI211_X2)
+   0.034    2.432 ^ _347864_/Z (BUF_X8)
+   0.056    2.488 v _349272_/Z (MUX2_X1)
+   0.062    2.550 v _349273_/Z (MUX2_X1)
+   0.095    2.645 ^ _349274_/ZN (AOI222_X2)
+   0.052    2.698 v _349325_/ZN (OAI221_X2)
+   0.053    2.751 ^ _357847_/ZN (AOI21_X2)
+   0.033    2.784 ^ _358475_/Z (BUF_X4)
+   0.011    2.795 v _359117_/ZN (NOR2_X1)
+   0.447    3.242 ^ _359155_/ZN (AOI21_X1)
+   0.050    3.292 ^ _614735_/S (HA_X1)
+   0.017    3.309 v _363674_/ZN (AOI21_X1)
+   0.113    3.422 v _363678_/ZN (OR4_X1)
+   0.031    3.454 ^ _363679_/ZN (NOR2_X1)
+   0.018    3.472 v _363680_/ZN (OAI21_X1)
+   0.114    3.585 v _363681_/ZN (OR4_X1)
+   0.100    3.685 v _363685_/ZN (OR4_X1)
+   0.100    3.786 v _363688_/ZN (OR4_X1)
+   0.115    3.901 v _363689_/ZN (OR4_X1)
+   0.115    4.016 v _363690_/ZN (OR4_X1)
+   0.115    4.131 v _363691_/ZN (OR4_X1)
+   0.118    4.249 v _363692_/ZN (OR4_X1)
+   0.052    4.301 ^ _363693_/ZN (OAI22_X1)
+   0.069    4.370 v _363694_/Z (MUX2_X1)
+   0.041    4.411 ^ _368119_/ZN (AOI21_X1)
+   0.025    4.436 v _368124_/ZN (OAI21_X1)
+   0.077    4.513 ^ _368125_/ZN (AOI211_X2)
+   0.059    4.572 ^ _368318_/ZN (AND4_X4)
+   0.009    4.582 v _380081_/ZN (NOR2_X1)
+   0.032    4.613 ^ _380083_/ZN (NOR2_X1)
+   0.055    4.668 ^ _380084_/Z (BUF_X1)
+   0.062    4.730 ^ _380085_/Z (BUF_X1)
+   0.061    4.791 ^ _380086_/Z (BUF_X1)
+   0.065    4.856 ^ _380087_/Z (BUF_X1)
+   0.012    4.868 v _380088_/ZN (NOR2_X1)
+   0.066    4.934 v _380098_/ZN (OR2_X1)
+   0.039    4.972 v _613227_/CO (HA_X1)
+   0.011    4.983 ^ _424537_/ZN (INV_X1)
+   0.028    5.011 ^ _424538_/ZN (OR4_X1)
+   0.009    5.020 v _424575_/ZN (NOR2_X1)
+   0.067    5.086 v _424577_/Z (MUX2_X1)
+   0.032    5.119 ^ _424582_/ZN (NAND2_X1)
+   0.012    5.131 v _424641_/ZN (NOR2_X1)
+   0.053    5.184 v _424642_/Z (XOR2_X1)
+   0.071    5.255 v _424643_/Z (MUX2_X1)
+   0.039    5.294 ^ _424656_/ZN (AOI21_X1)
+   0.037    5.331 v _424681_/ZN (NAND4_X1)
+   0.028    5.359 ^ _424688_/ZN (NOR2_X1)
+   0.031    5.390 v _427678_/ZN (AOI21_X1)
+   0.051    5.441 v _427686_/Z (BUF_X1)
+   0.027    5.468 ^ _427692_/ZN (NAND2_X1)
+   0.000    5.468 ^ u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/ce_in (fakeram45_512x64)
+            5.468   data arrival time
+
+  10.000   10.000   clock core_clock (rise edge)
+   0.000   10.000   clock network delay (ideal)
+  -0.500    9.500   clock uncertainty
+   0.000    9.500   clock reconvergence pessimism
+            9.500 ^ u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/clk (fakeram45_512x64)
+  -0.050    9.450   library setup time
+            9.450   data required time
+-----------------------------------------------------------
+            9.450   data required time
+           -5.468   data arrival time
+-----------------------------------------------------------
+            3.982   slack (MET)
+
+
+min_period_bisect_ns 6.03  fmax_bisect_mhz 165.76
+==== critical path at the bisected minimum period
+Startpoint: u_cpu.u_core.vls_started_q$_DFF_PN0_
+            (rising edge-triggered flip-flop clocked by core_clock)
+Endpoint: u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram
+          (rising edge-triggered flip-flop clocked by core_clock)
+Path Group: core_clock
+Path Type: max
+
+   Delay     Time   Description
+-----------------------------------------------------------
+   0.000    0.000   clock core_clock (rise edge)
+   0.000    0.000   clock network delay (ideal)
+   0.000    0.000 ^ u_cpu.u_core.vls_started_q$_DFF_PN0_/CK (DFFR_X1)
+   0.097    0.097 ^ u_cpu.u_core.vls_started_q$_DFF_PN0_/Q (DFFR_X1)
+   0.048    0.146 ^ _338549_/Z (BUF_X1)
+   0.068    0.214 ^ _338550_/Z (BUF_X1)
+   0.070    0.284 ^ _338551_/Z (BUF_X1)
+   0.067    0.351 ^ _338552_/Z (BUF_X1)
+   0.069    0.419 ^ _338553_/Z (BUF_X1)
+   0.057    0.476 v _338677_/ZN (NAND2_X1)
+   0.042    0.518 ^ _338678_/ZN (INV_X1)
+   0.040    0.559 ^ _348642_/Z (MUX2_X1)
+   0.012    0.570 v _348643_/ZN (NAND2_X1)
+   0.042    0.612 v _348644_/Z (BUF_X1)
+   0.053    0.665 v _572889_/Z (BUF_X1)
+   0.053    0.718 v _572929_/Z (MUX2_X1)
+   0.056    0.774 v _572931_/Z (MUX2_X1)
+   0.062    0.836 v _572936_/Z (MUX2_X1)
+   0.055    0.891 v _618968_/S (HA_X1)
+   0.038    0.928 v _339448_/Z (BUF_X1)
+   0.047    0.976 ^ _339451_/ZN (AOI21_X1)
+   0.025    1.000 v _424268_/ZN (OAI22_X1)
+   0.044    1.044 ^ _424269_/ZN (NOR2_X1)
+   0.017    1.061 v _424271_/ZN (OAI21_X1)
+   0.031    1.092 ^ _424272_/ZN (AOI21_X1)
+   0.041    1.133 ^ _424273_/ZN (XNOR2_X1)
+   0.042    1.175 ^ _424274_/Z (MUX2_X1)
+   0.044    1.219 ^ _607854_/S (HA_X1)
+   0.043    1.262 ^ _339796_/Z (BUF_X1)
+   0.015    1.277 v _339800_/ZN (NAND2_X1)
+   0.028    1.305 ^ _339801_/ZN (NOR2_X1)
+   0.026    1.331 v _339806_/ZN (AOI21_X1)
+   0.051    1.382 ^ _339812_/ZN (AOI22_X1)
+   0.055    1.437 ^ _339813_/ZN (AND2_X1)
+   0.067    1.504 ^ _340099_/ZN (AND3_X1)
+   0.062    1.566 ^ _340100_/ZN (AND4_X2)
+   0.078    1.645 ^ _341041_/ZN (AND4_X1)
+   0.039    1.684 v _341434_/ZN (XNOR2_X1)
+   0.081    1.765 ^ _341435_/ZN (OAI21_X2)
+   0.063    1.828 v _341436_/Z (MUX2_X1)
+   0.106    1.934 v _341437_/ZN (OR4_X2)
+   0.110    2.044 v _341438_/ZN (OR4_X2)
+   0.033    2.078 ^ _341458_/ZN (OAI21_X2)
+   0.032    2.109 v _341459_/ZN (NAND4_X1)
+   0.125    2.235 v _341460_/ZN (OR4_X2)
+   0.082    2.316 ^ _347857_/ZN (AOI221_X2)
+   0.027    2.344 v _347862_/ZN (OAI21_X2)
+   0.054    2.398 ^ _347863_/ZN (OAI211_X2)
+   0.034    2.432 ^ _347864_/Z (BUF_X8)
+   0.056    2.488 v _349272_/Z (MUX2_X1)
+   0.062    2.550 v _349273_/Z (MUX2_X1)
+   0.095    2.645 ^ _349274_/ZN (AOI222_X2)
+   0.052    2.698 v _349325_/ZN (OAI221_X2)
+   0.053    2.751 ^ _357847_/ZN (AOI21_X2)
+   0.033    2.784 ^ _358475_/Z (BUF_X4)
+   0.011    2.795 v _359117_/ZN (NOR2_X1)
+   0.447    3.242 ^ _359155_/ZN (AOI21_X1)
+   0.050    3.292 ^ _614735_/S (HA_X1)
+   0.017    3.309 v _363674_/ZN (AOI21_X1)
+   0.113    3.422 v _363678_/ZN (OR4_X1)
+   0.031    3.454 ^ _363679_/ZN (NOR2_X1)
+   0.018    3.472 v _363680_/ZN (OAI21_X1)
+   0.114    3.585 v _363681_/ZN (OR4_X1)
+   0.100    3.685 v _363685_/ZN (OR4_X1)
+   0.100    3.786 v _363688_/ZN (OR4_X1)
+   0.115    3.901 v _363689_/ZN (OR4_X1)
+   0.115    4.016 v _363690_/ZN (OR4_X1)
+   0.115    4.131 v _363691_/ZN (OR4_X1)
+   0.118    4.249 v _363692_/ZN (OR4_X1)
+   0.052    4.301 ^ _363693_/ZN (OAI22_X1)
+   0.069    4.370 v _363694_/Z (MUX2_X1)
+   0.041    4.411 ^ _368119_/ZN (AOI21_X1)
+   0.025    4.436 v _368124_/ZN (OAI21_X1)
+   0.077    4.513 ^ _368125_/ZN (AOI211_X2)
+   0.059    4.572 ^ _368318_/ZN (AND4_X4)
+   0.009    4.582 v _380081_/ZN (NOR2_X1)
+   0.032    4.613 ^ _380083_/ZN (NOR2_X1)
+   0.055    4.668 ^ _380084_/Z (BUF_X1)
+   0.062    4.730 ^ _380085_/Z (BUF_X1)
+   0.061    4.791 ^ _380086_/Z (BUF_X1)
+   0.065    4.856 ^ _380087_/Z (BUF_X1)
+   0.012    4.868 v _380088_/ZN (NOR2_X1)
+   0.066    4.934 v _380098_/ZN (OR2_X1)
+   0.039    4.972 v _613227_/CO (HA_X1)
+   0.011    4.983 ^ _424537_/ZN (INV_X1)
+   0.028    5.011 ^ _424538_/ZN (OR4_X1)
+   0.009    5.020 v _424575_/ZN (NOR2_X1)
+   0.067    5.086 v _424577_/Z (MUX2_X1)
+   0.032    5.119 ^ _424582_/ZN (NAND2_X1)
+   0.012    5.131 v _424641_/ZN (NOR2_X1)
+   0.053    5.184 v _424642_/Z (XOR2_X1)
+   0.071    5.255 v _424643_/Z (MUX2_X1)
+   0.039    5.294 ^ _424656_/ZN (AOI21_X1)
+   0.037    5.331 v _424681_/ZN (NAND4_X1)
+   0.028    5.359 ^ _424688_/ZN (NOR2_X1)
+   0.031    5.390 v _427678_/ZN (AOI21_X1)
+   0.051    5.441 v _427686_/Z (BUF_X1)
+   0.027    5.468 ^ _427692_/ZN (NAND2_X1)
+   0.000    5.468 ^ u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/ce_in (fakeram45_512x64)
+            5.468   data arrival time
+
+   6.033    6.033   clock core_clock (rise edge)
+   0.000    6.033   clock network delay (ideal)
+  -0.500    5.533   clock uncertainty
+   0.000    5.533   clock reconvergence pessimism
+            5.533 ^ u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/clk (fakeram45_512x64)
+  -0.050    5.483   library setup time
+            5.483   data required time
+-----------------------------------------------------------
+            5.483   data required time
+           -5.468   data arrival time
+-----------------------------------------------------------
+            0.015   slack (MET)
+
+
+min_period_rise_launch_ns 6.03  fmax_rise_launch_mhz 165.76
+==== worst rising-edge-launched path at that period
+Startpoint: rst_ni (input port clocked by core_clock)
+Endpoint: u_cpu.u_core.boot_q$_DFFE_PN1P_
+          (recovery check against rising-edge clock core_clock)
+Path Group: asynchronous
+Path Type: max
+
+   Delay     Time   Description
+-----------------------------------------------------------
+   0.000    0.000   clock core_clock (rise edge)
+   0.000    0.000   clock network delay (ideal)
+   2.000    2.000 ^ input external delay
+   0.000    2.000 ^ rst_ni (in)
+   0.000    2.000 ^ u_cpu.u_core.boot_q$_DFFE_PN1P_/SN (DFFS_X1)
+            2.000   data arrival time
+
+   6.033    6.033   clock core_clock (rise edge)
+   0.000    6.033   clock network delay (ideal)
+  -0.500    5.533   clock uncertainty
+   0.000    5.533   clock reconvergence pessimism
+            5.533 ^ u_cpu.u_core.boot_q$_DFFE_PN1P_/CK (DFFS_X1)
+   0.042    5.575   library recovery time
+            5.575   data required time
+-----------------------------------------------------------
+            5.575   data required time
+           -2.000   data arrival time
+-----------------------------------------------------------
+            3.575   slack (MET)
+
+
+Startpoint: u_cpu.u_core.vls_started_q$_DFF_PN0_
+            (rising edge-triggered flip-flop clocked by core_clock)
+Endpoint: u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram
+          (rising edge-triggered flip-flop clocked by core_clock)
+Path Group: core_clock
+Path Type: max
+
+   Delay     Time   Description
+-----------------------------------------------------------
+   0.000    0.000   clock core_clock (rise edge)
+   0.000    0.000   clock network delay (ideal)
+   0.000    0.000 ^ u_cpu.u_core.vls_started_q$_DFF_PN0_/CK (DFFR_X1)
+   0.097    0.097 ^ u_cpu.u_core.vls_started_q$_DFF_PN0_/Q (DFFR_X1)
+   0.048    0.146 ^ _338549_/Z (BUF_X1)
+   0.068    0.214 ^ _338550_/Z (BUF_X1)
+   0.070    0.284 ^ _338551_/Z (BUF_X1)
+   0.067    0.351 ^ _338552_/Z (BUF_X1)
+   0.069    0.419 ^ _338553_/Z (BUF_X1)
+   0.057    0.476 v _338677_/ZN (NAND2_X1)
+   0.042    0.518 ^ _338678_/ZN (INV_X1)
+   0.040    0.559 ^ _348642_/Z (MUX2_X1)
+   0.012    0.570 v _348643_/ZN (NAND2_X1)
+   0.042    0.612 v _348644_/Z (BUF_X1)
+   0.053    0.665 v _572889_/Z (BUF_X1)
+   0.053    0.718 v _572929_/Z (MUX2_X1)
+   0.056    0.774 v _572931_/Z (MUX2_X1)
+   0.062    0.836 v _572936_/Z (MUX2_X1)
+   0.055    0.891 v _618968_/S (HA_X1)
+   0.038    0.928 v _339448_/Z (BUF_X1)
+   0.047    0.976 ^ _339451_/ZN (AOI21_X1)
+   0.025    1.000 v _424268_/ZN (OAI22_X1)
+   0.044    1.044 ^ _424269_/ZN (NOR2_X1)
+   0.017    1.061 v _424271_/ZN (OAI21_X1)
+   0.031    1.092 ^ _424272_/ZN (AOI21_X1)
+   0.041    1.133 ^ _424273_/ZN (XNOR2_X1)
+   0.042    1.175 ^ _424274_/Z (MUX2_X1)
+   0.044    1.219 ^ _607854_/S (HA_X1)
+   0.043    1.262 ^ _339796_/Z (BUF_X1)
+   0.015    1.277 v _339800_/ZN (NAND2_X1)
+   0.028    1.305 ^ _339801_/ZN (NOR2_X1)
+   0.026    1.331 v _339806_/ZN (AOI21_X1)
+   0.051    1.382 ^ _339812_/ZN (AOI22_X1)
+   0.055    1.437 ^ _339813_/ZN (AND2_X1)
+   0.067    1.504 ^ _340099_/ZN (AND3_X1)
+   0.062    1.566 ^ _340100_/ZN (AND4_X2)
+   0.078    1.645 ^ _341041_/ZN (AND4_X1)
+   0.039    1.684 v _341434_/ZN (XNOR2_X1)
+   0.081    1.765 ^ _341435_/ZN (OAI21_X2)
+   0.063    1.828 v _341436_/Z (MUX2_X1)
+   0.106    1.934 v _341437_/ZN (OR4_X2)
+   0.110    2.044 v _341438_/ZN (OR4_X2)
+   0.033    2.078 ^ _341458_/ZN (OAI21_X2)
+   0.032    2.109 v _341459_/ZN (NAND4_X1)
+   0.125    2.235 v _341460_/ZN (OR4_X2)
+   0.082    2.316 ^ _347857_/ZN (AOI221_X2)
+   0.027    2.344 v _347862_/ZN (OAI21_X2)
+   0.054    2.398 ^ _347863_/ZN (OAI211_X2)
+   0.034    2.432 ^ _347864_/Z (BUF_X8)
+   0.056    2.488 v _349272_/Z (MUX2_X1)
+   0.062    2.550 v _349273_/Z (MUX2_X1)
+   0.095    2.645 ^ _349274_/ZN (AOI222_X2)
+   0.052    2.698 v _349325_/ZN (OAI221_X2)
+   0.053    2.751 ^ _357847_/ZN (AOI21_X2)
+   0.033    2.784 ^ _358475_/Z (BUF_X4)
+   0.011    2.795 v _359117_/ZN (NOR2_X1)
+   0.447    3.242 ^ _359155_/ZN (AOI21_X1)
+   0.050    3.292 ^ _614735_/S (HA_X1)
+   0.017    3.309 v _363674_/ZN (AOI21_X1)
+   0.113    3.422 v _363678_/ZN (OR4_X1)
+   0.031    3.454 ^ _363679_/ZN (NOR2_X1)
+   0.018    3.472 v _363680_/ZN (OAI21_X1)
+   0.114    3.585 v _363681_/ZN (OR4_X1)
+   0.100    3.685 v _363685_/ZN (OR4_X1)
+   0.100    3.786 v _363688_/ZN (OR4_X1)
+   0.115    3.901 v _363689_/ZN (OR4_X1)
+   0.115    4.016 v _363690_/ZN (OR4_X1)
+   0.115    4.131 v _363691_/ZN (OR4_X1)
+   0.118    4.249 v _363692_/ZN (OR4_X1)
+   0.052    4.301 ^ _363693_/ZN (OAI22_X1)
+   0.069    4.370 v _363694_/Z (MUX2_X1)
+   0.041    4.411 ^ _368119_/ZN (AOI21_X1)
+   0.025    4.436 v _368124_/ZN (OAI21_X1)
+   0.077    4.513 ^ _368125_/ZN (AOI211_X2)
+   0.059    4.572 ^ _368318_/ZN (AND4_X4)
+   0.009    4.582 v _380081_/ZN (NOR2_X1)
+   0.032    4.613 ^ _380083_/ZN (NOR2_X1)
+   0.055    4.668 ^ _380084_/Z (BUF_X1)
+   0.062    4.730 ^ _380085_/Z (BUF_X1)
+   0.061    4.791 ^ _380086_/Z (BUF_X1)
+   0.065    4.856 ^ _380087_/Z (BUF_X1)
+   0.012    4.868 v _380088_/ZN (NOR2_X1)
+   0.066    4.934 v _380098_/ZN (OR2_X1)
+   0.039    4.972 v _613227_/CO (HA_X1)
+   0.011    4.983 ^ _424537_/ZN (INV_X1)
+   0.028    5.011 ^ _424538_/ZN (OR4_X1)
+   0.009    5.020 v _424575_/ZN (NOR2_X1)
+   0.067    5.086 v _424577_/Z (MUX2_X1)
+   0.032    5.119 ^ _424582_/ZN (NAND2_X1)
+   0.012    5.131 v _424641_/ZN (NOR2_X1)
+   0.053    5.184 v _424642_/Z (XOR2_X1)
+   0.071    5.255 v _424643_/Z (MUX2_X1)
+   0.039    5.294 ^ _424656_/ZN (AOI21_X1)
+   0.037    5.331 v _424681_/ZN (NAND4_X1)
+   0.028    5.359 ^ _424688_/ZN (NOR2_X1)
+   0.031    5.390 v _427678_/ZN (AOI21_X1)
+   0.051    5.441 v _427686_/Z (BUF_X1)
+   0.027    5.468 ^ _427692_/ZN (NAND2_X1)
+   0.000    5.468 ^ u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/ce_in (fakeram45_512x64)
+            5.468   data arrival time
+
+   6.033    6.033   clock core_clock (rise edge)
+   0.000    6.033   clock network delay (ideal)
+  -0.500    5.533   clock uncertainty
+   0.000    5.533   clock reconvergence pessimism
+            5.533 ^ u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/clk (fakeram45_512x64)
+  -0.050    5.483   library setup time
+            5.483   data required time
+-----------------------------------------------------------
+            5.483   data required time
+           -5.468   data arrival time
+-----------------------------------------------------------
+            0.015   slack (MET)
+
+
