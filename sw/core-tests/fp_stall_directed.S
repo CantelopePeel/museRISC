@@ -79,8 +79,8 @@ _start:
     //      HOLD until EX can advance. The load targets v16: its rd
     //      must not alias an FP source index (the load-use check
     //      compares the vector rd with scalar rs1/rs2), or the FP op
-    //      would wait in ID instead of EX. Sub-cases (from the
-    //      round-1 audit): forwarded to a dependent op; fflags
+    //      would wait in ID instead of EX. Sub-cases:
+    //      forwarded to a dependent op; fflags
     //      accrued exactly once; int result feeding an int
     //      consumer; a fast op (fsgnjn) parked from IDLE.
     li t0, 3
