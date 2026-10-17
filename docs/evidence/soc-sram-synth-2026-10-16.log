@@ -102,7 +102,12 @@ Mutations of round-3 RTL (vector TB, sky130 models):
   colliding reads sent to the macro (no bypass)     FAIL (568 failures)
   no write combining (retry only)                   PASS, 13,373,624 cycles
   no retry                                          partial-collision assertion fires
-  old-word staleness tracking off                   FAIL (7 failures)
+  old-vd validity flag ignored (w_cw_hit = row match only)
+                                                    FAIL (7 failures)
+  write-invalidation clauses only removed           PASS (unreachable: S3 write
+                                                    rows never decrease within
+                                                    an instruction; asserted in
+                                                    simulation since the follow-up)
 Earlier mutations (wrapper RTL unchanged since): VRF capture register
 removed -> FAIL on both families; sky130 L1 half select stuck -> cache
 tests FAIL; L1 capture register removed -> still PASS (kept by design).
@@ -133,3 +138,25 @@ flow/designs/sky130hd/muserisc_soc/sram/vendor_model_check.sh
   VEC TB PASS on X seeds 1/2/3; run_directed 36 PASS lines      1 min 21 s
   --as-shipped (blocking posedge dout X, races the capture flop):
   VEC TB FAIL (3329 / 3326 / 3322 failures); run_directed exit 1
+
+== Follow-up to PR #17 round 3 (branch soc-sram-followup, main fdb0d48) ==
+- muserisc_vec: simulation-only check that S3 write rows never decrease
+  within an instruction (the invariant that makes the old-vd
+  write-invalidation clauses unreachable). Silent in every gate run.
+  Mutations (vector TB, sky130 collision-garbage models): validity flag
+  ignored (w_cw_hit = row match) FAIL (7); only the four
+  write-invalidation clauses removed PASS (13,232,168 cycles).
+- sta_synth.tcl: the summary no longer prints a period-minus-WNS fmax
+  (the sky130 header showed 18.80 MHz from the rst_ni recovery path);
+  it prints WNS/TNS at the SDC period, the worst core_clock setup path,
+  and an "fmax summary" of the three bisected minimum periods. The STA
+  logs above were regenerated from the same 1_synth.odb files:
+  nangate45 6.19 ns (161.67 MHz); sky130hd 81.37 / 54.29 / 43.52 ns
+  (12.29 / 18.42 / 22.98 MHz).
+- vendor_model_check.sh: docker runs as the invoking user; only the
+  vendor's per-access Reading/Writing displays are stripped; its
+  same-address WARNING is kept and counted (fails if non-zero):
+  0 warnings, VEC TB PASS x3, 36/36 directed. With colliding reads sent
+  to the macro (mutation A) the vendor model prints 136,168 warnings
+  but the vector TB still passes, because it returns the new data on a
+  collision; the srammacro garbage models are what catch it by value.

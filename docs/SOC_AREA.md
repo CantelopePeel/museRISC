@@ -213,7 +213,8 @@ prints a warning. So the design never issues one to a macro.
      word. That is the case when the previous S3 write was a full-word
      write of the same row, or when the element's own port-C read was
      of that row and no write touched the row since. That read is
-     tracked through S1/S2 and invalidated by any write to the row.
+     tracked through S1/S2 and invalidated by any write to the row
+     (defensive today; see the mutations below).
      A read that collides with a full-word write is not sent to the
      replica. `muserisc_vregfile` returns the write data instead (a
      full-word, write-first bypass) and holds it like a read.
@@ -290,12 +291,29 @@ Separate checks:
   - sending colliding reads to the macro → VEC TB FAIL (568 failures);
   - no write combining, retry only → PASS at +1.07 % cycles;
   - no retry → the partial-collision assertion fires;
-  - no old-word staleness tracking → VEC TB FAIL (7 failures).
+  - ignoring the old-vd validity flag altogether (`w_cw_hit` on a row
+    match alone, so slots that never read port C, such as a
+    reduction's final write, merge into a stale word) → VEC TB FAIL
+    (7 failures);
+  - removing only the four write-invalidation clauses (the
+    `s1_crow_hit` / `s2_crow_hit` terms) → PASS. They are unreachable
+    today: within an instruction the S3 write rows never decrease, so
+    a write landing on an element's old-vd row after its read is
+    either the previous S3 write (a full-word comb hit, which has
+    priority) or partial. A simulation-only check in `muserisc_vec`
+    asserts that invariant. The clauses are kept as protection for a
+    future non-monotonic writer.
 - The vendor OpenRAM `.v` files themselves pass the vector TB (3
   X-randomization seeds) and the full directed suite.
-  `vendor_model_check.sh` runs them, with `$display` stripped and the
-  posedge `dout = 'bx` made non-blocking (the signoff assumption
-  above).
+  `vendor_model_check.sh` runs them, with the per-access `$display`s
+  stripped and the posedge `dout = 'bx` made non-blocking (the
+  signoff assumption above).
+  - It keeps the vendor's same-address read/write WARNING and fails
+    if it ever prints. The count is 0 for this design. With the
+    colliding reads sent to the macro (mutation above) it is 136,168.
+  - The vendor model itself returns the newly written data on such a
+    collision, so it cannot catch the bug by value. That is why the
+    `srammacro` models return whole-word garbage instead.
 
 `make lint` lints the SoC under both defines.
 

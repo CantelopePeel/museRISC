@@ -2,41 +2,14 @@ OpenROAD unknown
 Features included (+) or not (-): -GPU +GUI -Python
 This program is licensed under the BSD-3 license. See the LICENSE file for details.
 Components of this program may be licensed under more restrictive licenses which must be honored.
-==== summary
+==== summary at the SDC period
+(WNS/TNS at the SDC clock, all path groups incl. reset recovery.
+ Fmax is NOT period - WNS here: half-cycle paths from falling-edge
+ macro outputs scale with the period. See '==== fmax summary' at
+ the end for the bisected minimum periods.)
 wns max -28.182
 tns max -84338.875
-crit_path_ns 53.182 (period 25.000, worst slack -28.182, setup uncertainty included)
-fmax_mhz 18.80
-==== critical path
-Startpoint: rst_ni (input port clocked by core_clock)
-Endpoint: u_cpu.u_core.boot_q$_DFFE_PN1P_
-          (recovery check against rising-edge clock core_clock)
-Path Group: asynchronous
-Path Type: max
-
-Fanout    Delay     Time   Description
------------------------------------------------------------------
-          0.000    0.000   clock core_clock (rise edge)
-          0.000    0.000   clock network delay (ideal)
-          5.000    5.000 ^ input external delay
- 13280    0.000    5.000 ^ rst_ni (in)
-          0.000    5.000 ^ u_cpu.u_core.boot_q$_DFFE_PN1P_/SET_B (sky130_fd_sc_hd__dfstp_2)
-                   5.000   data arrival time
-
-         25.000   25.000   clock core_clock (rise edge)
-          0.000   25.000   clock network delay (ideal)
-         -0.500   24.500   clock uncertainty
-          0.000   24.500   clock reconvergence pessimism
-                  24.500 ^ u_cpu.u_core.boot_q$_DFFE_PN1P_/CLK (sky130_fd_sc_hd__dfstp_2)
-          0.128   24.628   library recovery time
-                  24.628   data required time
------------------------------------------------------------------
-                  24.628   data required time
-                  -5.000   data arrival time
------------------------------------------------------------------
-                  19.628   slack (MET)
-
-
+==== worst core_clock setup path at the SDC period
 Startpoint: u_cpu.u_core.u_vregfile.g_port[0].u_bank.u_ram
             (falling edge-triggered flip-flop clocked by core_clock)
 Endpoint: u_cpu.u_core.u_fpu.prod_op[0]$_SDFFCE_PN0P_
@@ -601,3 +574,7 @@ Fanout    Delay     Time   Description
                    0.003   slack (MET)
 
 
+==== fmax summary (bisected minimum period, setup only)
+all paths                             81.37 ns    12.29 MHz
+VRF macro outputs registered          54.29 ns    18.42 MHz
+all macro outputs registered          43.52 ns    22.98 MHz
