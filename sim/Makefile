@@ -292,6 +292,9 @@ $(BUILD)/icache_tb: $(ROOT)/tb/cpp/icache_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(C
 
 icache: $(BUILD)/icache_tb
 	cd $(BUILD) && COV_FILE=cov_icache.dat ./icache_tb
+	cd $(BUILD) && for s in 1 2; do \
+	  COV_FILE=cov_icache_s$$s.dat ./icache_tb $$s > icache_s.log 2>&1 || { tail -20 icache_s.log; exit 1; }; \
+	  tail -1 icache_s.log | sed "s/$$/ [seed $$s]/"; done
 
 ## ---- Crypto accelerator KATs (issue #19) --------------------------------
 $(BUILD)/sha256_tb: $(ROOT)/tb/cpp/sha256_tb.cpp $(CRYPTO)/sha256_block.sv | $(BUILD) $(OBJ)

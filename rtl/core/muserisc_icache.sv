@@ -287,8 +287,11 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
         pf1_addr_q <= pf_addr;
         pf2_q <= pf1_q;
         pf2_addr_q <= pf1_addr_q;
-        // N: the prefetched doubleword (overrides the move to B).
-        if (pf2_q && pf_hit) begin
+        // N: the prefetched doubleword (overrides the move to B). Not
+        // in a cycle that accepts a fetch hitting N: S_FB answers from
+        // N next cycle, so N must keep that word.
+        if (pf2_q && pf_hit &&
+            !((state_q == S_IDLE) && req_valid_i && fb_hit && !fb_hit_b)) begin
           nb_v_q <= 1'b1;
           nb_addr_q <= pf2_addr_q;
           nb_word_q <= data_rdata[pf_way];

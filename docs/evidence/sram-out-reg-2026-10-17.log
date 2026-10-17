@@ -98,3 +98,29 @@ I$ fetch buffer, riscv-tests caches + random latency (OREG=1 vs 0):
   stale words). Fixed: the buffer is never used in an inval_i cycle.
 - Verilator 5.020 rejects -GSRAM_OUT_REG=1 on a `bit` parameter
   (WIDTHTRUNC, 32-bit constant); the Makefiles pass 1'b1 / 1'b0.
+
+== Round-1 review fix (PR #29 B1) ==
+Bug: with SRAM_OUT_REG=1 a fetch accepted in S_IDLE as a hit on the
+prefetched doubleword N, in the same cycle as a two-cycle-old prefetch
+lookup (pf2_q && pf_hit) reloading N with another doubleword, was then
+answered in S_FB from the new N (wrong word). Trigger: fetch X, a
+non-sequential array hit, exactly one idle cycle, fetch X+8. The core's
+fetch timing does not produce it (cycle counts below are unchanged),
+but the synthesized configuration contains it.
+Fix: no N capture in a cycle that accepts a fetch hitting N (one more
+term in the N load enable).
+Test: icache_tb gains ten "fetch-stream" phases (one fetch at a time
+like the core, 0-3 idle cycles, mostly the next word or the doubleword
+after the one before last; the reviewer's stress pattern) and an RNG
+seed argument; `make -C sim icache` runs seeds 777, 1, 2.
+  pre-fix RTL, OREG=1:  FAIL (wrong words from phase 10 on)
+  fixed RTL: seeds 777, 1..10 x OREG 0/1: 22/22 PASS (230,000 checks each)
+Gates after the fix:
+  make lint (5.048) PASS 16 s; Verilator 5.020 (Docker): lint PASS, vec TB
+    and OpenSBI+s_hello PASS with both settings, 864 s
+  make core-test (both settings) PASS, 2,558 s (405 PASS lines; icache
+    3 seeds x 2 settings; srammacro 36/36 x 2 families x 2 settings)
+  riscv-tests 123/123 x {OREG 0,1} x {cached+random, uncached}, ~43 s each
+  ACT 2,577/2,578 OREG=1 (699 s) and OREG=0 (650 s), only the waiver
+  riscv-tests and ACT CSVs (per-test cycles) identical to the pre-fix run,
+  so the earlier cycle-cost numbers and the Linux boot stand.

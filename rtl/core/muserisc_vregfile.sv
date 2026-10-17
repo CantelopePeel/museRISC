@@ -35,8 +35,8 @@
 // into the vector unit. The array is still sampled in the re cycle,
 // so the collision rules above are unchanged.
 //
-// Consumer contract: read data is valid the cycle after re
-// and is then held while re stays low, but a held word does
+// Consumer contract: read data is valid the cycle after re (two
+// cycles after with SRAM_OUT_REG) and is then held while re stays low, but a held word does
 // NOT reflect writes that land after it was sampled. A
 // consumer may hold read data across a write only if that
 // write cannot touch bytes it still uses (true for the
