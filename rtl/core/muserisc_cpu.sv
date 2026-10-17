@@ -34,12 +34,30 @@
 // (boot ROM, CLINT, PLIC, UART, crypto) I/O. cache_en_i is a
 // strap (must not change after reset).
 //
+// SRAM_OUT_REG: 1 registers the read outputs of every SRAM array
+// (L1 tag/data ways, VRF banks): one more cycle of read latency,
+// absorbed by the caches (lookup S_RDW state) and the vector unit
+// (SR stage), so the sky130 OpenRAM falling-edge outputs only feed
+// a flop. It defaults to 1 in the ORFS macro builds
+// (MUSERISC_SRAM_FAKERAM45 / MUSERISC_SRAM_SKY130), the configuration
+// that is synthesized, and to 0 otherwise; the simulation suites
+// run both settings (sim/Makefile).
+//
 // The dbg_st_* outputs mirror every store request the core
 // hands its data port (stores, SC/AMO write phases, PTE A/D
 // updates) at the handshake. They exist for test harnesses
 // (HTIF tohost lives in cacheable RAM and may never reach the
 // bus under write-back) and can be left unconnected.
 `default_nettype none
+`ifndef MUSERISC_SRAM_OUT_REG_DEFAULT
+`ifdef MUSERISC_SRAM_FAKERAM45
+`define MUSERISC_SRAM_OUT_REG_DEFAULT 1'b1
+`elsif MUSERISC_SRAM_SKY130
+`define MUSERISC_SRAM_OUT_REG_DEFAULT 1'b1
+`else
+`define MUSERISC_SRAM_OUT_REG_DEFAULT 1'b0
+`endif
+`endif
 module muserisc_cpu import muserisc_cache_pkg::*; #(
     parameter int unsigned IC_SETS = 64,
     parameter int unsigned IC_WAYS = 2,
@@ -49,7 +67,8 @@ module muserisc_cpu import muserisc_cache_pkg::*; #(
     parameter logic [63:0] C0_BASE = 64'h0000_0000_8000_0000,
     parameter logic [63:0] C0_SIZE = 64'h0000_0000_8000_0000,
     parameter logic [63:0] C1_BASE = 64'h0,
-    parameter logic [63:0] C1_SIZE = 64'h0
+    parameter logic [63:0] C1_SIZE = 64'h0,
+    parameter bit          SRAM_OUT_REG = `MUSERISC_SRAM_OUT_REG_DEFAULT
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -93,7 +112,7 @@ module muserisc_cpu import muserisc_cache_pkg::*; #(
   logic [1:0]  dreq_op;
   logic [7:0]  dreq_be;
 
-  muserisc_core u_core (
+  muserisc_core #(.SRAM_OUT_REG(SRAM_OUT_REG)) u_core (
       .clk_i          (clk_i),
       .rst_ni         (rst_ni),
       .boot_pc_i      (boot_pc_i),
@@ -140,7 +159,8 @@ module muserisc_cpu import muserisc_cache_pkg::*; #(
   muserisc_icache #(
       .SETS(IC_SETS), .WAYS(IC_WAYS), .LINE_BYTES(LINE_BYTES),
       .C0_BASE(C0_BASE), .C0_SIZE(C0_SIZE),
-      .C1_BASE(C1_BASE), .C1_SIZE(C1_SIZE)
+      .C1_BASE(C1_BASE), .C1_SIZE(C1_SIZE),
+      .SRAM_OUT_REG(SRAM_OUT_REG)
   ) u_icache (
       .clk_i           (clk_i),
       .rst_ni          (rst_ni),
@@ -164,7 +184,8 @@ module muserisc_cpu import muserisc_cache_pkg::*; #(
   muserisc_dcache #(
       .SETS(DC_SETS), .WAYS(DC_WAYS), .LINE_BYTES(LINE_BYTES),
       .C0_BASE(C0_BASE), .C0_SIZE(C0_SIZE),
-      .C1_BASE(C1_BASE), .C1_SIZE(C1_SIZE)
+      .C1_BASE(C1_BASE), .C1_SIZE(C1_SIZE),
+      .SRAM_OUT_REG(SRAM_OUT_REG)
   ) u_dcache (
       .clk_i           (clk_i),
       .rst_ni          (rst_ni),

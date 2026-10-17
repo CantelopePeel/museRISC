@@ -40,6 +40,7 @@ SRAM_MODELS_SKY130 := $(addprefix flow/designs/sky130hd/muserisc_soc/sram/,\
 
 lint: ## Verilator lint on all synthesizable RTL
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_soc_top $(CORE_RTL) $(CACHE_RTL) $(RTL)
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_soc_top "-GSRAM_OUT_REG=1'b1" $(CORE_RTL) $(CACHE_RTL) $(RTL)
 	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module keccak_f1600 rtl/crypto/keccak_f1600.sv
 	verilator --lint-only -Wall -Wno-DECLFILENAME --top-module sha512_block rtl/crypto/sha512_block.sv
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_core $(CORE_RTL)
@@ -48,9 +49,11 @@ lint: ## Verilator lint on all synthesizable RTL
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_cpu $(CORE_RTL) $(CACHE_RTL)
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_soc_top +define+MUSERISC_SRAM_FAKERAM45 $(SRAM_MODELS_FAKERAM45) $(CORE_RTL) $(CACHE_RTL) $(RTL)
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_soc_top +define+MUSERISC_SRAM_SKY130 $(SRAM_MODELS_SKY130) $(CORE_RTL) $(CACHE_RTL) $(RTL)
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Irtl/core --top-module muserisc_soc_top +define+MUSERISC_SRAM_SKY130 "-GSRAM_OUT_REG=1'b0" $(SRAM_MODELS_SKY130) $(CORE_RTL) $(CACHE_RTL) $(RTL)
 
-core-test: ## In-house core C++ Verilator TBs + directed asm + coverage (issue #18)
+core-test: ## In-house core C++ Verilator TBs + directed asm + coverage (issue #18), SRAM_OUT_REG=0 and =1
 	$(MAKE) -C sim
+	$(MAKE) -C sim OREG=1 BUILD=../build/sim-oreg oreg
 
 riscv-tests: ## Stage gate: upstream riscv-tests rv64ui/um on the in-house core (#18)
 	$(MAKE) -C sim riscv-tests

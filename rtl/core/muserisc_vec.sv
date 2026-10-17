@@ -28,6 +28,14 @@
 //       vfrec7/vfrsqrt7 estimate here; every sub-step
 //       result is registered before use. The element
 //       result is written with byte enables.
+// SRAM_OUT_REG = 1 (VRF read data two cycles after the read; see
+// muserisc_vregfile) adds a read-wait stage SR between S0 and S1:
+// the S0 read lands while the element moves SR -> S1, so streaming
+// stays at one element per cycle. Because a read issued while S1
+// still holds an element would overwrite S1's words at the VRF
+// outputs one cycle later, S1 copies its words into skid registers
+// at the end of its first cycle whenever it does not advance (and
+// a vrgather.vv's second read waits one extra S1 cycle).
 // Mask-destination ops accumulate 64 result bits in a word
 // register (seeded from the old vd word) and write it once
 // per 64 elements. Prestart, tail and inactive elements are
@@ -41,7 +49,9 @@
 `default_nettype none
 module muserisc_vec
   import muserisc_pkg::*, muserisc_vec_pkg::*, muserisc_fpu_pkg::*;
-(
+#(
+    parameter bit SRAM_OUT_REG = 1'b0   // VRF read latency 2 (else 1)
+) (
     input  wire          clk_i,
     input  wire          rst_ni,
     input  wire          kill_i,
@@ -271,7 +281,14 @@ module muserisc_vec
   logic [1:0] s0_ph_q;
   logic [9:0] i0_q;
 
+  // SR: read-wait stage (SRAM_OUT_REG only), same fields as S1.
+  logic       sr_v_q;
+  logic [1:0] sr_kind_q;
+  logic [9:0] sr_i_q, sr_ai_q;
+  logic       sr_m_q, sr_first_q, sr_last_q, sr_skip_q;
+
   logic       s1_v_q, s1_ph_q;
+  logic       s1_gw_q;    // vrgather.vv read in flight (SRAM_OUT_REG)
   logic [1:0] s1_kind_q;
   logic [9:0] s1_i_q, s1_ai_q;
   logic       s1_m_q, s1_first_q, s1_last_q;
@@ -325,20 +342,25 @@ module muserisc_vec
   // vd word; it travels with the element (row, "still current" flag
   // cleared by any write to that row while the element is in S1/S2).
   // comb_* is the last word S3 wrote, when that write was full-word.
-  logic [7:0]  s1_crow_q, s2_crow_q, w_crow_q;
-  logic        s1_cok_q, s2_cok_q, w_cok_q;
+  logic [7:0]  sr_crow_q, s1_crow_q, s2_crow_q, w_crow_q;
+  logic        sr_cok_q, s1_cok_q, s2_cok_q, w_cok_q;
   logic [63:0] w_cw_q;
   logic        comb_v_q;
   logic [7:0]  comb_addr_q;
   logic [63:0] comb_q;
 
   logic s2_free, s1_ready, s1_adv, s1_free, s0_issue, s0_want;
+  logic sr_adv, sr_free, s1_gwant;
   logic vrf_coll;  // a read this cycle would hit a partial S3 write
   assign s2_free = !s2_v_q || s2_done;
-  assign s1_ready = !(is_gvv && (s1_kind_q == K_ELEM) && !s1_ph_q);
+  assign s1_ready = !(is_gvv && (s1_kind_q == K_ELEM) && (!s1_ph_q || s1_gw_q));
   assign s1_adv = s1_v_q && s1_ready && s2_free;
   assign s1_free = !s1_v_q || s1_adv;
-  assign s0_want = run_q && (s0_ph_q != PH_END) && s1_free;
+  assign sr_adv = SRAM_OUT_REG && sr_v_q && s1_free;
+  assign sr_free = !sr_v_q || sr_adv;
+  // The vrgather.vv vs2 read (S1) has the VRF port A to itself.
+  assign s0_want = run_q && (s0_ph_q != PH_END) &&
+                   (SRAM_OUT_REG ? sr_free : s1_free) && !s1_gwant;
   // VRF read/write row collisions. SRAM macros (e.g. the sky130
   // OpenRAM 1rw1r) leave a read of the row written in the same cycle
   // undefined, so the VRF never relies on the array for it:
@@ -948,14 +970,23 @@ module muserisc_vec
     s0_skip = s0_skip || s0_scal;
   end
 
+  // S1 read words: the VRF outputs, or (SRAM_OUT_REG) the skid copy
+  // S1 took at the end of the cycle the words were last live.
+  logic [63:0] rd_a, rd_b, rd_c;
+  logic [63:0] s1_rda_q, s1_rdb_q, s1_rdc_q;
+  logic        s1_new_q, s1_anew_q, s1_cap_q, s1_capa_q;
+  assign rd_a = (SRAM_OUT_REG && s1_capa_q) ? s1_rda_q : rdata_a_i;
+  assign rd_b = (SRAM_OUT_REG && s1_cap_q) ? s1_rdb_q : rdata_b_i;
+  assign rd_c = (SRAM_OUT_REG && s1_cap_q) ? s1_rdc_q : rdata_c_i;
+
   // S1 gather resolution (second S1 cycle issues the vs2 read).
   logic [63:0] g_idx;
   logic        g_ok;
   assign g_idx = (op_q == VOP_GATHEREI16)
-                 ? ext_el(rdata_b_i, s1_i_q, 3'd1)
-                 : ext_el(rdata_b_i, s1_i_q, sew_q);
+                 ? ext_el(rd_b, s1_i_q, 3'd1)
+                 : ext_el(rd_b, s1_i_q, sew_q);
   assign g_ok = g_idx < {54'd0, vlmax10_q};
-  logic s1_gissue, s1_gwant;
+  logic s1_gissue;
   assign s1_gwant = s1_v_q && is_gvv && (s1_kind_q == K_ELEM) && !s1_ph_q;
   assign s1_gissue = s1_gwant && !vrf_coll;
 
@@ -1010,18 +1041,18 @@ module muserisc_vec
   logic [2:0]  seed_w;
   assign seed_w = (op_q == VOP_FWRED) ? 3'd3 :
                   ((op_q == VOP_RED) || (op_q == VOP_FRED)) ? sew_q : dw_q;
-  assign x_a = is_mvr ? rdata_a_i : ext_el(rdata_a_i, s1_ai_q, aw_q);
-  assign x_b = (form_q == VFORM_VV) ? ext_el(rdata_b_i, s1_i_q, sew_q) :
+  assign x_a = is_mvr ? rd_a : ext_el(rd_a, s1_ai_q, aw_q);
+  assign x_b = (form_q == VFORM_VV) ? ext_el(rd_b, s1_i_q, sew_q) :
                (form_q == VFORM_VX) ? scalar_q : imm_q;
-  assign x_old = ext_el(rdata_c_i, s1_i_q, dw_q);
-  assign x_seed = ext_el(rdata_b_i, 10'd0, seed_w);
+  assign x_old = ext_el(rd_c, s1_i_q, dw_q);
+  assign x_seed = ext_el(rd_b, 10'd0, seed_w);
 
   // ------------------------------------------------------------
   // Sequential state
   // ------------------------------------------------------------
   assign busy_o = run_q;
-  assign done_o = run_q && (s0_ph_q == PH_END) && !s1_v_q && !s2_v_q &&
-                  !w_v_q;
+  assign done_o = run_q && (s0_ph_q == PH_END) && !sr_v_q && !s1_v_q &&
+                  !s2_v_q && !w_v_q;
   assign we_o = w_v_q;
   assign waddr_o = w_addr_q;
   logic [7:0]  w_pbe;    // element byte enables
@@ -1071,11 +1102,25 @@ module muserisc_vec
   // Old-vd word currency: cleared by any write to its row while the
   // element sits in S1 or S2 (a write in the read's own cycle is
   // either full-word, which the VRF forwards, or stalls the read).
-  logic s1_crow_hit, s2_crow_hit;
+  logic sr_crow_hit, s1_crow_hit, s2_crow_hit;
+  assign sr_crow_hit = w_v_q && (w_addr_q == sr_crow_q);
   assign s1_crow_hit = w_v_q && (w_addr_q == s1_crow_q);
   assign s2_crow_hit = w_v_q && (w_addr_q == s2_crow_q);
   always_ff @(posedge clk_i) begin
-    if (s0_issue) begin
+    if (SRAM_OUT_REG) begin
+      if (s0_issue) begin
+        sr_crow_q <= c_ra_c;
+        sr_cok_q <= c_re_c;
+      end else if (sr_crow_hit) begin
+        sr_cok_q <= 1'b0;
+      end
+      if (sr_adv) begin
+        s1_crow_q <= sr_crow_q;
+        s1_cok_q <= sr_cok_q && !sr_crow_hit;
+      end else if (s1_crow_hit) begin
+        s1_cok_q <= 1'b0;
+      end
+    end else if (s0_issue) begin
       s1_crow_q <= c_ra_c;
       s1_cok_q <= c_re_c;
     end else if (s1_crow_hit) begin
@@ -1139,11 +1184,13 @@ module muserisc_vec
     if (!rst_ni) begin
       run_q <= 1'b0;
       s0_ph_q <= PH_END;
+      sr_v_q <= 1'b0;
       s1_v_q <= 1'b0;
       s2_v_q <= 1'b0;
     end else if (kill_i) begin
       run_q <= 1'b0;
       s0_ph_q <= PH_END;
+      sr_v_q <= 1'b0;
       s1_v_q <= 1'b0;
       s2_v_q <= 1'b0;
     end else if (!run_q) begin
@@ -1161,8 +1208,15 @@ module muserisc_vec
           default: s0_ph_q <= PH_END;
         endcase
       end
-      if (s0_issue) s1_v_q <= 1'b1;
-      else if (s1_adv) s1_v_q <= 1'b0;
+      if (SRAM_OUT_REG) begin
+        if (s0_issue) sr_v_q <= 1'b1;
+        else if (sr_adv) sr_v_q <= 1'b0;
+        if (sr_adv) s1_v_q <= 1'b1;
+        else if (s1_adv) s1_v_q <= 1'b0;
+      end else begin
+        if (s0_issue) s1_v_q <= 1'b1;
+        else if (s1_adv) s1_v_q <= 1'b0;
+      end
       if (s1_adv) s2_v_q <= 1'b1;
       else if (s2_done) s2_v_q <= 1'b0;
     end
@@ -1212,20 +1266,61 @@ module muserisc_vec
     end else if (run_q) begin
       if (s0_issue && (s0_ph_q == PH_ELEM)) i0_q <= i0_q + 10'd1;
 
-      // ---- S0 -> S1 ----
-      if (s0_issue) begin
-        s1_kind_q <= s0_kind;
-        s1_i_q <= i0_q;
-        s1_ai_q <= s0_ai;
-        s1_m_q <= v0_i[i0_q[8:0]];
-        s1_first_q <= (i0_q == beg_q);
-        s1_last_q <= s0_last;
-        s1_skip_q <= s0_skip;
+      // ---- S0 -> S1 (or S0 -> SR -> S1) ----
+      if (SRAM_OUT_REG) begin
+        if (s0_issue) begin
+          sr_kind_q <= s0_kind;
+          sr_i_q <= i0_q;
+          sr_ai_q <= s0_ai;
+          sr_m_q <= v0_i[i0_q[8:0]];
+          sr_first_q <= (i0_q == beg_q);
+          sr_last_q <= s0_last;
+          sr_skip_q <= s0_skip;
+        end
+      end
+      if (SRAM_OUT_REG ? sr_adv : s0_issue) begin
+        s1_kind_q <= SRAM_OUT_REG ? sr_kind_q : s0_kind;
+        s1_i_q <= SRAM_OUT_REG ? sr_i_q : i0_q;
+        s1_ai_q <= SRAM_OUT_REG ? sr_ai_q : s0_ai;
+        s1_m_q <= SRAM_OUT_REG ? sr_m_q : v0_i[i0_q[8:0]];
+        s1_first_q <= SRAM_OUT_REG ? sr_first_q : (i0_q == beg_q);
+        s1_last_q <= SRAM_OUT_REG ? sr_last_q : s0_last;
+        s1_skip_q <= SRAM_OUT_REG ? sr_skip_q : s0_skip;
         s1_ph_q <= 1'b0;
+        s1_gw_q <= 1'b0;
       end else if (s1_gissue) begin
         s1_ph_q <= 1'b1;
+        s1_gw_q <= SRAM_OUT_REG;
         s1_skip_q <= !g_ok;
         s1_ai_q <= g_idx[9:0];
+      end else begin
+        s1_gw_q <= 1'b0;
+      end
+
+      // ---- S1 skid copies (SRAM_OUT_REG) ----
+      // The words at the VRF outputs belong to S1 in its first cycle
+      // (and port A in the first cycle after a vrgather.vv read
+      // lands): any later read lands on top of them, so S1 keeps a
+      // copy if it does not advance then.
+      if (SRAM_OUT_REG) begin
+        s1_new_q <= sr_adv;
+        s1_anew_q <= sr_adv || s1_gw_q;
+        if (sr_adv) begin
+          s1_cap_q <= 1'b0;
+          s1_capa_q <= 1'b0;
+        end else begin
+          if (s1_v_q && s1_new_q && !s1_adv) begin
+            s1_cap_q <= 1'b1;
+            s1_rdb_q <= rdata_b_i;
+            s1_rdc_q <= rdata_c_i;
+          end
+          if (s1_gissue) begin
+            s1_capa_q <= 1'b0;
+          end else if (s1_v_q && s1_anew_q && !s1_adv) begin
+            s1_capa_q <= 1'b1;
+            s1_rda_q <= rdata_a_i;
+          end
+        end
       end
 
       // ---- S1 -> S2 ----
@@ -1235,9 +1330,9 @@ module muserisc_vec
         s2_a_q <= (s1_kind_q == K_SEED) ? x_seed : x_a;
         s2_b_q <= x_b;
         s2_old_q <= x_old;
-        s2_cw_q <= rdata_c_i;
-        s2_abit_q <= rdata_a_i[s1_i_q[5:0]];
-        s2_bbit_q <= rdata_b_i[s1_i_q[5:0]];
+        s2_cw_q <= rd_c;
+        s2_abit_q <= rd_a[s1_i_q[5:0]];
+        s2_bbit_q <= rd_b[s1_i_q[5:0]];
         s2_m_q <= s1_m_q;
         s2_first_q <= s1_first_q;
         s2_last_q <= s1_last_q;

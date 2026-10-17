@@ -1,0 +1,126 @@
+Registered SRAM outputs (SRAM_OUT_REG) - gates and cycle cost, 2026-10-17
+=========================================================================
+
+Branch sram-out-reg on fork main 5efc69b (PR #28). Host: 48 cores, load
+~100-200 throughout (shared), so wall times are pessimistic. Verilator
+5.048 (deps/) unless noted. "OREG=0/1" = SRAM_OUT_REG of the TB top.
+
+== Design ==
+SRAM_OUT_REG=1 registers the read output of all 15 SRAM arrays (3 VRF
+replicas, 6 L1 data ways, 6 L1 tag ways): read data valid two cycles
+after the read. Default 1 in the ORFS macro builds (MUSERISC_SRAM_FAKERAM45 /
+MUSERISC_SRAM_SKY130), 0 otherwise. Consumers:
+  - muserisc_sram_sp / muserisc_vrf_bank: capture register = output
+    register (macro dout -> flop, no logic); behavioural model adds the
+    same register; vregfile full-word bypass delayed one cycle.
+  - muserisc_vec: SR read-wait stage between S0 and S1 (one element per
+    cycle kept), S1 skid copies of the read words when S1 does not
+    advance in its first cycle, vrgather.vv second read waits a cycle,
+    old-vd currency tracked through SR.
+  - muserisc_core vector LS sequencer: VLS_RW wait after a RD cycle that
+    read the VRF.
+  - muserisc_icache / muserisc_dcache: S_RDW lookup wait; D$ write-back
+    read and FENCE.I tag read one more cycle; I$ two-entry fetch buffer
+    (last responded doubleword + next doubleword prefetched in the
+    response cycle) answering in one cycle.
+
+== Gates (rebased tree) ==
+make lint (5.048)                        PASS (also lints the soc top with
+                                         SRAM_OUT_REG=1'b1 behavioural and
+                                         sky130 macros with 1'b0)          15 s
+Verilator 5.020 (Docker ubuntu:24.04,    make lint PASS; vec TB PASS OREG=0
+  worktree mounted read-only)            (13,232,168 cyc) and OREG=1
+                                         (13,280,622); soc_rtl_tb OpenSBI +
+                                         s_hello PASS OREG=0 (11,537,310)
+                                         and OREG=1 (13,147,957), random lat. 877 s
+make test                                ALL PHASE-0 KATs PASS                 29 s
+make core-test (OREG=0 in build/sim,     PASS, exit 0                        2,351 s
+  then OREG=1 `oreg` target in             (39 min, peak RSS 458 MB)
+  build/sim-oreg)
+  OREG=0: full suite, 207 PASS lines; coverage 36 % lines (2423/6658)
+  OREG=1: vec, vec-xinit (3 seeds), icache, dcache, core (rand + nocache),
+          core-ds1, core-mdcomb, core-xinit (2 seeds), srammacro; 194 PASS
+          lines; coverage 58 % (3631/6156)
+  srammacro, OREG=0 and OREG=1, both macro families (fakeram45, sky130):
+          VEC TB PASS, CORE TB 36 directed runs 0 FAIL, SOC RTL TB PASS
+          (crypto firmware) - the OREG=1 run is the shipped configuration
+  The #28 S3 write-row check stays quiet in every vec/core run (OREG=0/1).
+riscv-tests, caches + random latency     123/123 PASS (OREG=0) 42 s, 123/123 (OREG=1) 42 s
+riscv-tests --no-cache                   123/123 PASS (OREG=0) 42 s, 123/123 (OREG=1) 42 s
+ACT, caches + random latency (seed 3),   OREG=1: 2,577/2,578 (rebased tree) 652 s
+  existing 2,578-ELF set, read-only      OREG=0: 2,577/2,578                 540 s
+  only failure: PMPSm_cfg_A_tor_zero-00 (known PA-0 waiver)
+make -C sim socrtl (crypto firmware,     OREG=0: SOC RTL TB PASS @ 18,851,904 108 s
+  random latency)                        OREG=1: SOC RTL TB PASS @ 20,130,882 122 s
+soc_rtl_tb OpenSBI + s_hello             OREG=0: latency 1 @ 11,495,124, random @ 11,537,310
+                                         OREG=1: latency 1 @ 13,107,482, random @ 13,147,957
+soc_tb Linux boot, OREG=1, latency 1     MUSERISC_LINUX_BOOT_OK, SOC TB PASS @ 2,180,816,393
+                                         wall 10,801 s; log sram-out-reg-linux-boot-2026-10-17.log
+Caravel configuration (IC_WAYS=1,        core_tb on the sky130 OpenRAM models, OREG=1:
+  DC_WAYS=2, see SOC_AREA.md)            36 directed runs, 0 FAIL (random latency)
+OREG=0 cycle counts are identical to main (crypto 18,851,904, OpenSBI
+11,495,124 / 11,537,310, vec TB 13,232,168, riscv-tests and ACT CSVs).
+
+Not re-run on the rebased tree (only RTL delta is #28's sim-only check):
+the Linux boot (598c63c RTL), 5.020 OpenSBI was re-run after the rebase.
+
+== Cycle cost (OREG 0 -> 1) ==
+riscv-tests, caches + random latency     137,643 -> 149,701      +8.8 %
+riscv-tests --no-cache                   183,348 -> 183,348       0
+ACT, caches + random latency             413,065,622 -> 449,303,632  +8.8 % (median per ELF +9.0 %,
+                                                                          range +2.8 % .. +39.8 %)
+vec TB, sum of operation cycles          1,448,070 -> 1,473,524  +1.8 %
+  (whole TB incl. backdoor load/dump: 13,232,168 -> 13,280,622)
+  per op: most +1 cycle per instruction; vrgather.vv 43.6 -> 54.8 avg
+  (+26 %), vrgatherei16 49.4 -> 73.4 (+49 %), vmv.x.s 4.0 -> 5.0
+SoC crypto firmware                      18,851,904 -> 20,130,882  +6.8 %
+OpenSBI + s_hello, latency 1             11,495,124 -> 13,107,482  +14.0 %
+Linux boot, latency 1                    1,612,954,759 -> 2,180,816,393  +35.2 %
+
+Where the Linux cost comes from: boot to the first "RCU Tasks Trace"
+line, soc_tb latency 1, with one cache forced back to SRAM_OUT_REG=0
+(experiment builds, not committed):
+  OREG=0                                 1,270,996,565
+  OREG=1                                 1,708,257,220   +34.4 %
+  OREG=1, D$ arrays unregistered         1,365,241,323   +7.4 %  (= I$ share)
+  OREG=1, I$ arrays unregistered         1,587,597,239   +24.9 % (= D$ share)
+The D$ dominates: every load/store/PTW hit is one cycle longer.
+
+I$ fetch buffer, riscv-tests caches + random latency (OREG=1 vs 0):
+  only the last-doubleword buffer (first version)   +21.3 %
+    same, I$ arrays forced unregistered              +2.4 %  (D$ share)
+    same, D$ arrays forced unregistered              +18.9 % (I$ share)
+  with the next-doubleword prefetch (this branch)   +8.8 %
+
+== Bugs found on the way ==
+- First fetch-buffer version answered a fetch accepted in the same cycle
+  as inval_i (FENCE.I) from the buffer; icache_tb phase 8 caught it (2
+  stale words). Fixed: the buffer is never used in an inval_i cycle.
+- Verilator 5.020 rejects -GSRAM_OUT_REG=1 on a `bit` parameter
+  (WIDTHTRUNC, 32-bit constant); the Makefiles pass 1'b1 / 1'b0.
+
+== Round-1 review fix (PR #29 B1) ==
+Bug: with SRAM_OUT_REG=1 a fetch accepted in S_IDLE as a hit on the
+prefetched doubleword N, in the same cycle as a two-cycle-old prefetch
+lookup (pf2_q && pf_hit) reloading N with another doubleword, was then
+answered in S_FB from the new N (wrong word). Trigger: fetch X, a
+non-sequential array hit, exactly one idle cycle, fetch X+8. The core's
+fetch timing does not produce it (cycle counts below are unchanged),
+but the synthesized configuration contains it.
+Fix: no N capture in a cycle that accepts a fetch hitting N (one more
+term in the N load enable).
+Test: icache_tb gains ten "fetch-stream" phases (one fetch at a time
+like the core, 0-3 idle cycles, mostly the next word or the doubleword
+after the one before last; the reviewer's stress pattern) and an RNG
+seed argument; `make -C sim icache` runs seeds 777, 1, 2.
+  pre-fix RTL, OREG=1:  FAIL (wrong words from phase 10 on)
+  fixed RTL: seeds 777, 1..10 x OREG 0/1: 22/22 PASS (230,000 checks each)
+Gates after the fix:
+  make lint (5.048) PASS 16 s; Verilator 5.020 (Docker): lint PASS, vec TB
+    and OpenSBI+s_hello PASS with both settings, 864 s
+  make core-test (both settings) PASS, 2,558 s (405 PASS lines; icache
+    3 seeds x 2 settings; srammacro 36/36 x 2 families x 2 settings)
+  riscv-tests 123/123 x {OREG 0,1} x {cached+random, uncached}, ~43 s each
+  ACT 2,577/2,578 OREG=1 (699 s) and OREG=0 (650 s), only the waiver
+  riscv-tests and ACT CSVs (per-test cycles) identical to the pre-fix run,
+  so the earlier cycle-cost numbers and the Linux boot stand.

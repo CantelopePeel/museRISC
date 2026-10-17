@@ -29,7 +29,12 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
     parameter logic [63:0] C0_BASE = 64'h0000_0000_8000_0000,
     parameter logic [63:0] C0_SIZE = 64'h0000_0000_8000_0000,
     parameter logic [63:0] C1_BASE = 64'h0,
-    parameter logic [63:0] C1_SIZE = 64'h0
+    parameter logic [63:0] C1_SIZE = 64'h0,
+    // 1: tag/data arrays return read data two cycles after the read
+    // (registered SRAM macro outputs, muserisc_sram_sp). Lookups
+    // then spend one cycle in S_RDW, and the write-back read and the
+    // clean tag read wait one more cycle.
+    parameter bit          SRAM_OUT_REG = 1'b0
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -64,6 +69,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
   localparam int unsigned WAY_W = (WAYS > 1) ? $clog2(WAYS) : 1;
   localparam int unsigned DA_W = IDX_W + BW;
   localparam logic [7:0] LEN = 8'(BEATS - 1);
+  localparam int unsigned RDL = SRAM_OUT_REG ? 2 : 1;  // array read latency
 
   // Geometry limits (elaboration-time).
   if (SETS < 2 || (1 << IDX_W) != SETS) begin : g_bad_sets
@@ -78,7 +84,8 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
 
   typedef enum logic [3:0] {
     S_IDLE, S_LOOKUP, S_WB_RD, S_WB_BUS, S_WB_ACK, S_FILL_REQ, S_FILL,
-    S_REPLAY, S_UNC_REQ, S_UNC_RSP, S_UNC_DONE, S_CLEAN, S_CLEAN_TAG
+    S_REPLAY, S_UNC_REQ, S_UNC_RSP, S_UNC_DONE, S_CLEAN, S_CLEAN_TAG,
+    S_RDW, S_CLEAN_W
   } state_e;
   state_e state_q;
 
@@ -123,7 +130,8 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
   logic [TAG_W-1:0]     tag_rdata [WAYS];
   logic [63:0]          data_rdata [WAYS];
   for (genvar w = 0; w < int'(WAYS); w++) begin : g_way
-    muserisc_sram_sp #(.WIDTH(TAG_W), .DEPTH(SETS), .LANES(1)) u_tag (
+    muserisc_sram_sp #(.WIDTH(TAG_W), .DEPTH(SETS), .LANES(1),
+                       .SRAM_OUT_REG(SRAM_OUT_REG)) u_tag (
         .clk_i   (clk_i),
         .en_i    (tag_en[w]),
         .we_i    (tag_we[w]),
@@ -131,7 +139,8 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
         .wdata_i (tag_wdata),
         .rdata_o (tag_rdata[w])
     );
-    muserisc_sram_sp #(.WIDTH(64), .DEPTH(SETS * BEATS), .LANES(8)) u_data (
+    muserisc_sram_sp #(.WIDTH(64), .DEPTH(SETS * BEATS), .LANES(8),
+                       .SRAM_OUT_REG(SRAM_OUT_REG)) u_data (
         .clk_i   (clk_i),
         .en_i    (data_en[w]),
         .we_i    (data_we[w]),
@@ -215,7 +224,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
       end
       S_WB_RD: begin
         data_addr = {line_idx, cnt_q[BW-1:0]};
-        if (cnt_q != (BW + 1)'(BEATS)) data_en[victim_q] = 1'b1;
+        if (cnt_q < (BW + 1)'(BEATS)) data_en[victim_q] = 1'b1;
       end
       S_WB_BUS: begin
         bus_req_valid_o = 1'b1;
@@ -256,7 +265,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
         tag_addr = sc_set_q;
         if (sc_dirty) tag_en[sc_way_q] = 1'b1;
       end
-      default: ;  // S_WB_ACK, S_UNC_RSP, S_UNC_DONE, S_CLEAN_TAG
+      default: ;  // S_WB_ACK, S_UNC_RSP, S_UNC_DONE, S_CLEAN_TAG, S_RDW, S_CLEAN_W
     endcase
   end
 
@@ -289,7 +298,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
             sc_set_q <= '0;
             sc_way_q <= '0;
             if (req_op_i == DOP_CLEAN) state_q <= S_CLEAN;
-            else if (req_cacheable) state_q <= S_LOOKUP;
+            else if (req_cacheable) state_q <= SRAM_OUT_REG ? S_RDW : S_LOOKUP;
             else state_q <= S_UNC_REQ;
           end
         end
@@ -307,8 +316,10 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
           end
         end
         S_WB_RD: begin
-          if (cnt_q != '0) linebuf_q[cnt_q[BW-1:0] - 1'b1] <= data_rdata[victim_q];
-          if (cnt_q == (BW + 1)'(BEATS)) begin
+          if (cnt_q >= (BW + 1)'(RDL)) begin
+            linebuf_q[BW'(cnt_q - (BW + 1)'(RDL))] <= data_rdata[victim_q];
+          end
+          if (cnt_q == (BW + 1)'(BEATS + RDL - 1)) begin
             cnt_q <= '0;
             state_q <= S_WB_BUS;
           end else begin
@@ -349,7 +360,8 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
             end
           end
         end
-        S_REPLAY: state_q <= S_LOOKUP;
+        S_REPLAY: state_q <= SRAM_OUT_REG ? S_RDW : S_LOOKUP;
+        S_RDW: state_q <= S_LOOKUP;
         S_UNC_REQ: if (bus_req_ready_i) state_q <= S_UNC_RSP;
         S_UNC_RSP: begin
           if (bus_rsp_valid_i) begin
@@ -361,7 +373,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
         S_CLEAN: begin
           if (sc_dirty) begin
             victim_q <= sc_way_q;
-            state_q <= S_CLEAN_TAG;
+            state_q <= SRAM_OUT_REG ? S_CLEAN_W : S_CLEAN_TAG;
           end else if (sc_last) begin
             state_q <= S_IDLE;
           end else if (sc_way_q == WAY_W'(WAYS - 1)) begin
@@ -371,6 +383,7 @@ module muserisc_dcache import muserisc_cache_pkg::*; #(
             sc_way_q <= sc_way_q + 1'b1;
           end
         end
+        S_CLEAN_W: state_q <= S_CLEAN_TAG;
         S_CLEAN_TAG: begin
           vtag_q <= tag_rdata[victim_q];
           cnt_q <= '0;

@@ -169,7 +169,8 @@ The RTL contracts expect held data: the VRF holds while `re` is low,
 and `muserisc_sram_sp` holds until the next read. So every macro
 wrapper has a capture register: `rd_q` marks a read in the previous
 cycle, `hold_q` takes the macro output in the cycle after a read, and
-`rdata = rd_q ? macro_out : hold_q`. Latency is unchanged.
+`rdata = rd_q ? macro_out : hold_q`. Latency is unchanged (with
+`SRAM_OUT_REG=0`; see below for the registered option).
 
 The vector unit depends on the hold: without it, both macro families
 fail the vector TB.
@@ -197,6 +198,71 @@ at least 2 × (clk→q + logic + setup + uncertainty).
 
 A full cycle would need a read pipeline stage (one more cycle of
 latency) or a macro with rising-edge output.
+
+### Registered SRAM outputs (`SRAM_OUT_REG`)
+
+`SRAM_OUT_REG=1` is that read pipeline stage, on all 15 macros. It is
+a parameter of `muserisc_soc_top` / `muserisc_cpu`, passed to the
+core (VRF and vector unit) and both caches.
+- **Default.** 1 in the ORFS macro builds (`MUSERISC_SRAM_FAKERAM45`
+  or `MUSERISC_SRAM_SKY130` defined), 0 otherwise. So the
+  configuration that is synthesized is the registered one, and the
+  behavioural simulation can run either.
+- **Wrappers.** The capture register becomes the output register:
+  `rdata = hold_q`, loaded straight from the macro output in the cycle
+  after a read. The OpenRAM falling-edge `dout` then only reaches a
+  flop (half a cycle, no logic), and every consumer gets a full
+  cycle. Data is valid two cycles after the read and is held as
+  before. The behavioural models add the same register, so the
+  latency never depends on the build. `muserisc_vregfile` delays its
+  full-word bypass by the same cycle (192 flops).
+- **Vector unit.** A read-wait stage SR between S0 and S1 keeps one
+  element per cycle. A read issued while S1 still holds an element
+  would land on top of S1's words, so S1 copies them into skid
+  registers when it does not advance in its first cycle. The
+  `vrgather.vv` second read waits one more cycle. The vector LS
+  sequencer waits one cycle (VLS_RW) after a RD cycle that read the
+  VRF. Write ordering is unchanged; the B2 guarantee (no
+  same-address read and write on a replica) holds as before, and the
+  collision-garbage models pass.
+- **Caches.** A lookup waits one cycle (`S_RDW`): array hits answer
+  two cycles after acceptance instead of one. The D$ write-back read
+  and FENCE.I tag read wait one more cycle. The I$ hides most of its
+  cost with a two-entry fetch buffer (the doubleword of the last
+  response, and the next one, read from the arrays in the response
+  cycle) that answers in one cycle.
+
+Simulation runs both settings: `make core-test` repeats every TB
+whose top has the parameter with `OREG=1` (`build/sim-oreg`),
+including `srammacro` (the shipped macro configuration) and the
+x-initial runs.
+
+**Cycle cost** (`SRAM_OUT_REG` 0 → 1, same binaries and seeds;
+evidence: [`evidence/sram-out-reg-2026-10-17.log`](evidence/sram-out-reg-2026-10-17.log)):
+
+| Workload | `SRAM_OUT_REG=0` | `=1` | Cost |
+|---|---:|---:|---:|
+| riscv-tests, caches + random latency (123 tests) | 137,643 | 149,701 | +8.8 % |
+| riscv-tests, caches off | 183,348 | 183,348 | 0 |
+| ACT, caches + random latency (2,578 ELFs) | 413,065,622 | 449,303,632 | +8.8 % (median +9.0 %) |
+| Vector TB, operation cycles | 1,448,070 | 1,473,524 | +1.8 % (`vrgather.vv` +26 %, `vrgatherei16` +49 %) |
+| SoC crypto firmware (`socrtl`) | 18,851,904 | 20,130,882 | +6.8 % |
+| OpenSBI + S-mode payload (`soc_rtl_tb`, latency 1) | 11,495,124 | 13,107,482 | +14.0 % |
+| Linux boot (`soc_tb`, latency 1) | 1,612,954,759 | 2,180,816,393 | **+35.2 %** |
+
+Where the Linux cost comes from (boot up to the first "RCU Tasks
+Trace" line, 1,270,996,565 cycles at 0): registering only the D$
+arrays costs +24.9 %, only the I$ arrays (with the fetch buffer)
++7.4 %, all +34.4 %. Every D$ hit is one cycle longer, and Linux is
+load/store bound. On riscv-tests (mostly straight-line code) the
+I$ dominated before the next-doubleword prefetch: with only the
+last-doubleword buffer they cost +21.3 %, of which +19 points went
+away with the I$ arrays unregistered.
+
+The D$ is therefore the next thing to fix. Its index and beat bits
+(PA[11:3]) are inside the page offset, so the arrays can be read
+from the virtual address while the load or store is still in EX,
+and a hit would again answer one cycle after the MEM request.
 
 **Same-address read and write.** OpenRAM documents a read and a write
 of the same address in the same cycle as unsupported; the vendor model

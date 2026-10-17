@@ -1,8 +1,8 @@
 // Single-port synchronous SRAM model (L1 cache arrays).
 //
 // One access per cycle: with en_i high the word at addr_i is
-// read (rdata_o valid the following cycle, held until the next
-// enabled read) or, with any we_i lane set, written under the
+// read (rdata_o valid the following cycle, two cycles later with
+// SRAM_OUT_REG; held until the next enabled read) or, with any we_i lane set, written under the
 // per-lane write mask. A write cycle does not update rdata_o
 // (no read-during-write forwarding is assumed by the caches).
 // This is the behavior of a standard single-port SRAM macro or
@@ -22,11 +22,19 @@
 // edge; OpenRAM: X after every rising edge, valid from the falling
 // edge), so a capture register restores the hold-until-next-read
 // contract: rdata_o = rd_q ? macro : hold_q.
+//
+// SRAM_OUT_REG = 1 adds one cycle of read latency: rdata_o is
+// valid two cycles after the read (registered straight off the
+// macro output, so the sky130 OpenRAM falling-edge dout path ends
+// at a flop) and is then held until two cycles after the next
+// read. Every build (behavioural or macro) honours the parameter,
+// so the latency the caches see never depends on the build.
 `default_nettype none
 module muserisc_sram_sp #(
     parameter int unsigned WIDTH = 64,
     parameter int unsigned DEPTH = 64,
     parameter int unsigned LANES = 8,   // write-mask lanes (WIDTH % LANES == 0)
+    parameter bit          SRAM_OUT_REG = 1'b0,  // 1: two-cycle read latency
     localparam int unsigned AW = (DEPTH > 1) ? $clog2(DEPTH) : 1
 ) (
     input  wire              clk_i,
@@ -57,7 +65,10 @@ module muserisc_sram_sp #(
       rd_q <= rd;
       if (rd_q) hold_q <= mac_rd;
     end
-    assign rdata_o = rd_q ? mac_rd : hold_q;
+    // Registered output: hold_q is then the output register itself
+    // (it takes the macro word one cycle after the read and holds it
+    // until the cycle after the next read).
+    assign rdata_o = SRAM_OUT_REG ? hold_q : (rd_q ? mac_rd : hold_q);
 `ifdef MUSERISC_SRAM_FAKERAM45
     // fakeram45 takes a per-bit write mask.
     logic [WIDTH-1:0] wmask;
@@ -133,6 +144,7 @@ module muserisc_sram_sp #(
 `endif
   end else begin : g_behav
     logic [WIDTH-1:0] mem_q [DEPTH];
+    logic [WIDTH-1:0] rd_q;
     always_ff @(posedge clk_i) begin
       if (en_i) begin
         if (|we_i) begin
@@ -140,9 +152,20 @@ module muserisc_sram_sp #(
             if (we_i[l]) mem_q[addr_i][l*LW +: LW] <= wdata_i[l*LW +: LW];
           end
         end else begin
-          rdata_o <= mem_q[addr_i];
+          rd_q <= mem_q[addr_i];
         end
       end
+    end
+    if (SRAM_OUT_REG) begin : g_oreg
+      logic             rd_v_q;
+      logic [WIDTH-1:0] out_q;
+      always_ff @(posedge clk_i) begin
+        rd_v_q <= en_i && !(|we_i);
+        if (rd_v_q) out_q <= rd_q;
+      end
+      assign rdata_o = out_q;
+    end else begin : g_noreg
+      assign rdata_o = rd_q;
     end
   end
 endmodule

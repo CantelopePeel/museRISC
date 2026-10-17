@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <map>
+#include <cstdlib>
 #include <memory>
 #include <random>
 #include <vector>
@@ -57,7 +58,8 @@ int main(int argc, char** argv) {
   VerilatedContext context;
   context.commandArgs(argc, argv);
   const std::unique_ptr<Vmuserisc_icache> dut{new Vmuserisc_icache{&context}};
-  std::mt19937_64 rng(777);
+  // argv[1] (optional): RNG seed.
+  std::mt19937_64 rng(argc > 1 && argv[1][0] != '+' ? std::strtoull(argv[1], nullptr, 0) : 777);
   auto rnd = [&](uint64_t n) { return rng() % n; };
 
   uint64_t version = 1;
@@ -72,7 +74,14 @@ int main(int argc, char** argv) {
   const std::vector<uint64_t> io_fixed = {0x0, 0x900, 0x3000, 0x80001000ULL, 0x10000000};
 
   long checks = 0, n_fetch = 0, n_inval = 0, n_kill = 0, n_io = 0;
-  for (int phase = 0; phase < 10; ++phase) {
+  // Phases 10..19 ("fetch-stream" phases) issue one fetch at a time
+  // like the core (next request only after the response, 0..3 idle
+  // cycles in between) and mostly sequential: the next word, or the
+  // doubleword after the one before last. That is what the
+  // SRAM_OUT_REG fetch buffer and next-doubleword prefetch see; the
+  // round-1 review of PR #29 found a buffer bug only this pattern hits.
+  for (int phase = 0; phase < 20; ++phase) {
+    const bool stream = phase >= 10;
     MbusConfig cfg;
     cfg.seed = 900 + phase;
     switch (phase % 5) {
@@ -90,7 +99,7 @@ int main(int argc, char** argv) {
     }
     io.push_back((rng() & (kC1Base - 1) & ~uint64_t(7)) | 0x100000);
     io.push_back((rng() | (1ULL << 63)) & ~uint64_t(31));
-    const bool cache_en = phase != 4;
+    const bool cache_en = (phase % 10) != 4;
     bool bad_beat = false;
     uint64_t io_expect_addr = 0;
     bool io_expect = false;
@@ -122,23 +131,32 @@ int main(int argc, char** argv) {
 
     bool have_req = false, pending = false;
     uint64_t req_addr = 0, inflight_addr = 0, inflight_ver = 0;
-    int ops_left = 3000, idle = 0;
+    int ops_left = stream ? 20000 : 3000, idle = 0;
+    std::vector<uint64_t> hist;
     long cyc = 0;
     while (ops_left > 0 || have_req || pending) {
       if (++cyc > 2000000) {
         CHECK(false, "phase %d hang", phase);
         break;
       }
-      if (!have_req && ops_left > 0 && idle == 0) {
-        if (rnd(12) == 0) {
+      if (!have_req && (!stream || !pending) && ops_left > 0 && idle == 0) {
+        const uint64_t r = rnd(100);
+        if (stream ? r < 4 : rnd(12) == 0) {
           req_addr = io[rnd(io.size())] + 4 * rnd(4);
+        } else if (stream && r < 40 && !hist.empty()) {
+          req_addr = hist.back() + 4;  // next word
+        } else if (stream && r < 70 && hist.size() >= 2) {
+          // the doubleword after the one before last
+          req_addr = (hist[hist.size() - 2] & ~7ull) + 8 + 4 * rnd(2);
         } else {
           req_addr = lines[rnd(lines.size())] + 4 * rnd(kLineBytes / 4);
         }
+        hist.push_back(req_addr);
+        if (hist.size() > 4) hist.erase(hist.begin());
         have_req = true;
         --ops_left;
-        idle = int(rnd(3));
-      } else if (idle > 0) {
+        if (!stream) idle = int(rnd(3));
+      } else if (idle > 0 && (!stream || (!pending && !have_req))) {
         --idle;
       }
       // Code modification + FENCE.I, sometimes mid-refill.
@@ -178,6 +196,7 @@ int main(int argc, char** argv) {
         }
         ++checks;
         pending = false;
+        if (stream) idle = int(rnd(4));
       }
       const bool fire = have_req && dut->req_ready_o;
       if (fire) {

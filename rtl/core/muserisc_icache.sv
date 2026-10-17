@@ -19,7 +19,19 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
     parameter logic [63:0] C0_BASE = 64'h0000_0000_8000_0000,
     parameter logic [63:0] C0_SIZE = 64'h0000_0000_8000_0000,
     parameter logic [63:0] C1_BASE = 64'h0,
-    parameter logic [63:0] C1_SIZE = 64'h0
+    parameter logic [63:0] C1_SIZE = 64'h0,
+    // 1: tag/data arrays return read data two cycles after the read
+    // (registered SRAM macro outputs, muserisc_sram_sp); lookups then
+    // spend one cycle in S_RDW. To hide that on sequential code, a
+    // two-entry fetch buffer holds the doubleword of the last
+    // response (B) and the next one (N): every response from
+    // doubleword X reads X+1 from the arrays in that otherwise idle
+    // cycle (S_LOOKUP hit or S_FB) and, two cycles later, keeps it in
+    // N if it hits. A fetch from a buffered doubleword answers the
+    // next cycle (S_FB), like an array hit with one-cycle arrays.
+    // Both entries are dropped on inval_i and on every refill, and
+    // are never used in an inval_i cycle, exactly like the arrays.
+    parameter bit          SRAM_OUT_REG = 1'b0
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -60,9 +72,9 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
     $error("icache: WAYS must be in [1, 16]");
   end
 
-  typedef enum logic [2:0] {
+  typedef enum logic [3:0] {
     S_IDLE, S_LOOKUP, S_FILL_REQ, S_FILL, S_REPLAY, S_UNC_REQ, S_UNC_RSP,
-    S_UNC_DONE
+    S_UNC_DONE, S_RDW, S_FB
   } state_e;
   state_e state_q;
 
@@ -95,7 +107,8 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
   logic [TAG_W-1:0] tag_rdata [WAYS];
   logic [63:0]      data_rdata [WAYS];
   for (genvar w = 0; w < int'(WAYS); w++) begin : g_way
-    muserisc_sram_sp #(.WIDTH(TAG_W), .DEPTH(SETS), .LANES(1)) u_tag (
+    muserisc_sram_sp #(.WIDTH(TAG_W), .DEPTH(SETS), .LANES(1),
+                       .SRAM_OUT_REG(SRAM_OUT_REG)) u_tag (
         .clk_i   (clk_i),
         .en_i    (tag_en[w]),
         .we_i    (tag_we[w]),
@@ -103,7 +116,8 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
         .wdata_i (f_tag(r_addr_q)),
         .rdata_o (tag_rdata[w])
     );
-    muserisc_sram_sp #(.WIDTH(64), .DEPTH(SETS * BEATS), .LANES(8)) u_data (
+    muserisc_sram_sp #(.WIDTH(64), .DEPTH(SETS * BEATS), .LANES(8),
+                       .SRAM_OUT_REG(SRAM_OUT_REG)) u_data (
         .clk_i   (clk_i),
         .en_i    (data_en[w]),
         .we_i    (data_we[w]),
@@ -139,12 +153,43 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
   logic [63:0] hit_word;
   assign hit_word = data_rdata[hit_way];
 
+  // Fetch buffer and next-doubleword prefetch (SRAM_OUT_REG only).
+  logic        fb_v_q, nb_v_q, fb_hit, fb_hit_b, fb_sel_q;
+  logic [63:3] fb_addr_q, nb_addr_q;
+  logic [63:0] fb_word_q, nb_word_q, fb_rsp;
+  // Not in an inval_i cycle: like the arrays, a fetch accepted then
+  // must see the code written before the FENCE.I.
+  assign fb_hit_b = fb_v_q && (req_addr_i[63:3] == fb_addr_q);
+  assign fb_hit = SRAM_OUT_REG && !inval_i &&
+                  (fb_hit_b || (nb_v_q && (req_addr_i[63:3] == nb_addr_q)));
+  assign fb_rsp = fb_sel_q ? nb_word_q : fb_word_q;
+  // Prefetch: issued in a responding S_LOOKUP / S_FB cycle for the
+  // doubleword after r_addr_q, looked up when its read data arrives.
+  logic        pf_issue, pf1_q, pf2_q, pf_hit;
+  logic [63:3] pf_addr, pf1_addr_q, pf2_addr_q;
+  logic [WAY_W-1:0] pf_way;
+  assign pf_addr = r_addr_q[63:3] + 61'd1;
+  assign pf_issue = SRAM_OUT_REG && (((state_q == S_LOOKUP) && hit) ||
+                                     (state_q == S_FB));
+  always_comb begin
+    pf_hit = 1'b0;
+    pf_way = '0;
+    for (int w = int'(WAYS) - 1; w >= 0; w--) begin
+      if (valid_q[w][f_idx({pf2_addr_q, 3'b000})] &&
+          (tag_rdata[w] == f_tag({pf2_addr_q, 3'b000}))) begin
+        pf_hit = 1'b1;
+        pf_way = WAY_W'(w);
+      end
+    end
+  end
+
   logic [63:0] rsp_word;
   assign rsp_valid_o = ((state_q == S_LOOKUP) && hit) ||
-                       (state_q == S_UNC_DONE);
+                       (state_q == S_UNC_DONE) || (state_q == S_FB);
   // Registered uncached response: no bus input reaches the core
   // combinationally.
-  assign rsp_word = (state_q == S_UNC_DONE) ? unc_rdata_q : hit_word;
+  assign rsp_word = (state_q == S_UNC_DONE) ? unc_rdata_q :
+                    (state_q == S_FB) ? fb_rsp : hit_word;
   assign rsp_rdata_o = r_addr_q[2] ? rsp_word[63:32] : rsp_word[31:0];
 
   always_comb begin
@@ -191,7 +236,15 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
         data_en = '1;
       end
       S_UNC_REQ: bus_req_valid_o = 1'b1;
-      default: ;  // S_LOOKUP, S_UNC_RSP, S_UNC_DONE
+      S_LOOKUP, S_FB: begin
+        tag_addr = f_idx({pf_addr, 3'b000});
+        data_addr = {f_idx({pf_addr, 3'b000}), f_beat({pf_addr, 3'b000})};
+        if (pf_issue) begin
+          tag_en = '1;
+          data_en = '1;
+        end
+      end
+      default: ;  // S_UNC_RSP, S_UNC_DONE, S_RDW
     endcase
   end
 
@@ -205,12 +258,56 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
       cnt_q <= '0;
       fill_kill_q <= 1'b0;
       unc_rdata_q <= 64'd0;
+      fb_v_q <= 1'b0;
+      fb_addr_q <= '0;
+      fb_word_q <= 64'd0;
+      nb_v_q <= 1'b0;
+      nb_addr_q <= '0;
+      nb_word_q <= 64'd0;
+      fb_sel_q <= 1'b0;
+      pf1_q <= 1'b0;
+      pf2_q <= 1'b0;
+      pf1_addr_q <= '0;
+      pf2_addr_q <= '0;
     end else begin
+      if (SRAM_OUT_REG) begin
+        // B: the doubleword of the last response.
+        if ((state_q == S_LOOKUP) && hit) begin
+          fb_v_q <= 1'b1;
+          fb_addr_q <= r_addr_q[63:3];
+          fb_word_q <= hit_word;
+        end else if ((state_q == S_FB) && fb_sel_q) begin
+          fb_v_q <= 1'b1;
+          fb_addr_q <= nb_addr_q;
+          fb_word_q <= nb_word_q;
+          nb_v_q <= 1'b0;
+        end
+        if ((state_q == S_IDLE) && req_valid_i) fb_sel_q <= !fb_hit_b;
+        pf1_q <= pf_issue;
+        pf1_addr_q <= pf_addr;
+        pf2_q <= pf1_q;
+        pf2_addr_q <= pf1_addr_q;
+        // N: the prefetched doubleword (overrides the move to B). Not
+        // in a cycle that accepts a fetch hitting N: S_FB answers from
+        // N next cycle, so N must keep that word.
+        if (pf2_q && pf_hit &&
+            !((state_q == S_IDLE) && req_valid_i && fb_hit && !fb_hit_b)) begin
+          nb_v_q <= 1'b1;
+          nb_addr_q <= pf2_addr_q;
+          nb_word_q <= data_rdata[pf_way];
+        end
+        if (inval_i || (state_q == S_FILL_REQ)) begin
+          fb_v_q <= 1'b0;
+          nb_v_q <= 1'b0;
+        end
+      end
       unique case (state_q)
         S_IDLE: begin
           if (req_valid_i) begin
             r_addr_q <= req_addr_i;
-            state_q <= req_cacheable ? S_LOOKUP : S_UNC_REQ;
+            state_q <= !req_cacheable ? S_UNC_REQ :
+                       fb_hit ? S_FB :
+                       SRAM_OUT_REG ? S_RDW : S_LOOKUP;
           end
         end
         S_LOOKUP: begin
@@ -237,7 +334,9 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
             end
           end
         end
-        S_REPLAY: state_q <= S_LOOKUP;
+        S_REPLAY: state_q <= SRAM_OUT_REG ? S_RDW : S_LOOKUP;
+        S_RDW: state_q <= S_LOOKUP;
+        S_FB: state_q <= S_IDLE;
         S_UNC_REQ: if (bus_req_ready_i) state_q <= S_UNC_RSP;
         S_UNC_RSP: begin
           if (bus_rsp_valid_i) begin

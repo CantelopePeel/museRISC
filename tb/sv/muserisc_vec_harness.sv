@@ -3,7 +3,9 @@
 // FPU (muserisc_fpu) exactly as in the core, plus a testbench backdoor that loads (write port)
 // and dumps (read port C) VRF words while the unit is idle.
 `default_nettype none
-module muserisc_vec_harness (
+module muserisc_vec_harness #(
+    parameter bit SRAM_OUT_REG = 1'b0   // VRF read latency 2 (see muserisc_vregfile)
+) (
     input  wire          clk_i,
     input  wire          rst_ni,
     // Backdoor (ignored while the unit is busy).
@@ -39,7 +41,8 @@ module muserisc_vec_harness (
     output logic [63:0]  scalar_o,
     output logic         sat_o,
     output logic [4:0]   fflags_o,
-    output logic         we_o       // unit VRF write strobe (observability)
+    output logic         we_o,      // unit VRF write strobe (observability)
+    output logic         sram_out_reg_o  // = SRAM_OUT_REG (backdoor read latency)
 );
   logic        re_a, re_b, re_c, we;
   logic [7:0]  ra_a, ra_b, ra_c, wa, wbe;
@@ -63,8 +66,9 @@ module muserisc_vec_harness (
   assign wd = tb_own ? tb_wdata_i : u_wd;
   assign tb_rdata_o = rd_c;
   assign we_o = u_we;
+  assign sram_out_reg_o = SRAM_OUT_REG;
 
-  muserisc_vregfile u_vrf (
+  muserisc_vregfile #(.SRAM_OUT_REG(SRAM_OUT_REG)) u_vrf (
       .clk_i     (clk_i),
       .re_a_i    (re_a),
       .raddr_a_i (ra_a),
@@ -82,7 +86,7 @@ module muserisc_vec_harness (
       .wdata_i   (wd)
   );
 
-  muserisc_vec u_vec (
+  muserisc_vec #(.SRAM_OUT_REG(SRAM_OUT_REG)) u_vec (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
       .kill_i    (kill_i),
