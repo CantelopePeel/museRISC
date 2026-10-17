@@ -1093,6 +1093,34 @@ module muserisc_vec
       w_cw_q <= s2_cw_q;
     end
   end
+`ifndef SYNTHESIS
+  // Invariant (simulation check): within one instruction the S3 write
+  // rows never decrease (elementwise ops, compress's cnt, whole-register
+  // word moves, one mask word per 64 elements, the reduction's single
+  // final write). Consequently a write that lands on an element's old-vd
+  // row after its port-C read is always the immediately preceding S3
+  // write (a full-word comb hit, which takes priority) or a partial
+  // write followed by a row change, so the write-invalidation clauses
+  // above (s1/s2_crow_hit) never decide anything today. They are kept
+  // as protection for a future non-monotonic writer; if this check
+  // fires, review that the clauses (and their tests) still cover it.
+  logic       chk_wv_q;
+  logic [7:0] chk_wrow_q;
+  always @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      chk_wv_q <= 1'b0;
+    end else begin
+      if (start_i && !run_q) chk_wv_q <= 1'b0;
+      else if (w_v_q) begin
+        if (chk_wv_q && (w_addr_q < chk_wrow_q))
+          $error("muserisc_vec: S3 write row %0d after row %0d in one instruction (op %0d): old-vd write invalidation is now live",
+                 w_addr_q, chk_wrow_q, op_q);
+        chk_wv_q <= 1'b1;
+        chk_wrow_q <= w_addr_q;
+      end
+    end
+  end
+`endif
   always_ff @(posedge clk_i) begin
     if (s2_we) begin
       w_addr_q <= s2_waddr;

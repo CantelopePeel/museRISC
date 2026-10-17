@@ -13,18 +13,17 @@ foreach lib $::env(STA_LIBS) {
 read_db $::env(STA_ODB)
 read_sdc $::env(STA_SDC)
 
-puts "==== summary"
+puts "==== summary at the SDC period"
+puts "(WNS/TNS at the SDC clock, all path groups incl. reset recovery."
+puts " Fmax is NOT period - WNS here: half-cycle paths from falling-edge"
+puts " macro outputs scale with the period. See '==== fmax summary' at"
+puts " the end for the bisected minimum periods.)"
 report_wns -digits 3
 report_tns -digits 3
 set period [get_property [get_clocks core_clock] period]
-set wns [sta::worst_slack -max]
-set crit [expr {$period - $wns}]
-puts [format "crit_path_ns %.3f (period %.3f, worst slack %.3f, setup uncertainty included)" \
-  $crit $period $wns]
-puts [format "fmax_mhz %.2f" [expr {1000.0 / $crit}]]
 
-puts "==== critical path"
-report_checks -path_delay max -format full -fields {fanout} -digits 3
+puts "==== worst core_clock setup path at the SDC period"
+report_checks -path_delay max -path_group core_clock -format full -fields {fanout} -digits 3
 
 # Setup endpoints (register data and enable pins, not async
 # set/reset) whose
@@ -99,6 +98,7 @@ while {$hi - $lo > 0.05} {
   if {[wns_at $mid] >= 0} { set hi $mid } else { set lo $mid }
 }
 puts [format "min_period_bisect_ns %.2f  fmax_bisect_mhz %.2f" $hi [expr {1000.0 / $hi}]]
+set p_all $hi
 wns_at $hi
 puts "==== critical path at the bisected minimum period"
 report_checks -path_delay max -path_group core_clock -fields {fanout} -digits 3
@@ -119,6 +119,7 @@ while {$hi - $lo > 0.05} {
   if {[wns_rise_at $mid] >= 0} { set hi $mid } else { set lo $mid }
 }
 puts [format "min_period_rise_launch_ns %.2f  fmax_rise_launch_mhz %.2f" $hi [expr {1000.0 / $hi}]]
+set p_rise $hi
 wns_rise_at $hi
 puts "==== worst rising-edge-launched path at that period"
 report_checks -rise_from [get_clocks core_clock] -path_delay max -digits 3
@@ -139,7 +140,15 @@ if {[llength $vrf_macros] > 0} {
   }
   puts [format "min_period_without_vrf_launch_ns %.2f  fmax_without_vrf_launch_mhz %.2f  (VRF macros: %d)" \
     $hi [expr {1000.0 / $hi}] [llength $vrf_macros]]
+  set p_novrf $hi
   wns_at $hi
   puts "==== critical path with VRF-launched paths excluded"
   report_checks -path_delay max -path_group core_clock -fields {fanout} -digits 3
 }
+
+puts "==== fmax summary (bisected minimum period, setup only)"
+puts [format "all paths                          %8.2f ns  %7.2f MHz" $p_all [expr {1000.0 / $p_all}]]
+if {[info exists p_novrf]} {
+  puts [format "VRF macro outputs registered       %8.2f ns  %7.2f MHz" $p_novrf [expr {1000.0 / $p_novrf}]]
+}
+puts [format "all macro outputs registered       %8.2f ns  %7.2f MHz" $p_rise [expr {1000.0 / $p_rise}]]
