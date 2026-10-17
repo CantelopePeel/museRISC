@@ -11,8 +11,18 @@
 ROOT   := ..
 RTL    := $(ROOT)/rtl/core
 CRYPTO := $(ROOT)/rtl/crypto
+# SRAM read-output register (SRAM_OUT_REG of muserisc_cpu /
+# muserisc_soc_top / muserisc_vec_harness / the caches): 0 = one-cycle
+# array reads, 1 = registered SRAM outputs (two-cycle reads; the
+# configuration the ORFS macro builds synthesize). Every TB whose
+# top has the parameter is built with OREG; `make core-test` runs
+# the suite twice, OREG=0 in build/sim and OREG=1 in build/sim-oreg.
+OREG   ?= 0
+GOREG  := "-GSRAM_OUT_REG=1'b$(OREG)"
 BUILD  := $(ROOT)/build/sim
 OBJ    := $(BUILD)/obj
+# run_directed.sh runs in this build directory.
+export SIM_BUILD := $(abspath $(BUILD))
 
 VERILATOR ?= verilator
 VFLAGS    := --cc --exe --build -j 0 -Wall -Wno-DECLFILENAME \
@@ -60,14 +70,17 @@ TESTS    := rv64i_directed rv64m_directed md_directed md_irq_directed md_kill_di
             smc_fencei_directed amo_cache_directed mmio_bypass_directed \
             vm_sfence_cache_directed fp_hold_cache_directed ptw_drop_directed
 
-.PHONY: all alu muldiv muldiv_mc decoder regfile csr plic mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 core-xinit sw coverage clean riscv-tests \
+.PHONY: all oreg alu muldiv muldiv_mc decoder regfile csr plic mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 core-xinit sw coverage clean riscv-tests \
         crypto sha256 sha512 keccak ecfield cryptotop core-mdcomb srammacro directed-bins
 all: alu muldiv muldiv_mc decoder regfile csr plic mmu fpu fpu-ds1 bext rvc vec vec-xinit icache dcache core core-ds1 core-mdcomb core-xinit srammacro coverage
+# The TBs whose top has SRAM_OUT_REG (the rest do not depend on it);
+# `make core-test` runs these with OREG=1 in build/sim-oreg.
+oreg: vec vec-xinit icache dcache core core-ds1 core-mdcomb core-xinit srammacro coverage
 
 ## ---- Stage gate: upstream riscv-tests (not part of `all`) -------------
 # Caches on, seeded random bus latency/gaps/backpressure.
 riscv-tests: $(BUILD)/core_tb
-	CORE_TB_ARGS="$(CORE_RAND_ARGS)" bash $(ROOT)/sim/run_riscv_tests.sh
+	CORE_TB=$(BUILD)/core_tb CORE_TB_ARGS="$(CORE_RAND_ARGS)" bash $(ROOT)/sim/run_riscv_tests.sh
 
 $(BUILD) $(OBJ):
 	mkdir -p $@
@@ -218,7 +231,7 @@ $(BUILD)/vec_tb: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(FPU_INC) \
                  $(RTL)/muserisc_fpu.sv \
                  $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
                  $(ROOT)/tb/sv/muserisc_vec_harness.sv | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/vec --top-module muserisc_vec_harness \
+	$(VERILATOR) $(VFLAGS) $(OBJ)/vec --top-module muserisc_vec_harness $(GOREG) \
 	  -o $(abspath $(BUILD)/vec_tb) $(PKG) \
 	  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
 	  $(RTL)/muserisc_fpu.sv \
@@ -240,7 +253,7 @@ $(BUILD)/vec_tb_xinit: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(FPU_INC) \
                  $(ROOT)/tb/sv/muserisc_vec_harness.sv | $(BUILD) $(OBJ)
 	$(VERILATOR) --cc --exe --build -j 0 -Wall -Wno-DECLFILENAME --assert --coverage-line \
 	  --x-initial unique -I$(RTL) -CFLAGS "-std=c++17 -O2" \
-	  --Mdir $(OBJ)/vec_xinit --top-module muserisc_vec_harness \
+	  --Mdir $(OBJ)/vec_xinit --top-module muserisc_vec_harness $(GOREG) \
 	  -o $(abspath $(BUILD)/vec_tb_xinit) $(PKG) \
 	  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
 	  $(RTL)/muserisc_fpu.sv \
@@ -263,7 +276,7 @@ CACHE_TB_G := -GSETS=4 -GWAYS=2 -GLINE_BYTES=32 \
               "-GC0_BASE=64'h1000" "-GC0_SIZE=64'h2000" \
               "-GC1_BASE=64'h0080000000000000" "-GC1_SIZE=64'h0080000000000000"
 $(BUILD)/dcache_tb: $(ROOT)/tb/cpp/dcache_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CACHE_RTL) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/dcache --top-module muserisc_dcache $(CACHE_TB_G) \
+	$(VERILATOR) $(VFLAGS) $(OBJ)/dcache --top-module muserisc_dcache $(CACHE_TB_G) $(GOREG) \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
 	  -o $(abspath $(BUILD)/dcache_tb) $(CACHE_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/dcache_tb.cpp)
@@ -272,7 +285,7 @@ dcache: $(BUILD)/dcache_tb
 	cd $(BUILD) && COV_FILE=cov_dcache.dat ./dcache_tb
 
 $(BUILD)/icache_tb: $(ROOT)/tb/cpp/icache_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CACHE_RTL) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/icache --top-module muserisc_icache $(CACHE_TB_G) \
+	$(VERILATOR) $(VFLAGS) $(OBJ)/icache --top-module muserisc_icache $(CACHE_TB_G) $(GOREG) \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
 	  -o $(abspath $(BUILD)/icache_tb) $(CACHE_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/icache_tb.cpp)
@@ -331,7 +344,7 @@ crypto: sha256 sha512 keccak ecfield cryptotop
 # core_tb cacheability: [0, 0x1000_0000) (directed tests at PA 0)
 # plus the default DRAM window at 0x8000_0000 (ELF tests).
 $(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/core --top-module muserisc_cpu \
+	$(VERILATOR) $(VFLAGS) $(OBJ)/core --top-module muserisc_cpu $(GOREG) \
 	  "-GC1_BASE=64'h0" "-GC1_SIZE=64'h10000000" \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
 	  -o $(abspath $(BUILD)/core_tb) $(CPU_RTL) \
@@ -340,7 +353,7 @@ $(BUILD)/core_tb: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_R
 ## ---- SoC platform harness (Linux/OpenSBI boot, issue #21) --------------
 # Default cacheability: DRAM 0x8000_0000.. only; ROM/CLINT/PLIC/UART are I/O.
 $(BUILD)/soc_tb: $(ROOT)/tb/cpp/soc_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS_FAST) $(OBJ)/soc --top-module muserisc_cpu \
+	$(VERILATOR) $(VFLAGS_FAST) $(OBJ)/soc --top-module muserisc_cpu $(GOREG) \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
 	  -o $(abspath $(BUILD)/soc_tb) $(CPU_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/soc_tb.cpp)
@@ -372,7 +385,7 @@ SOCFW     := $(abspath $(ROOT)/build/soc-tests)
 
 # Long firmware runs: no coverage instrumentation (as soc_tb).
 $(BUILD)/soc_rtl_tb: $(ROOT)/tb/cpp/soc_rtl_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(SOC_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS_FAST) $(OBJ)/socrtl --top-module muserisc_soc_top \
+	$(VERILATOR) $(VFLAGS_FAST) $(OBJ)/socrtl --top-module muserisc_soc_top $(GOREG) \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
 	  -o $(abspath $(BUILD)/soc_rtl_tb) $(SOC_RTL) \
 	  $(abspath $(ROOT)/tb/cpp/soc_rtl_tb.cpp)
@@ -418,7 +431,7 @@ MDCOMB_RUNS := rv64i_directed.bin rv64m_directed.bin md_directed.bin md_kill_dir
   fpvec_directed.bin "vec_trap_directed.bin --irq-timer-after 2000" \
   "trap_pa_fetch.bin 100000 --expect-trap 1" "trap_pa_load.bin 100000 --expect-trap 5"
 $(BUILD)/core_tb_mdcomb: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/core_mdcomb --top-module muserisc_cpu \
+	$(VERILATOR) $(VFLAGS) $(OBJ)/core_mdcomb --top-module muserisc_cpu $(GOREG) \
 	  +define+MUSERISC_MULDIV_COMB \
 	  "-GC1_BASE=64'h0" "-GC1_SIZE=64'h10000000" \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
@@ -442,7 +455,7 @@ core-mdcomb: $(BUILD)/core_tb_mdcomb $(addprefix $(BUILD)/,$(addsuffix .bin,$(TE
 # core and the test programs must not depend on initial register
 # contents (e.g. a test using sp without setting it).
 $(BUILD)/core_tb_xinit: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/core_xinit --top-module muserisc_cpu \
+	$(VERILATOR) $(VFLAGS) $(OBJ)/core_xinit --top-module muserisc_cpu $(GOREG) \
 	  --x-initial unique \
 	  "-GC1_BASE=64'h0" "-GC1_SIZE=64'h10000000" \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
@@ -476,7 +489,7 @@ $(BUILD)/vec_tb_%: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(FPU_INC) $(RTL)/muserisc_v
                  $(RTL)/muserisc_fpu_pkg.sv $(RTL)/muserisc_fpu.sv \
                  $(RTL)/muserisc_vregfile.sv $(RTL)/muserisc_vec.sv \
                  $(ROOT)/tb/sv/muserisc_vec_harness.sv $$(SRAM_MOD_$$*) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/vec_$* --top-module muserisc_vec_harness \
+	$(VERILATOR) $(VFLAGS) $(OBJ)/vec_$* --top-module muserisc_vec_harness $(GOREG) \
 	  $(SRAM_DEF_$*) $(SRAM_MOD_$*) -o $(abspath $@) $(PKG) \
 	  $(RTL)/muserisc_vec_pkg.sv $(RTL)/muserisc_fpu_pkg.sv \
 	  $(RTL)/muserisc_fpu.sv \
@@ -486,7 +499,7 @@ $(BUILD)/vec_tb_%: $(ROOT)/tb/cpp/vec_tb.cpp $(PKG) $(FPU_INC) $(RTL)/muserisc_v
 
 $(BUILD)/core_tb_%: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) \
                   $$(SRAM_MOD_$$*) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/core_$* --top-module muserisc_cpu \
+	$(VERILATOR) $(VFLAGS) $(OBJ)/core_$* --top-module muserisc_cpu $(GOREG) \
 	  $(SRAM_DEF_$*) $(SRAM_MOD_$*) \
 	  "-GC1_BASE=64'h0" "-GC1_SIZE=64'h10000000" \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
@@ -495,7 +508,7 @@ $(BUILD)/core_tb_%: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU
 
 $(BUILD)/soc_rtl_tb_%: $(ROOT)/tb/cpp/soc_rtl_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(SOC_RTL) $(FPU_INC) \
                      $$(SRAM_MOD_$$*) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS_FAST) $(OBJ)/socrtl_$* --top-module muserisc_soc_top \
+	$(VERILATOR) $(VFLAGS_FAST) $(OBJ)/socrtl_$* --top-module muserisc_soc_top $(GOREG) \
 	  $(SRAM_DEF_$*) $(SRAM_MOD_$*) \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \
 	  -o $(abspath $@) $(SOC_RTL) \
@@ -521,7 +534,7 @@ srammacro: $(addprefix $(BUILD)/vec_tb_,$(SRAM_MACROS)) $(addprefix $(BUILD)/cor
 
 ## ---- FPU_DS_BITS=1 core build: FP directed suites ---------------------
 $(BUILD)/core_tb_ds1: $(ROOT)/tb/cpp/core_tb.cpp $(ROOT)/tb/cpp/mbus_model.h $(CPU_RTL) $(FPU_INC) | $(BUILD) $(OBJ)
-	$(VERILATOR) $(VFLAGS) $(OBJ)/core_ds1 --top-module muserisc_cpu \
+	$(VERILATOR) $(VFLAGS) $(OBJ)/core_ds1 --top-module muserisc_cpu $(GOREG) \
 	  +define+MUSERISC_FPU_DS_BITS=1 \
 	  "-GC1_BASE=64'h0" "-GC1_SIZE=64'h10000000" \
 	  -CFLAGS -I$(abspath $(ROOT)/tb/cpp) \

@@ -2033,3 +2033,35 @@ stages 4c/5:
   - ACT 2,577/2,578
     ([`act-core-soc-sram-synth-2026-10-16.csv`](act-core-soc-sram-synth-2026-10-16.csv)),
     with only the `PMPSm_cfg_A_tor_zero-00` waiver failing.
+
+## Registered SRAM outputs, `SRAM_OUT_REG` (2026-10-17, branch `sram-out-reg`)
+
+- All 15 SRAM arrays (VRF replicas, L1 data and tag ways) can register
+  their read output (`SRAM_OUT_REG=1`, default in the ORFS macro
+  builds): the sky130 OpenRAM falling-edge `dout` then only feeds a
+  flop, so no logic path is limited to half a clock period.
+- The extra read cycle is absorbed by a vector-unit read-wait stage
+  (one element per cycle kept), a vector LS wait cycle, and a cache
+  lookup wait; the I$ hides most of its share with a two-entry fetch
+  buffer that prefetches the next doubleword.
+- Cycle cost (0 → 1): riscv-tests (cached, random latency) +8.8 %,
+  ACT +8.8 %, vector TB operations +1.8 %, SoC crypto firmware
+  +6.8 %, OpenSBI +14.0 %, Linux boot +35.2 % (1,612,954,759 →
+  2,180,816,393 cycles), almost all of it from the D$ (+24.9 points
+  of a partial boot).
+- `make core-test` now runs every TB whose top has the parameter
+  with both settings (`build/sim`, `build/sim-oreg`), `srammacro`
+  included.
+- Summary: [`../SOC_AREA.md`](../SOC_AREA.md) "Registered SRAM
+  outputs". Gates, cost table and the cost split:
+  [`sram-out-reg-2026-10-17.log`](sram-out-reg-2026-10-17.log);
+  Linux UART log:
+  [`sram-out-reg-linux-boot-2026-10-17.log`](sram-out-reg-linux-boot-2026-10-17.log);
+  CSVs: `act-core-sram-out-reg-2026-10-17.csv`,
+  `riscv-tests-core-sram-out-reg{,0}-2026-10-17.csv`.
+- Gates: lint (5.048 and Docker 5.020), test, core-test (both
+  settings, `srammacro`, core-xinit, vec-xinit), riscv-tests 123/123
+  cached and uncached (both settings), ACT 2,577/2,578 cached + random
+  latency (both settings; only the `PMPSm_cfg_A_tor_zero-00` waiver),
+  `socrtl` and OpenSBI (both settings), `soc_tb` Linux boot with
+  `SRAM_OUT_REG=1`.

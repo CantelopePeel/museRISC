@@ -407,14 +407,19 @@ struct Dut {
   }
   VRF Dump() {
     VRF f;
-    d->tb_re_i = 1;
-    for (int w = 0; w < 256; ++w) {
-      d->tb_raddr_i = w;
+    // Read latency: 1 cycle, or 2 with registered SRAM outputs
+    // (SRAM_OUT_REG); reads are pipelined, one per cycle.
+    const int lag = d->sram_out_reg_o ? 1 : 0;
+    for (int t = 0; t < 256 + lag; ++t) {
+      d->tb_re_i = t < 256;
+      d->tb_raddr_i = t < 256 ? t : 0;
       Tick();
       // Sample the sync-read data where a flop would: before the
       // next rising edge. The sky130 OpenRAM macro drives its read
       // data only after the falling edge.
       d->clk_i = 0; d->eval();
+      const int w = t - lag;
+      if (w < 0) continue;
       const uint64_t v = d->tb_rdata_o;
       std::memcpy(&f.b[w >> 3][(w & 7) * 8], &v, 8);
     }

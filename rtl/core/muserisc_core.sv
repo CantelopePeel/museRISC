@@ -39,7 +39,12 @@
 //   page-table walker shares the data port (MEM first); AMOs
 //   are a read then a write with the port held in between.
 `default_nettype none
-module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
+module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; #(
+    // 1: VRF reads take two cycles (registered SRAM macro outputs,
+    // see muserisc_vregfile); the vector unit and the vector LS
+    // sequencer wait the extra cycle.
+    parameter bit SRAM_OUT_REG = 1'b0
+) (
     input  wire        clk_i,
     input  wire        rst_ni,
     input  wire [63:0] boot_pc_i,     // reset PC strap (0 for directed TBs); read
@@ -963,7 +968,7 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
   assign vrf_wbe = vls_is ? vls_vrf_wbe : vu_wbe;
   assign vrf_wd = vls_is ? vls_vrf_wd : vu_wd;
 
-  muserisc_vregfile u_vregfile (
+  muserisc_vregfile #(.SRAM_OUT_REG(SRAM_OUT_REG)) u_vregfile (
       .clk_i     (clk_i),
       .re_a_i    (vrf_re_a),
       .raddr_a_i (vrf_ra_a),
@@ -981,7 +986,7 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
       .wdata_i   (vrf_wd)
   );
 
-  muserisc_vec u_vec (
+  muserisc_vec #(.SRAM_OUT_REG(SRAM_OUT_REG)) u_vec (
       .clk_i     (clk_i),
       .rst_ni    (rst_ni),
       .kill_i    (trap_take),
@@ -1241,7 +1246,10 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
   // (RVV 1.0 7.7). Whole-register transfers iterate bytes;
   // their vstart (in encoded-EEW elements) is scaled to
   // bytes on entry and back to elements on a fault.
-  localparam logic [1:0] VLS_RD = 2'd0, VLS_ACC = 2'd1, VLS_WO = 2'd2;
+  // VLS_RW (SRAM_OUT_REG only): the RD-phase VRF reads land one
+  // cycle later, so the sequencer waits a cycle before ACC.
+  localparam logic [1:0] VLS_RD = 2'd0, VLS_ACC = 2'd1, VLS_WO = 2'd2,
+                         VLS_RW = 2'd3;
   logic        vls_done, vls_elem_done;
   logic        vls_whole, vls_strided, vls_indexed, vls_ff, vls_maskls;
   logic        vls_started_q;
@@ -1423,7 +1431,8 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
       unique case (vls_ph)
         VLS_RD: begin
           if (vls_act) begin
-            vls_ph_q <= VLS_ACC;
+            vls_ph_q <= (SRAM_OUT_REG && (vls_re_a || vls_re_c)) ? VLS_RW
+                                                                  : VLS_ACC;
           end else begin
             vls_i_q <= vls_i + 10'd1;          // skip element
             vls_ea_q <= vls_ea + vls_step;
@@ -1445,6 +1454,7 @@ module muserisc_core import muserisc_pkg::*, muserisc_cache_pkg::*; (
             end
           end
         end
+        VLS_RW: vls_ph_q <= VLS_ACC;
         default: begin  // VLS_WO
           if (!vls_last_field) begin
             vls_f_q <= vls_f + 3'd1;

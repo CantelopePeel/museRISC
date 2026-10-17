@@ -13,7 +13,9 @@
 set -euo pipefail
 TAG=$1; shift
 EXTRA=("$@")
-cd "$(dirname "$0")/../build/sim"
+# SIM_BUILD: the sim build directory (default build/sim; the
+# SRAM_OUT_REG=1 suite uses build/sim-oreg).
+cd "${SIM_BUILD:-$(dirname "$0")/../build/sim}"
 TB=${CORE_TB:-./core_tb}
 COV_PREFIX=${COV_PREFIX:-cov}
 seed=1

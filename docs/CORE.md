@@ -256,6 +256,20 @@ forwarding needed — i.e. an SRAM macro or a BRAM in NO_CHANGE
 mode. Hit latency is one cycle after acceptance; a miss adds a
 line refill (one burst) plus, for a dirty victim, a line
 write-back (one burst) before it, then a one-cycle replay.
+
+`SRAM_OUT_REG=1` (`muserisc_cpu` / `muserisc_soc_top` parameter;
+the default of the ORFS SRAM-macro builds, see
+docs/SOC_AREA.md) registers every array output, so array reads
+take two cycles. A lookup then waits one cycle in `S_RDW`
+(array hits answer two cycles after acceptance), and the D$
+write-back read and FENCE.I tag read wait one more cycle. The
+I$ hides most of this on sequential code with a two-entry fetch
+buffer: the doubleword of the last response, and the next
+doubleword, which it reads from the arrays in the response
+cycle (when they are otherwise idle) and keeps if it hits. A
+fetch from either answers one cycle after acceptance (`S_FB`).
+Both entries are dropped on `inval_i` and on every refill and
+are not used in an `inval_i` cycle, like the arrays.
 Uncached responses are registered in the cache (one extra
 cycle), so no bus input reaches the core combinationally: the
 core sees only cache state and SRAM outputs.
@@ -359,7 +373,8 @@ can close timing.
 64-bit words (`{reg, word}` addressing). Three identical 1R1W
 256x64 RAM replicas with byte-write enables and *synchronous*
 read (address sampled when `re` is high, output held while
-low), one per read port: A (vs2 / index), B (vs1), C (old vd
+low; with `SRAM_OUT_REG=1` the data arrives one cycle later,
+from a register straight off the SRAM macro), one per read port: A (vs2 / index), B (vs1), C (old vd
 / store data); every write goes to all three. Each replica
 maps to one SDP BRAM (or LUTRAM) on FPGA or a 1R1W
 byte-masked SRAM macro on ASIC. A replica never sees a read
@@ -382,6 +397,7 @@ per cycle in steady state:
 | Stage | Work |
 |---|---|
 | S0 | slot sequencer over `[vstart, vl)` (plus a seed and a final-write slot for reductions, one word per slot for `vmv<nr>r`); issues the three word reads, samples `v0[i]`; slide/gather-by-scalar source indices are computed here |
+| SR | `SRAM_OUT_REG=1` only: waits for the two-cycle VRF read (the element moves on to S1 when its words arrive, so streaming stays one element per cycle; S1 copies its words into skid registers if it cannot advance in its first cycle, and a `vrgather.vv` second read waits one extra cycle) |
 | S1 | extracts each operand element from its word (byte shift + width mask); `vrgather.vv`/`vrgatherei16` spend a second S1 cycle turning the vs1 element into a vs2 read |
 | S2 | single-cycle integer ALU, compares/mask bits, fixed-point rounding (`vxrm`) and saturation (`vxsat`), reduction/iota/compress/cpop/first accumulators; or a multi-cycle sub-unit (below); mask-destination ops accumulate 64 bits in a word register seeded from the old vd word |
 | S3 | write-back register: places the element in its word with byte enables (or writes a whole word) |
@@ -406,8 +422,8 @@ cycles per active element, `vfdiv.vv`/`vfsqrt.v` 18 (e32) /
 elements skip the FPU. Simulation asserts each sub-step result
 against `fp_eval`/`fp_estimate` on the issued operands.
 
-Read-ahead safety: S0 reads up to three elements ahead of
-the write in S3. For every source/destination overlap RVV
+Read-ahead safety: S0 reads up to three elements (four with
+the SR stage) ahead of the write in S3. For every source/destination overlap RVV
 allows (identical groups, widening into the high half,
 narrowing or mask results into the low part) destination
 element j only overwrites source elements <= j, which have
@@ -428,7 +444,8 @@ taken at the instruction boundary after the op (latency
 bound = the op's cycle count, at most 5,124 cycles for
 `vdiv` e8 m8 vl=512). The MEM sequencer steps one element/field
 at a time through the MMU/PMP/data port: RD cycle (VRF
-reads for index and store data), ACC cycle (held across TLB
+reads for index and store data; with `SRAM_OUT_REG=1` an RW
+wait cycle follows when it read the VRF), ACC cycle (held across TLB
 misses), load elements written to the VRF as they complete
 (gated by `!trap_fire`); segment loads buffer one element's
 fields and write them after the last field, so a fault never

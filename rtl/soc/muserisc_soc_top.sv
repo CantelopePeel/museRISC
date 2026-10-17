@@ -20,8 +20,25 @@
 // the devices are reached by uncached single-beat accesses
 // through muserisc_soc_fabric, so their side effects happen
 // exactly once per load/store.
+//
+// SRAM_OUT_REG: see muserisc_cpu (defaults to 1 in the ORFS SRAM
+// macro builds, 0 otherwise).
 `default_nettype none
-module muserisc_soc_top (
+`ifndef MUSERISC_SRAM_OUT_REG_DEFAULT
+`ifdef MUSERISC_SRAM_FAKERAM45
+`define MUSERISC_SRAM_OUT_REG_DEFAULT 1'b1
+`elsif MUSERISC_SRAM_SKY130
+`define MUSERISC_SRAM_OUT_REG_DEFAULT 1'b1
+`else
+`define MUSERISC_SRAM_OUT_REG_DEFAULT 1'b0
+`endif
+`endif
+module muserisc_soc_top #(
+    parameter bit SRAM_OUT_REG = `MUSERISC_SRAM_OUT_REG_DEFAULT,
+    // L1 associativity (64 sets x 64 B lines per way; muserisc_cpu).
+    parameter int unsigned IC_WAYS = 2,
+    parameter int unsigned DC_WAYS = 4
+) (
     input  wire        clk_i,
     input  wire        rst_ni,
     input  wire [63:0] boot_pc_i,
@@ -83,7 +100,9 @@ module muserisc_soc_top (
   logic [7:0]  dbg_st_be;
   /* verilator lint_on UNUSEDSIGNAL */
 
-  muserisc_cpu u_cpu (
+  muserisc_cpu #(
+      .IC_WAYS(IC_WAYS), .DC_WAYS(DC_WAYS), .SRAM_OUT_REG(SRAM_OUT_REG)
+  ) u_cpu (
       .clk_i           (clk_i),
       .rst_ni          (rst_ni),
       .boot_pc_i       (boot_pc_i),
