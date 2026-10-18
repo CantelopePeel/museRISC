@@ -375,6 +375,12 @@ module muserisc_icache import muserisc_cache_pkg::*; #(
       (bus_rsp_valid_i && (state_q == S_FILL)) |->
       (bus_rsp_last_i == (cnt_q == BW'(BEATS - 1))))
     else $error("icache: fill burst last-beat mismatch");
+  // The fetch-buffer race fixed in PR #29 (review B1): a fetch hitting
+  // N accepted in the cycle a prefetch lookup would reload N. The
+  // fetch-stream phases of icache_tb reach it; this records it.
+  c_nb_accept_vs_pf: cover property (@(posedge clk_i) disable iff (!chk_live_q)
+      SRAM_OUT_REG && (state_q == S_IDLE) && req_valid_i && fb_hit && !fb_hit_b &&
+      pf2_q && pf_hit);
   a_single_rsp: assert property (@(posedge clk_i) disable iff (!chk_live_q)
       (bus_rsp_valid_i && (state_q != S_FILL)) |->
       (bus_rsp_last_i && (state_q == S_UNC_RSP)))

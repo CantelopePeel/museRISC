@@ -1,4 +1,159 @@
-# SoC area and timing estimate (synthesis, 2026-10-16)
+# SoC area and timing (place and route 2026-10-17; synthesis 2026-10-16)
+
+## Place and route (ORFS, 2026-10-17)
+
+The first post-placement and post-route numbers. All runs use
+`SRAM_OUT_REG=1` (registered macro outputs, the default of the macro
+builds), synthesized from fork main 5efc69b + #29 *before* its
+round-1 fix (B1, one more term in the I$ fetch-buffer N load enable,
+off every critical path, so the netlist is not re-run). Flow:
+floorplan → macro placement → PDN → global placement → resize →
+detailed placement → CTS + `repair_timing` → global route +
+`repair_design`/`repair_timing` → detailed route → finish. Timing is
+OpenSTA (`scripts/sta_pnr.tcl`): WNS/TNS at the SDC period, then
+fmax by bisecting the clock period on the fixed design (propagated
+clock after CTS). Evidence:
+[`evidence/soc-pnr-2026-10-17.log`](evidence/soc-pnr-2026-10-17.log).
+
+| | Nangate45 | sky130hd, full SoC | sky130hd, Caravel size |
+|---|---:|---:|---:|
+| L1 | 8 KiB I$ (2 ways) + 16 KiB D$ (4 ways) | same | 4 KiB I$ (1 way) + 8 KiB D$ (2 ways) |
+| Macros | 15 | 15 | 9 |
+| Die | 1.100 × 1.100 mm = **1.21 mm²** | 3.80 × 3.60 mm = **13.68 mm²** | 2.92 × 3.52 mm = **10.28 mm²** (Caravel user area) |
+| Cell area (std + macros) | 0.748 mm² (67 % of core) | 9.09 mm² (69 % of core) | 6.55 mm² (66 % of core) |
+| of which macros | 0.158 mm² (21 %) | 6.23 mm² (68 %) | 3.74 mm² (57 %) |
+| Std cells after repair | 0.590 mm² | 2.87 mm² | 2.80 mm² |
+| Target / stage reached | 6.0 ns, **routed and finished** | 25 ns, global route (detailed route stopped at 16 h) | 25 ns, global route (detailed route stopped at 16 h) |
+| **fmax, typical corner** | **151.2 MHz** (6.61 ns) post-route, RC-extracted | **40.0 MHz** (24.98 ns) post-GRT; 39.7 MHz post-CTS | **32.2 MHz** (31.03 ns) post-GRT |
+| WNS / TNS at the target | −0.61 ns / −955 ns | +0.03 ns / 0 | −6.0 ns / −49,196 ns |
+| Hold | met (+0.008 ns) | met (+0.16 ns) | met (+0.08 ns) |
+| Slow corner | no slow library in ORFS nangate45 | 20.3 MHz (49.2 ns): `ss_100C_1v60` std cells, OpenRAM at TT (only TT exists); hold −0.46 ns there | not run |
+| DRC / antenna | 0 / 0 (detailed router; P&R 3.6 h, synthesis 1.3 h) | not finished: 809,440 → 77,359 violations in 13 iterations | not finished: 899,676 → 42,804 in 12 iterations |
+
+The "post-GRT" figures use placement-estimate parasitics on the
+repaired, legalized post-global-route netlist; the sky130 numbers are
+therefore not signoff. The typical corner is TT 1.8 V 25 °C on
+sky130hd and Nangate45 "typical".
+
+**Critical paths** (the same family on both processes once the SRAM
+outputs are registered):
+1. **MEM stage → pipeline stall / D$ request.** `exmem_ctrl_q` →
+   (vector LS) address add → data TLB compare → `mem_stall` → the
+   hold enables of every ID/EX and EX/MEM register (`idex_frs*_q`,
+   `exmem_result_q`) and the D$ request (`csb0` of a data way). This
+   sets fmax on Nangate45 (6.61 ns), on the full sky130 SoC (25.0 ns)
+   and on the Caravel variant (31.0 ns, `exmem_result_q`).
+2. **Crypto `ec_field` multiply step.** `u_fld.mm` → `result`: two
+   chained 256-bit modular adds (add, compare, subtract) per cycle.
+   Before timing repair it was the worst path on sky130 (38 ns on the
+   Caravel placement, 32 ns on the first full-SoC placement); repair brings it under
+   the core paths on the full SoC.
+3. Next tier on sky130 (post-CTS slack at 25.2 ns): vector unit
+   (+0.08 ns), FPU (+0.16), CSR (+0.48), MMU (+0.57), D$ (+0.01).
+   The I$ and VRF have > 1 ns.
+
+For comparison:
+- The unregistered netlist (half-cycle OpenRAM reads) reached 14.7 MHz
+  after placement and buffering, on the earlier 3.56 × 3.36 mm floorplan.
+- The synthesis-only estimate with all outputs registered was 23.0 MHz
+  (wire-load, unrepaired).
+
+### Floorplans
+
+- **sky130hd** (`flow/designs/sky130hd/muserisc_soc/macro_place.tcl`;
+  geometry from the core area):
+  - L1 data ways along the bottom (mirrored so their port-0 pins face
+    up) and top edges.
+  - The three VRF replicas stacked in the left column, with 100 µm gaps
+    for their port-0 (bottom) and port-1 (top/right) pins.
+  - The L1 tag ways stacked in the right column.
+  - Std cells in the middle band.
+  - 15 µm row halo around every macro (`tapcell.tcl`).
+- **PDN** (`pdn.tcl`): the platform grid (met1 rails, met4/met5
+  straps). The OpenRAM power pins are on met3, so the macro grid
+  adds met4 straps over each macro with met3–met4 vias.
+- **nangate45**: L1 data ways in a left column (mirrored, pins face
+  the core); VRF banks and tag ways in the right column; platform PDN.
+- **Repair budget**: floorplan `repair_timing` is replaced by buffer
+  removal (it ran for hours on the unrepaired netlist).
+  `TNS_END_PERCENT=20`, no last-gasp.
+
+What it took to get the sky130 runs through placement and CTS:
+- The first floorplan (3.56 × 3.36 mm) left the global placer too little
+  free area. It raised its own target density from 0.5 to 0.83–0.90,
+  and the post-CTS legalization then failed three times (DPL-0033)
+  in the register-file cluster. Padding, the diamond legalizer and
+  a buffer-free repair sequence did not fix it.
+- 3.80 × 3.60 mm brings the placer to 0.58 and legalizes.
+- FastRoute's 20 % layer derate did not converge, and
+  `-allow_congestion` left guides the detailed router rejects
+  (DRT-0218). With 10 % (full SoC), or 0 % plus met4 straps at
+  108.56 µm (Caravel), global routing finishes with **no overflow**.
+
+### Why detailed routing did not finish
+
+Global routing ends with no overflow at 34 % (full SoC) and 37 %
+(Caravel) average layer usage. So the 16 h timeouts are not global
+congestion.
+
+The detailed-route reports after iteration 10 show:
+- more than 97 % of the violations are **met1 shorts and spacing**;
+- they are clustered in dense std-cell regions, e.g. a vertical strip
+  70–150 µm right of the VRF column on the full SoC.
+
+That is local pin access (register files, VRF muxing). The router
+converges, at about one iteration per hour, and needed 13 iterations
+to reach 77 k / 43 k violations.
+
+The fix being tried (`caravel3`, ≤ 12 h, result posted to the PR):
+- placement target density 0.45 instead of 0.55;
+- one site of padding on each side in global and detailed placement;
+- detailed routing capped at 30 iterations, so the run always reaches
+  finish with a DRC count.
+
+### What fits Caravel
+
+The full SoC needs a **13.7 mm²** die on sky130hd; Caravel's user
+area is 10.3 mm². With a 4 KiB I$ (1 way) and an 8 KiB D$ (2 ways),
+`IC_WAYS=1 DC_WAYS=2` (the `caravel` variants), the SoC places at
+66 % in exactly the Caravel user area, at **32 MHz** post-global-route
+(typical). The directed suite passes in that configuration on the
+OpenRAM models with `SRAM_OUT_REG=1`. Routing closure is the open
+item (above).
+
+The full SoC reaches 40 MHz on the larger die. The difference is
+placement quality in the tighter die (longer MEM-stage paths), not
+the logic.
+
+### Toward 100 MHz (sky130)
+
+Ranked by expected gain:
+1. **MEM-stage stall network.** Register the data-TLB hit / PA, or
+   make the pipeline hold enables come from registered state (a skid
+   on the MEM response), so that address → TLB → `mem_stall` →
+   all-pipeline-enables is no longer one cycle. This is the critical
+   path on both processes.
+2. **D$ access from the VA in EX.** The D$ index and beat bits
+   (PA[11:3]) are inside the page offset, so the arrays can be read
+   while the access is in EX (VIPT). This also removes most of the
+   +35 % Linux cycle cost of `SRAM_OUT_REG`.
+3. **`ec_field` multiply.** One modular add per cycle instead of two
+   chained (512 cycles per 256-bit multiply), or a carry-save
+   accumulator.
+4. **Wide FPU / vector / CSR result muxing.** These sit within
+   0.1–0.6 ns of the core paths at 40 MHz. They need one more pipeline
+   stage (FPU result register before the writeback/forwarding mux)
+   to go much further.
+5. **Floorplan and routing.** Lower utilization or a larger die helps
+   the met1 pin-access congestion and wire lengths (2–3 mm across the
+   die on sky130). Moving the L1 data ways next to the D$/I$ logic
+   instead of the die edges would shorten the D$ request paths.
+6. **Process.** Nangate45 already runs the same RTL at 151 MHz.
+   On sky130 the realistic target after 1–4 is ~60–70 MHz; 100 MHz
+   would need a deeper pipeline (separate address-generation and
+   translation stages) on top.
+
+## Synthesis (2026-10-16)
 
 This is ORFS synthesis of the whole `muserisc_soc_top`. It was
 synthesized on fork main b634ffc; the branch is now on edf395e, whose
@@ -488,5 +643,20 @@ flow/designs/sky130hd/muserisc_soc/sram/vendor_model_check.sh [--as-shipped]
 ```
 
 Each flat synthesis takes ~1 h on a loaded host, mostly in ABC.
-Floorplan, placement and repair were not run; the numbers above stop
-at synthesis.
+
+Place and route (non-root container, named, bounded; results in
+`build/orfs-results/<platform>/muserisc_soc_top/<variant>/`):
+
+```sh
+# full flow (variants: base/reg = full SoC, caravel* = IC_WAYS=1 DC_WAYS=2 on 2.92 x 3.52 mm)
+ORFS_NAME=pnr ORFS_TIMEOUT=16h DESIGN=muserisc_soc PLATFORM=sky130hd ./scripts/openroad_docker.sh \
+  "FLOW_VARIANT=reg SKIP_ANTENNA_REPAIR=1 synth do-floorplan do-place do-cts do-route do-finish"
+DESIGN=muserisc_soc ./scripts/openroad_docker.sh "FLOW_VARIANT=reg synth do-floorplan do-place do-cts do-route do-finish"
+# timing of any stage (fmax bisection; STA_LIBS=... for another corner)
+DESIGN=muserisc_soc PLATFORM=sky130hd ./scripts/openroad_docker.sh \
+  "FLOW_VARIANT=reg STA_STAGE=5_1_grt RUN_SCRIPT=designs/muserisc_scripts/sta_pnr.tcl run"
+```
+
+The clock target is the period in the synthesized `1_synth.sdc`
+(25 ns sky130hd; the Nangate45 run used 6.0 ns, edited in
+`results/.../1_synth.sdc`).

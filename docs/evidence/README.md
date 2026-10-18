@@ -2065,3 +2065,21 @@ stages 4c/5:
   latency (both settings; only the `PMPSm_cfg_A_tor_zero-00` waiver),
   `socrtl` and OpenSBI (both settings), `soc_tb` Linux boot with
   `SRAM_OUT_REG=1`.
+
+## SoC place and route, first numbers (2026-10-17, branch `sram-reg-pnr`)
+
+- ORFS place and route of `muserisc_soc_top` with `SRAM_OUT_REG=1`
+  (netlist from before the #29 round-1 fix, one non-critical gate).
+- Nangate45, 1.1 × 1.1 mm: routed and finished, **151.2 MHz** post-route
+  (RC-extracted), 0 DRC, 0 antenna; 0.748 mm² cells (21 % macros).
+- sky130hd full SoC, 3.8 × 3.6 mm (13.7 mm²): **40.0 MHz** post-global-route
+  (39.7 MHz post-CTS), typical; 20.3 MHz with ss_100C_1v60 std cells.
+- sky130hd Caravel size (IC_WAYS=1, DC_WAYS=2), 2.92 × 3.52 mm: places at 66 %,
+  **32.2 MHz** post-global-route.
+- Both sky130 runs stopped in detailed routing at the 16 h bound
+  (77 k / 43 k violations after 13 / 12 iterations, > 97 % met1 shorts
+  and spacing; global routing had no overflow).
+- Critical path on both processes: MEM-stage address → data TLB →
+  `mem_stall` → pipeline hold enables / D$ request.
+- Summary: [`../SOC_AREA.md`](../SOC_AREA.md) "Place and route"; stage
+  tables, congestion, DRT progress, STA: [`soc-pnr-2026-10-17.log`](soc-pnr-2026-10-17.log).

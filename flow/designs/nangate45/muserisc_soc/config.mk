@@ -41,12 +41,19 @@ export VERILOG_INCLUDE_DIRS = $(DESIGN_HOME)/src/muserisc_soc/core
 # exceeds ORFS's default 4096-bit SYNTH_MEMORY_MAX_BITS guard
 # (largest: the 32x64 int/FP regfiles and SHA-256 w, 2048 bits).
 export SDC_FILE      = $(DESIGN_HOME)/nangate45/muserisc_soc/constraint.sdc
-# First full-SoC closure attempt (issue #11 slice): start
-# sparse; the combinational FPU/vector datapaths, not
-# utilization, are expected to set Fmax. Report honestly.
-export CORE_UTILIZATION = 20
-export PLACE_DENSITY_LB_ADDON = 0.05
-export CLOCK_PERIOD = 10
+# ---- Place and route (docs/SOC_AREA.md, "Place and route") ----
+MUSERISC_PNR_DIR = $(DESIGN_HOME)/$(PLATFORM)/muserisc_soc
+# Explicit die/core: L1 data ways in a left column, VRF banks and L1
+# tag ways in a right column (macro_place.tcl), std cells between.
+export DIE_AREA  ?= 0 0 1100 1100
+export CORE_AREA ?= 20 20 1080 1080
+export MACRO_PLACEMENT_TCL = $(MUSERISC_PNR_DIR)/macro_place.tcl
+export TAPCELL_TCL = $(MUSERISC_PNR_DIR)/tapcell.tcl
+export PLACE_DENSITY ?= 0.60
+# Timing repair budget (see sky130hd/muserisc_soc/config.mk).
+export REMOVE_ABC_BUFFERS ?= 1
+export TNS_END_PERCENT ?= 20
+export SKIP_LAST_GASP ?= 1
 export EARLY_SIZING_CAP_RATIO = 0.8
 # Same weak-cell ban as the crypto macro (see muse_crypto
 # config.mk for the liberty evidence, #31).

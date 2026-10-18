@@ -2,8 +2,9 @@
 //
 // One access per cycle: with en_i high the word at addr_i is
 // read (rdata_o valid the following cycle, two cycles later with
-// SRAM_OUT_REG; held until the next enabled read) or, with any we_i lane set, written under the
-// per-lane write mask. A write cycle does not update rdata_o
+// SRAM_OUT_REG; held until the next enabled read) or, with any
+// we_i lane set, written under the per-lane write mask. A write
+// cycle does not update rdata_o
 // (no read-during-write forwarding is assumed by the caches).
 // This is the behavior of a standard single-port SRAM macro or
 // an FPGA BRAM in NO_CHANGE mode; the behavioral body below is
