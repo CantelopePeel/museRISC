@@ -1,0 +1,270 @@
+muserisc_soc_top place and route (ORFS openroad/orfs:latest, OpenROAD + Yosys 0.68+), 2026-10-17/18
+==========================================================================================
+RTL: fork main 5efc69b + PR #29 before its round-1 fix (B1: one more term in the I$
+fetch-buffer N load enable, off every critical path; the netlist was not re-run).
+SRAM_OUT_REG=1 (macro-build default). Host: 48 cores, load ~100-200 (shared).
+Containers non-root, named, with timeout(1) bounds. Typical corner unless noted.
+
+== Nangate45, variant reg: 1.1 x 1.1 mm die, 6.0 ns target, full flow finished ==
+1_1_yosys_canonicalize.log            0.1 min  peak     274 MB  
+1_2_yosys.log                        80.7 min  peak    2617 MB  
+1_synth.log                           0.2 min  peak     799 MB  0.671 mm2 100%
+2_1_floorplan.log                     1.8 min  peak    1229 MB  0.650 mm2 58%
+2_2_floorplan_macro.log               0.1 min  peak     438 MB  0.650 mm2 58%
+2_3_floorplan_tapcell.log             0.0 min  peak     403 MB  0.651 mm2 58%
+2_4_floorplan_pdn.log                 0.1 min  peak     460 MB  0.651 mm2 58%
+3_1_place_gp_skip_io.log              1.0 min  peak     950 MB  0.651 mm2 58%
+3_2_place_iop.log                     0.0 min  peak     445 MB  0.651 mm2 58%
+3_3_place_gp.log                     17.6 min  peak    2968 MB  0.669 mm2 60%
+3_4_place_resized.log                 4.2 min  peak    1658 MB  0.720 mm2 64%
+3_5_place_dp.log                      6.0 min  peak    2162 MB  0.720 mm2 64%
+4_1_cts.log                          22.6 min  peak    3888 MB  0.730 mm2 65%
+4_rsz_lec.log                         9.9 min  peak    3888 MB  
+5_1_grt.log                          43.5 min  peak    4743 MB  0.748 mm2 67%
+5_2_route.log                        41.6 min  peak   13188 MB  0.748 mm2 67%
+5_3_fillcell.log                      0.2 min  peak    1492 MB  0.748 mm2 67%
+6_1_fill.log                          0.1 min  peak     947 MB  
+6_final_lec.log                      11.6 min  peak    8059 MB  
+6_report.log                         24.0 min  peak    8059 MB  0.748 mm2 67%
+run.log                               4.7 min  peak    2903 MB
+ORFS finish report (6_finish.rpt):
+  tns max -954.79
+  wns max -0.61
+  core_clock period_min = 6.61 fmax = 151.28
+  setup violation count 6811
+  hold violation count 0
+  max slew violation count 0
+  max fanout violation count 0
+  max cap violation count 15603
+  max cap violations: the SDC set_max_capacitance 21 (guardband, as muse_crypto); slew/fanout clean
+  detailed route DRC: 0 (5_route_drc.rpt empty); antenna: [INFO ANT-0002] Found 0 net violations. [INFO ANT-0001] Found 0 pin violations.
+STA (scripts/sta_pnr.tcl, 6_final + RC-extracted SPEF):
+  parasitics: ./results/nangate45/muserisc_soc_top/reg/6_final.spef
+  worst slack max -0.610
+  worst slack min 0.008
+  tns max -954.794
+  min_period_bisect_ns 6.61  fmax_bisect_mhz 151.21
+  block u_cpu/u_core/u_vec         endpoints   1840  worst_slack    0.253  from u_cpu.u_core.exmem_ctrl_q[1]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_fpu         endpoints   1403  worst_slack    0.164  from u_cpu.u_core.exmem_ctrl_q[1]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_csr         endpoints   6126  worst_slack    0.384  from u_cpu.u_core.exmem_ctrl_q[1]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_mmu         endpoints   9110  worst_slack    0.364  from u_cpu.u_core.exmem_ctrl_q[1]$_DFFE_PN0P_/Q
+  block u_cpu/u_dcache             endpoints   3470  worst_slack    0.038  from u_cpu.u_core.exmem_ctrl_q[1]$_DFFE_PN0P_/Q
+  block u_cpu/u_icache             endpoints   1988  worst_slack    0.341  from u_cpu.u_core.u_csr.virt_o$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_vregfile    endpoints   1535  worst_slack    0.562  from u_cpu.u_core.exmem_ctrl_q[1]$_DFFE_PN0P_/Q
+  critical endpoints at the bisected period:
+  Endpoint                                Delay    Delay    Slack
+  ---------------------------------------------------------------
+  u_cpu.u_core.idex_frs3_q[44]$_DFFE_PP_/D (DFF_X1)    6.670    6.667    0.003 (MET)
+  u_cpu.u_core.idex_frs3_q[61]$_DFFE_PP_/D (DFF_X1)    6.670    6.667    0.003 (MET)
+  u_cpu.u_core.idex_frs2_q[40]$_DFFE_PP_/D (DFF_X1)    6.670    6.666    0.004 (MET)
+  u_cpu.u_core.idex_frs3_q[25]$_DFFE_PP_/D (DFF_X1)    6.670    6.666    0.004 (MET)
+  u_cpu.u_core.idex_frs2_q[61]$_DFFE_PP_/D (DFF_X1)    6.670    6.667    0.004 (MET)
+  u_cpu.u_core.idex_frs2_q[38]$_DFFE_PP_/D (DFF_X1)    6.670    6.666    0.004 (MET)
+  u_cpu.u_core.idex_frs3_q[62]$_DFFE_PP_/D (DFF_X1)    6.670    6.666    0.005 (MET)
+  u_cpu.u_core.idex_frs3_q[14]$_DFFE_PP_/D (DFF_X1)    6.672    6.667    0.005 (MET)
+  u_cpu.u_core.idex_frs2_q[29]$_DFFE_PP_/D (DFF_X1)    6.669    6.662    0.007 (MET)
+  u_cpu.u_core.idex_frs2_q[2]$_DFFE_PP_/D (DFF_X1)    6.669    6.662    0.008 (MET)
+  
+  Startpoint: rst_ni (input port clocked by core_clock)
+  Startpoint: u_cpu.u_core.exmem_ctrl_q[1]$_DFFE_PN0P_
+  Endpoint: u_cpu.u_core.idex_frs3_q[44]$_DFFE_PP_
+
+== sky130hd full SoC, variant reg2: 3.8 x 3.6 mm die, 25 ns target ==
+2_1_floorplan.log                     1.7 min  peak    1378 MB  8.570 mm2 65%
+2_2_floorplan_macro.log               0.1 min  peak     697 MB  8.570 mm2 65%
+2_3_floorplan_tapcell.log             0.0 min  peak     692 MB  8.679 mm2 66%
+2_4_floorplan_pdn.log                 1.1 min  peak    5994 MB  8.679 mm2 66%
+3_1_place_gp_skip_io.log              1.0 min  peak    1259 MB  8.679 mm2 66%
+3_2_place_iop.log                     0.0 min  peak     768 MB  8.679 mm2 66%
+3_3_place_gp.log                     16.9 min  peak    3566 MB  8.943 mm2 68%
+3_4_place_resized.log                 3.6 min  peak    1828 MB  8.966 mm2 68%
+3_5_place_dp.log                      5.8 min  peak    2596 MB  8.966 mm2 68%
+4_1_cts.log                          27.5 min  peak    3989 MB  9.076 mm2 69%
+4_rsz_lec.log                        13.5 min  peak    3989 MB  
+5_1_grt.log                          31.0 min  peak    6009 MB  9.094 mm2 69%
+run.log                               3.1 min  peak    1925 MB
+global route final congestion:
+  Final congestion report:
+  Layer         Resource        Demand        Usage (%)    Max H / Max V / Total Congestion
+  ---------------------------------------------------------------------------------------
+  li1                  0             0            0.00%             0 /  0 /  0
+  met1           3169316       1229919           38.81%             0 /  0 /  0
+  met2           2743964       1061381           38.68%             0 /  0 /  0
+  met3           1967537        550448           27.98%             0 /  0 /  0
+  met4           1376593        392624           28.52%             0 /  0 /  0
+  met5            289400         33923           11.72%             0 /  0 /  0
+  ---------------------------------------------------------------------------------------
+  Total          9546810       3268295           34.23%             0 /  0 /  0
+  [INFO GRT-0018] Total wirelength: 28602721 um
+detailed route (16 h timeout, exit 124), violations per iteration:
+  809440., 619717., 579924., 316316., 229218., 195335., 174993., 162320., 149402., 137534., 109109., 90655., 77359.
+  iteration-10 report (capped at 10,000 per type): types {'Cut Spacing': 379, 'Metal Spacing': 10000, 'Short': 10000, 'Min Hole': 7, 'NS Metal': 4, 'Cut Short': 42}; layers {'mcon': 357, 'via': 54, 'via2': 10, 'met1': 20009, 'met2': 2}
+post-CTS / post-GRT timing (scripts/sta_pnr.tcl, placement-estimate parasitics):
+  -- sta4 (4_cts)
+  parasitics: placement estimate
+  worst slack max -0.164
+  worst slack min 0.164
+  tns max -9.348
+  min_period_bisect_ns 25.17  fmax_bisect_mhz 39.73
+  block u_cpu/u_core/u_vec         endpoints   3649  worst_slack    0.079  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_fpu         endpoints   2798  worst_slack    0.163  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_csr         endpoints   6126  worst_slack    0.477  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_mmu         endpoints   9110  worst_slack    0.568  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_dcache             endpoints   4394  worst_slack    0.007  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_icache             endpoints   2194  worst_slack    1.234  from u_cpu.u_core.boot_q$_DFFE_PN1P_/Q
+  block u_cpu/u_core/u_vregfile    endpoints   2269  worst_slack    1.191  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  critical endpoints at the bisected period:
+  Endpoint                                Delay    Delay    Slack
+  ---------------------------------------------------------------
+  u_cpu.u_dcache.g_way[3].u_data.g_macro.g_data.u_ram/csb0 (sky130_sram_1rw1r_128x256_8)   27.377   27.370    0.007 (MET)
+  u_cpu.u_core.idex_frs3_q[41]$_DFFE_PP_/DE (sky130_fd_sc_hd__edfxtp_1)   27.253   27.204    0.049 (MET)
+  u_cpu.u_core.exmem_result_q[61]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   27.438   27.385    0.053 (MET)
+  u_cpu.u_core.idex_frs3_q[60]$_DFFE_PP_/DE (sky130_fd_sc_hd__edfxtp_1)   27.264   27.209    0.056 (MET)
+  u_cpu.u_core.idex_frs3_q[26]$_DFFE_PP_/DE (sky130_fd_sc_hd__edfxtp_1)   27.265   27.207    0.058 (MET)
+  u_cpu.u_core.idex_frs1_q[26]$_DFFE_PP_/DE (sky130_fd_sc_hd__edfxtp_1)   27.265   27.207    0.058 (MET)
+  u_cpu.u_core.idex_frs3_q[20]$_DFFE_PP_/DE (sky130_fd_sc_hd__edfxtp_1)   27.264   27.206    0.058 (MET)
+  u_cpu.u_core.idex_frs1_q[55]$_DFFE_PP_/DE (sky130_fd_sc_hd__edfxtp_1)   27.265   27.207    0.058 (MET)
+  u_cpu.u_core.exmem_result_q[47]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   27.485   27.427    0.059 (MET)
+  u_cpu.u_core.idex_frs3_q[35]$_DFFE_PP_/DE (sky130_fd_sc_hd__edfxtp_1)   27.264   27.205    0.059 (MET)
+  
+  Startpoint: rst_ni (input port clocked by core_clock)
+  Startpoint: u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_
+  Endpoint: u_cpu.u_dcache.g_way[3].u_data.g_macro.g_data.u_ram
+  -- sta5 (5_1_grt)
+  parasitics: placement estimate
+  worst slack max 0.034
+  worst slack min 0.164
+  tns max 0.000
+  min_period_bisect_ns 24.98  fmax_bisect_mhz 40.04
+  block u_cpu/u_core/u_vec         endpoints   3649  worst_slack    0.515  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_fpu         endpoints   2798  worst_slack    0.551  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_csr         endpoints   6126  worst_slack    0.656  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_mmu         endpoints   9110  worst_slack    0.740  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_dcache             endpoints   4394  worst_slack    0.010  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_icache             endpoints   2194  worst_slack    1.039  from u_cpu.u_core.boot_q$_DFFE_PN1P_/Q
+  block u_cpu/u_core/u_vregfile    endpoints   2269  worst_slack    1.185  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  critical endpoints at the bisected period:
+  Endpoint                                Delay    Delay    Slack
+  ---------------------------------------------------------------
+  u_cpu.u_dcache.g_way[3].u_data.g_macro.g_data.half_q$_DFFE_PP_/DE (sky130_fd_sc_hd__edfxtp_1)   27.155   27.145    0.010 (MET)
+  u_cpu.u_dcache.g_way[3].u_data.g_macro.rd_q$_DFF_P_/D (sky130_fd_sc_hd__dfxtp_2)   27.288   27.274    0.014 (MET)
+  u_cpu.u_dcache.g_way[3].u_data.g_macro.g_data.u_ram/csb0 (sky130_sram_1rw1r_128x256_8)   27.182   27.117    0.064 (MET)
+  u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.half_q$_DFFE_PP_/DE (sky130_fd_sc_hd__edfxtp_1)   27.283   27.076    0.207 (MET)
+  u_cpu.u_dcache.g_way[0].u_data.g_macro.rd_q$_DFF_P_/D (sky130_fd_sc_hd__dfxtp_2)   27.478   27.267    0.211 (MET)
+  u_cpu.u_dcache.g_way[0].u_data.g_macro.g_data.u_ram/csb0 (sky130_sram_1rw1r_128x256_8)   27.410   27.195    0.215 (MET)
+  u_cpu.u_core.pc_r[60]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   27.321   27.080    0.240 (MET)
+  u_cpu.u_core.exmem_result_q[56]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   27.262   26.979    0.284 (MET)
+  u_cpu.u_dcache.g_way[3].u_data.g_macro.g_data.u_ram/addr0[3] (sky130_sram_1rw1r_128x256_8)   27.182   26.876    0.305 (MET)
+  u_cpu.u_dcache.g_way[3].u_data.g_macro.g_data.u_ram/wmask0[0] (sky130_sram_1rw1r_128x256_8)   27.182   26.874    0.308 (MET)
+  
+  Startpoint: rst_ni (input port clocked by core_clock)
+  Startpoint: u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_
+  Endpoint: u_cpu.u_dcache.g_way[3].u_data.g_macro.g_data.half_q$_DFFE_PP_
+  -- sta5ss (5_1_grt)
+  liberty: /OpenROAD-flow-scripts/flow/results/sky130hd/corner-libs/sky130_fd_sc_hd__ss_100C_1v60.lib /OpenROAD-flow-scripts/flow/platforms/sky130ram/sky130_sram_1rw1r_64x256_8/sky130_sram_1rw1r_64x256_8_TT_1p8V_25C.lib /OpenROAD-flow-scripts/flow/platforms/sky130ram/sky130_sram_1rw1r_128x256_8/sky130_sram_1rw1r_128x256_8_TT_1p8V_25C.lib /OpenROAD-flow-scripts/flow/platforms/sky130ram/sky130_sram_1rw1r_44x64_8/sky130_sram_1rw1r_44x64_8_TT_1p8V_25C.lib
+  parasitics: placement estimate
+  worst slack max -24.176
+  worst slack min -0.463
+  tns max -276800.469
+  min_period_bisect_ns 49.18  fmax_bisect_mhz 20.33
+  block u_cpu/u_core/u_vec         endpoints   3649  worst_slack    2.578  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_fpu         endpoints   2798  worst_slack    3.062  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_csr         endpoints   6126  worst_slack    2.509  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_mmu         endpoints   9110  worst_slack    2.751  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_dcache             endpoints   4394  worst_slack    1.718  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  block u_cpu/u_icache             endpoints   2194  worst_slack    1.744  from u_cpu.u_core.boot_q$_DFFE_PN1P_/Q
+  block u_cpu/u_core/u_vregfile    endpoints   2269  worst_slack    3.828  from u_cpu.u_core.exmem_ctrl_q[2]$_DFFE_PN0P_/Q
+  critical endpoints at the bisected period:
+  Endpoint                                Delay    Delay    Slack
+  ---------------------------------------------------------------
+  u_cpu.u_core.pc_r[60]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.395   53.389    0.006 (MET)
+  u_cpu.u_core.pc_r[62]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.363   53.039    0.324 (MET)
+  u_cpu.u_core.pc_r[36]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.441   52.903    0.537 (MET)
+  u_cpu.u_core.pc_r[40]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.319   52.706    0.613 (MET)
+  u_cpu.u_core.pc_r[38]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.335   52.714    0.621 (MET)
+  u_cpu.u_core.pc_r[56]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.365   52.725    0.640 (MET)
+  u_cpu.u_core.pc_r[50]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.371   52.727    0.644 (MET)
+  u_cpu.u_core.pc_r[34]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.409   52.751    0.658 (MET)
+  u_cpu.u_core.pc_r[52]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.407   52.734    0.674 (MET)
+  u_cpu.u_core.pc_r[58]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   53.373   52.683    0.689 (MET)
+  
+  Startpoint: rst_ni (input port clocked by core_clock)
+  Startpoint: u_cpu.u_core.boot_q$_DFFE_PN1P_
+  Endpoint: u_cpu.u_core.pc_r[60]$_DFFE_PN0P_
+
+== sky130hd Caravel size, variant caravel2: IC_WAYS=1 DC_WAYS=2, 2.92 x 3.52 mm, 25 ns ==
+2_1_floorplan.log                     0.7 min  peak    1352 MB  6.023 mm2 61%
+2_2_floorplan_macro.log               0.1 min  peak     688 MB  6.023 mm2 61%
+2_3_floorplan_tapcell.log             0.0 min  peak     680 MB  6.121 mm2 62%
+2_4_floorplan_pdn.log                 0.6 min  peak    3827 MB  6.121 mm2 62%
+3_1_place_gp_skip_io.log              1.1 min  peak    1207 MB  6.121 mm2 62%
+3_2_place_iop.log                     0.0 min  peak     730 MB  6.121 mm2 62%
+3_3_place_gp.log                     14.6 min  peak    3077 MB  6.415 mm2 65%
+3_4_place_resized.log                 2.2 min  peak    1768 MB  6.434 mm2 65%
+3_5_place_dp.log                      5.5 min  peak    2409 MB  6.434 mm2 65%
+4_1_cts.log                           7.4 min  peak    2808 MB  6.542 mm2 66%
+4_rsz_lec.log                         1.1 min  peak    2808 MB  
+5_1_grt.log                          18.4 min  peak    5372 MB  6.545 mm2 66%
+run.log                               3.5 min  peak    1830 MB
+global route final congestion:
+  Final congestion report:
+  Layer         Resource        Demand        Usage (%)    Max H / Max V / Total Congestion
+  ---------------------------------------------------------------------------------------
+  li1                  0             0            0.00%             0 /  0 /  0
+  met1           2837341       1237621           43.62%             0 /  0 /  0
+  met2           2693027       1393402           51.74%             0 /  0 /  0
+  met3           1815085        285921           15.75%             0 /  0 /  0
+  met4           1435144        471849           32.88%             0 /  0 /  0
+  met5            308430          5036            1.63%             0 /  0 /  0
+  ---------------------------------------------------------------------------------------
+  Total          9089027       3393829           37.34%             0 /  0 /  0
+  [INFO GRT-0018] Total wirelength: 29382649 um
+detailed route (16 h timeout, exit 124), violations per iteration:
+  899676., 619643., 570975., 258104., 167843., 136705., 119905., 108839., 95823., 82167., 59935., 49939., 42804.
+  iteration-10 report (capped at 10,000 per type): types {'Cut Spacing': 198, 'Metal Spacing': 10000, 'Short': 10000, 'Min Hole': 4, 'Cut Short': 33}; layers {'mcon': 191, 'via': 35, 'via2': 4, 'met1': 18125, 'met2': 1879, 'via3': 1}
+post-CTS / post-GRT timing (scripts/sta_pnr.tcl, placement-estimate parasitics):
+  -- sta5 (5_1_grt)
+  parasitics: placement estimate
+  worst slack max -6.025
+  worst slack min 0.081
+  tns max -49196.062
+  min_period_bisect_ns 31.03  fmax_bisect_mhz 32.23
+  block u_cpu/u_core/u_vec         endpoints   3649  worst_slack    0.675  from u_cpu.u_core.exmem_ctrl_q[0]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_fpu         endpoints   2798  worst_slack    0.666  from u_cpu.u_core.exmem_ctrl_q[0]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_csr         endpoints   6126  worst_slack    1.040  from u_cpu.u_core.exmem_ctrl_q[0]$_DFFE_PN0P_/Q
+  block u_cpu/u_core/u_mmu         endpoints   9110  worst_slack    1.386  from u_cpu.u_core.exmem_ctrl_q[0]$_DFFE_PN0P_/Q
+  block u_cpu/u_dcache             endpoints   2980  worst_slack    0.792  from u_cpu.u_core.exmem_ctrl_q[0]$_DFFE_PN0P_/Q
+  block u_cpu/u_icache             endpoints   1614  worst_slack    5.995  from u_cpu.u_core.boot_q$_DFFE_PN1P_/Q
+  block u_cpu/u_core/u_vregfile    endpoints   2269  worst_slack    2.036  from u_cpu.u_core.exmem_ctrl_q[0]$_DFFE_PN0P_/Q
+  critical endpoints at the bisected period:
+  Endpoint                                Delay    Delay    Slack
+  ---------------------------------------------------------------
+  u_cpu.u_core.exmem_result_q[18]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_2)   33.184   33.182    0.002 (MET)
+  u_cpu.u_core.exmem_result_q[10]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   33.342   33.229    0.113 (MET)
+  u_cpu.u_core.exmem_result_q[17]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   33.182   32.950    0.232 (MET)
+  u_cpu.u_core.exmem_result_q[8]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   33.332   32.993    0.339 (MET)
+  u_cpu.u_core.exmem_result_q[47]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_2)   33.209   32.849    0.361 (MET)
+  u_cpu.u_core.exmem_result_q[24]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   33.310   32.939    0.371 (MET)
+  u_cpu.u_core.exmem_result_q[60]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_2)   33.308   32.807    0.501 (MET)
+  u_cpu.u_core.exmem_result_q[1]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   33.213   32.636    0.578 (MET)
+  u_cpu.u_core.exmem_result_q[19]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   33.308   32.720    0.589 (MET)
+  u_cpu.u_core.exmem_result_q[21]$_DFFE_PN0P_/D (sky130_fd_sc_hd__dfrtp_1)   33.357   32.768    0.589 (MET)
+  
+  Startpoint: rst_ni (input port clocked by core_clock)
+  Startpoint: u_cpu.u_core.exmem_ctrl_q[0]$_DFFE_PN0P_
+  Endpoint: u_cpu.u_core.exmem_result_q[18]$_DFFE_PN0P_
+
+== Earlier sky130 attempts (stage-by-stage, why they were abandoned) ==
+- unreg (pre-SRAM_OUT_REG netlist, 3.56 x 3.36 mm, 50 ns): placed (repair_design only):
+  14.65 MHz, VRF dout1 (falling edge) -> D$ half_q; global route did not converge
+  (FastRoute 72 extra iterations, ~2 h, killed). PLACE_DENSITY 0.6.
+- reg, 3.56 x 3.36 mm: post-place 30.8 MHz (crypto ec_field mm->result 32.4 ns);
+  CTS repair reached WNS -0.143 ns at 25 ns, then post-repair legalization failed
+  (DPL-0033, ~100 cells, register-file cluster); same with 2-site padding (place),
+  diamond legalizer (place) and a buffer-free repair (CTS, WNS -0.344). GPL reported
+  "target density 0.5 too low for the available free area, adjusting to 0.83" (0.90
+  timing-driven) -> die enlarged to 3.8 x 3.6 mm (reg2: GPL target 0.58).
+- caravel (2.92 x 3.52 mm): post-place 25.8 MHz, post-CTS WNS -6.1 ns at 25 ns,
+  post-GRT 32.2 MHz; FastRoute (20 % derate) 96 extra iterations without converging;
+  -allow_congestion -> DRT-0218 "guide is not connected" twice (also without GRT
+  antenna repair) -> caravel2: 0 % derate and met4 straps at 108.56 um.
